@@ -3,6 +3,8 @@ export const api = requestClient;
 export interface LoginCode {
   id: string;
   label: string;
+  groupId: string;
+  groupName: string;
   maskedCode: string;
   enabled: boolean;
   expiresAt: string;
@@ -10,6 +12,11 @@ export interface LoginCode {
   maxAccounts: number;
   deviceCount: number;
   accountCount: number;
+}
+export interface LoginCodeGroup {
+  id: string;
+  name: string;
+  codeCount: number;
 }
 export interface ProxyItem {
   id: string;

@@ -10,6 +10,7 @@ import (
 
 type codeInput struct {
 	Label       string    `json:"label"`
+	GroupID     string    `json:"groupId"`
 	ExpiresAt   time.Time `json:"expiresAt"`
 	MaxDevices  int       `json:"maxDevices"`
 	MaxAccounts int       `json:"maxAccounts"`
@@ -20,7 +21,7 @@ func (b codeInput) valid() bool {
 	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now()) && b.MaxDevices > 0 && b.MaxDevices <= 100 && b.MaxAccounts > 0 && b.MaxAccounts <= 500
 }
 func (a *App) listCodes(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,label,suffix,enabled,expires_at,max_devices,max_accounts,created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id) FROM login_codes l WHERE tenant_id=$1 ORDER BY created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,'') FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -28,15 +29,15 @@ func (a *App) listCodes(c *gin.Context) {
 	defer rows.Close()
 	out := []gin.H{}
 	for rows.Next() {
-		var id, label, suffix string
+		var id, label, suffix, groupID, groupName string
 		var enabled bool
 		var expires, created time.Time
 		var maxD, maxA, devices, accounts int
-		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts); e != nil {
+		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName); e != nil {
 			dbError(c, e)
 			return
 		}
-		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created})
+		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -51,10 +52,24 @@ func (a *App) createCode(c *gin.Context) {
 		return
 	}
 	id := identity(c)
+	ctx := c.Request.Context()
+	tx, e := a.DB.Begin(ctx)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	defer tx.Rollback(ctx)
+	if !lockCodeGroup(c, tx, id.Tenant, b.GroupID) {
+		return
+	}
 	raw := "GD7-" + security.Token()
 	var codeID string
-	e := a.DB.QueryRow(c.Request.Context(), `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts).Scan(&codeID)
+	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID).Scan(&codeID)
 	if e != nil {
+		dbError(c, e)
+		return
+	}
+	if e = tx.Commit(ctx); e != nil {
 		dbError(c, e)
 		return
 	}

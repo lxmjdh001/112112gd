@@ -9,6 +9,9 @@ import (
 //go:embed 001_initial.sql
 var initial string
 
+//go:embed 002_login_code_groups.sql
+var loginCodeGroups string
+
 func Run(ctx context.Context, db *pgxpool.Pool) error {
 	tx, e := db.Begin(ctx)
 	if e != nil {
@@ -21,18 +24,23 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	if _, e = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations(version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`); e != nil {
 		return e
 	}
-	var applied bool
-	if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=1)`).Scan(&applied); e != nil {
-		return e
-	}
-	if applied {
-		return tx.Commit(ctx)
-	}
-	if _, e = tx.Exec(ctx, initial); e != nil {
-		return e
-	}
-	if _, e = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(1)`); e != nil {
-		return e
+	for _, migration := range []struct {
+		version int
+		sql     string
+	}{{1, initial}, {2, loginCodeGroups}} {
+		var applied bool
+		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, migration.version).Scan(&applied); e != nil {
+			return e
+		}
+		if applied {
+			continue
+		}
+		if _, e = tx.Exec(ctx, migration.sql); e != nil {
+			return e
+		}
+		if _, e = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES($1)`, migration.version); e != nil {
+			return e
+		}
 	}
 	return tx.Commit(ctx)
 }

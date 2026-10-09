@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 const schema = "gd007_e2e_" + randomBytes(5).toString("hex");
+const adminOnly = process.argv.includes("--admin-only");
 const pg = process.env.GONGDAN_PG_BIN || "/opt/homebrew/opt/postgresql@17/bin";
 const database =
   process.env.TEST_DATABASE_URL || "postgres://127.0.0.1:55437/gongdan007?sslmode=disable";
@@ -64,7 +65,7 @@ await writeFile(".runtime/e2e.json", JSON.stringify(settings), { mode: 0o600 });
 sql("CREATE SCHEMA " + schema);
 try {
   await run("pnpm", ["build:admin"]);
-  await run("pnpm", ["build:desktop"]);
+  if (!adminOnly) await run("pnpm", ["build:desktop"]);
   launch("go", ["run", "./cmd/api"], settings, path.resolve("server"));
   await ready("http://127.0.0.1:18081/healthz");
   launch(
@@ -84,8 +85,12 @@ try {
   );
   await ready("http://127.0.0.1:5779");
   await run(process.execPath, ["scripts/check-admin.mjs"]);
-  await run(process.execPath, ["scripts/check-desktop.mjs"]);
-  console.log("End-to-end checks passed. No WhatsApp account was paired or message sent.");
+  if (!adminOnly) await run(process.execPath, ["scripts/check-desktop.mjs"]);
+  console.log(
+    adminOnly
+      ? "Admin end-to-end checks passed."
+      : "End-to-end checks passed. No WhatsApp account was paired or message sent.",
+  );
 } finally {
   for (const child of children) {
     if (child.exitCode === null && child.pid) {
