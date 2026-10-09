@@ -19,10 +19,9 @@ onMounted(async () => {
   <div class="business">
     <div class="page-head">
       <div>
-        <h1>团队控制台</h1>
+        <h1>工作台</h1>
         <p class="subtitle">统一管理工作账号，让使用者在熟悉的官方界面中开始工作。</p>
       </div>
-      <ElButton type="primary" @click="router.push('/login-codes')">创建登录码</ElButton>
     </div>
     <ElAlert v-if="error" title="统计加载失败，请刷新重试" type="error" :closable="false" />
     <div class="stats">

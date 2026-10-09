@@ -5,7 +5,7 @@ const routes: RouteRecordRaw[] = [
     path: "/dashboard",
     component: () => import("#/views/business/dashboard.vue"),
     meta: {
-      title: "首页 · 控制台",
+      title: "工作台",
       icon: "lucide:layout-dashboard",
       order: 0,
       authority: ["admin"],

@@ -9,7 +9,7 @@ await page.goto("http://127.0.0.1:5779/", { waitUntil: "networkidle" });
 await page.locator("#username").fill(env.BOOTSTRAP_USERNAME);
 await page.locator("#password").fill(env.BOOTSTRAP_PASSWORD);
 await page.getByRole("button", { name: "登录", exact: true }).click();
-await page.getByRole("heading", { name: "团队控制台" }).waitFor();
+await page.getByRole("heading", { name: "工作台" }).waitFor();
 await page.waitForTimeout(1000);
 await page.screenshot({ path: ".runtime/admin-dashboard.png", fullPage: true });
 await page.goto("http://127.0.0.1:5779/#/login-codes");

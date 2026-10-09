@@ -9,7 +9,7 @@
   "modules": [
     {
       "key": "dashboard",
-      "name": "首页控制台",
+      "name": "工作台",
       "route": "/dashboard",
       "completion_phase": "P4",
       "status": "foundation_implemented",
