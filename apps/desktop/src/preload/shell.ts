@@ -7,6 +7,8 @@ const api: ShellAPI = {
   refresh: () => ipcRenderer.invoke("shell:refresh"),
   reload: () => ipcRenderer.invoke("shell:reload"),
   open: (id) => ipcRenderer.invoke("shell:open", id),
+  accountForm: (open) => ipcRenderer.invoke("shell:account-form", open),
+  createAccount: (account) => ipcRenderer.invoke("shell:create-account", account),
   onState: (fn) => {
     ipcRenderer.on("shell:state", (_e, state) => fn(state));
   },

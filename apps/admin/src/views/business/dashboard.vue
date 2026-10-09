@@ -29,7 +29,7 @@ onMounted(async () => {
         v-for="item in [
           { key: 'codes', label: '有效登录码' },
           { key: 'devices', label: '活跃客户端' },
-          { key: 'accounts', label: '平台账号位' },
+          { key: 'accounts', label: '平台账号' },
           { key: 'proxies', label: '代理资源' },
         ]"
         :key="item.key"
@@ -51,16 +51,16 @@ onMounted(async () => {
         </div>
         <div class="step">
           <b>02</b>
-          <h3>分配代理与账号</h3>
-          <p class="subtitle">批量导入代理，再为登录码创建 WhatsApp 账号位。</p>
-          <ElButton link type="primary" @click="router.push('/platform-accounts')"
-            >配置账号 →</ElButton
-          >
+          <h3>准备代理</h3>
+          <p class="subtitle">在后台导入代理，使用者添加账号时在客户端选择。</p>
+          <ElButton link type="primary" @click="router.push('/proxies')">管理代理 →</ElButton>
         </div>
         <div class="step">
           <b>03</b>
           <h3>客户端扫码工作</h3>
-          <p class="subtitle">用登录码进入客户端，打开 WhatsApp 官方页面，手机扫码关联。</p>
+          <p class="subtitle">
+            用登录码进入客户端，添加账号并选择代理，再在 WhatsApp 官方页面扫码登录。
+          </p>
           <span class="subtitle">聊天区支持 Google 免费翻译</span>
         </div>
       </div>
@@ -68,11 +68,11 @@ onMounted(async () => {
     <div class="panel">
       <h2 class="section-title">当前版本 · 基础工作流</h2>
       <p class="subtitle">
-        已接入登录码、设备、代理、账号位和操作日志。推广、账户账务、底库、线索及客户运营按后续阶段开放。
+        已接入登录码、设备、代理、客户端账号与操作日志。推广、账户账务、底库、线索及客户运营按后续阶段开放。
       </p>
       <p class="subtitle">
-        账号位是供使用者登录的平台环境；当前版本不采集 WhatsApp
-        手机号或聊天记录。网页就绪状态不等同于消息已送达。
+        账号由客户端添加并同步到后台。当前版本不采集 WhatsApp
+        手机号或聊天记录，网页就绪状态不等同于消息已送达。
       </p>
     </div>
   </div>

@@ -177,16 +177,16 @@ func TestImportAtomicAndAccountScope(t *testing.T) {
 	if _, ok := p["password"]; ok {
 		t.Fatal("password exposed in list")
 	}
-	s, d = h.call("POST", "/platform-accounts", h.admin, gin.H{"label": "WA", "codeId": id, "proxyId": p["id"]})
+	_, d = h.login(code, "device")
+	token := d["data"].(map[string]any)["accessToken"].(string)
+	s, d = h.call("POST", "/client/accounts", token, gin.H{"label": "WA", "platform": "whatsapp", "requestId": "00000000-0000-4000-8000-000000000001", "proxyId": p["id"]})
 	if s != 200 {
 		t.Fatal(d)
 	}
 	account := d["data"].(map[string]any)["id"].(string)
-	if s, _ = h.call("POST", "/platform-accounts", h.admin, gin.H{"label": "overflow", "codeId": id, "proxyId": p["id"]}); s != 409 {
+	if s, _ = h.call("POST", "/client/accounts", token, gin.H{"label": "overflow", "platform": "whatsapp", "requestId": "00000000-0000-4000-8000-000000000002", "proxyId": p["id"]}); s != 409 {
 		t.Fatal("account quota ignored")
 	}
-	_, d = h.login(code, "device")
-	token := d["data"].(map[string]any)["accessToken"].(string)
 	s, d = h.call("POST", "/client/accounts/"+account+"/open", token, gin.H{})
 	if s != 200 || d["data"].(map[string]any)["proxy"].(map[string]any)["password"] != "password" {
 		t.Fatal("assigned client cannot obtain proxy")

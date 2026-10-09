@@ -139,6 +139,11 @@ try {
   ]) {
     await page.goto("http://127.0.0.1:5779/" + route);
     await page.locator(".business h1").waitFor();
+    if (route === "#/platform-accounts") {
+      await page.getByRole("heading", { name: "账号列表", exact: true }).waitFor();
+      assert.equal(await page.getByRole("button", { name: /创建账号|添加账号/ }).count(), 0);
+      assert.match(await page.locator(".business").innerText(), /账号在客户端添加并登录/);
+    }
   }
   console.log(
     JSON.stringify({

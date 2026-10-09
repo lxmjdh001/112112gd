@@ -26,7 +26,8 @@ const names: Record<string, string> = {
   "code_group.delete": "删除登录码分组",
   "device.unbind": "解绑设备",
   "proxy.import": "批量导入代理",
-  "account.create": "创建账号位",
+  "account.create": "后台预分配账号（历史）",
+  "client.account.create": "客户端添加账号",
 };
 async function load() {
   rows.value = await api.get("/login-logs");

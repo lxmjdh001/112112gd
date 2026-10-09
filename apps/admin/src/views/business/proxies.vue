@@ -62,7 +62,7 @@ onMounted(load);
       </div>
       <ElTable
         :data="rows.filter((r) => `${r.host}${r.group}`.includes(query))"
-        empty-text="添加代理后，可在账号列表中关联"
+        empty-text="添加代理后，可在客户端添加账号时选择"
         ><ElTableColumn prop="protocol" label="协议" width="110" /><ElTableColumn
           prop="host"
           label="主机"

@@ -15,7 +15,14 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { hostname } from "node:os";
 import { pathToFileURL } from "node:url";
-import type { Account, ClientAuth, ProxyConfig, ViewState } from "../shared/types.ts";
+import type {
+  Account,
+  AccountOptions,
+  ClientAuth,
+  NewAccount,
+  ProxyConfig,
+  ViewState,
+} from "../shared/types.ts";
 import { GoogleFreeTranslator } from "./translation.ts";
 import { chromiumUserAgent } from "./browser-identity.ts";
 import { socksBridge, type Bridge } from "./proxy.ts";
@@ -39,6 +46,8 @@ let leaseUntil = 0;
 let epoch = 0;
 let opening = false;
 let beating = false;
+let accountFormOpen = false;
+let creatingAccount = false;
 let apiURL = "http://127.0.0.1:18080";
 const state: ViewState = {
   loggedIn: false,
@@ -131,6 +140,7 @@ async function terminate(message: string) {
   epoch++;
   auth = undefined;
   leaseUntil = 0;
+  accountFormOpen = false;
   state.label = "";
   state.accounts = [];
   state.activeId = "";
@@ -144,7 +154,7 @@ function bounds() {
   if (!win || win.isDestroyed()) return;
   const [width, height] = win.getContentSize();
   for (const runtime of runtimes.values()) {
-    const active = runtime.id === state.activeId;
+    const active = runtime.id === state.activeId && !accountFormOpen;
     runtime.view.setVisible(active);
     if (active)
       runtime.view.setBounds({
@@ -380,6 +390,10 @@ app.whenReady().then(async () => {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("did-start-loading", () => {
+    accountFormOpen = false;
+    bounds();
+  });
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win.on("resize", bounds);
   win.on("closed", () => app.quit());
@@ -417,6 +431,53 @@ app.whenReady().then(async () => {
   ipcMain.handle("shell:open", async (event, id) => {
     requireShell(event);
     await openAccount(id);
+  });
+  ipcMain.handle("shell:account-form", async (event, open) => {
+    requireShell(event);
+    if (open === false) {
+      accountFormOpen = false;
+      bounds();
+      return;
+    }
+    if (open !== true || !auth || performance.now() >= leaseUntil) throw Error("请先登录客户端");
+    const generation = epoch;
+    const options = await request<AccountOptions>("/client/account-options");
+    if (!auth || generation !== epoch) throw Error("登录状态已变化，请重试");
+    accountFormOpen = true;
+    bounds();
+    return options;
+  });
+  ipcMain.handle("shell:create-account", async (event, input: NewAccount) => {
+    requireShell(event);
+    if (!auth || performance.now() >= leaseUntil) throw Error("请先登录客户端");
+    if (creatingAccount) throw Error("正在添加账号，请稍后");
+    if (
+      !input ||
+      typeof input.label !== "string" ||
+      !input.label.trim() ||
+      [...input.label.trim()].length > 100 ||
+      typeof input.platform !== "string" ||
+      typeof input.proxyId !== "string" ||
+      typeof input.requestId !== "string"
+    )
+      throw Error("请填写账号名称并选择平台和代理");
+    getPlatform(input.platform);
+    const generation = epoch;
+    creatingAccount = true;
+    try {
+      const result = await request<{ id: string }>("/client/accounts", {
+        label: input.label.trim(),
+        platform: input.platform,
+        proxyId: input.proxyId,
+        requestId: input.requestId,
+      });
+      if (!auth || generation !== epoch) throw Error("登录状态已变化，请重新登录后查看账号");
+      await refresh();
+      if (!auth || generation !== epoch) throw Error("登录状态已变化，请重新登录后查看账号");
+      return result.id;
+    } finally {
+      creatingAccount = false;
+    }
   });
   ipcMain.handle("wa:translate", async (event, payload) => {
     const runtime = requireRuntime(event);

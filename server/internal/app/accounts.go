@@ -36,66 +36,6 @@ func (a *App) listAccounts(c *gin.Context) {
 	}
 	ok(c, out)
 }
-func (a *App) createAccount(c *gin.Context) {
-	var b struct {
-		Label   string `json:"label"`
-		CodeID  string `json:"codeId"`
-		ProxyID string `json:"proxyId"`
-	}
-	if c.ShouldBindJSON(&b) != nil || len(b.Label) == 0 || len(b.Label) > 100 {
-		fail(c, 400, "请填写账号名称并选择登录码、代理")
-		return
-	}
-	ctx := c.Request.Context()
-	id := identity(c)
-	tx, e := a.DB.Begin(ctx)
-	if e != nil {
-		dbError(c, e)
-		return
-	}
-	defer tx.Rollback(ctx)
-	var code, proxy string
-	var max int
-	e = tx.QueryRow(ctx, `SELECT id::text,max_accounts FROM login_codes WHERE id::text=$1 AND tenant_id=$2 AND enabled AND expires_at>now() FOR UPDATE`, b.CodeID, id.Tenant).Scan(&code, &max)
-	if errors.Is(e, pgx.ErrNoRows) {
-		fail(c, 400, "请选择有效的登录码")
-		return
-	}
-	if e != nil {
-		dbError(c, e)
-		return
-	}
-	var n int
-	if e = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts WHERE code_id=$1`, code).Scan(&n); e != nil {
-		dbError(c, e)
-		return
-	}
-	if n >= max {
-		fail(c, 409, "已达到该登录码的账号额度")
-		return
-	}
-	e = tx.QueryRow(ctx, `SELECT id::text FROM proxies WHERE id::text=$1 AND tenant_id=$2 AND enabled`, b.ProxyID, id.Tenant).Scan(&proxy)
-	if errors.Is(e, pgx.ErrNoRows) {
-		fail(c, 400, "请选择可用的代理")
-		return
-	}
-	if e != nil {
-		dbError(c, e)
-		return
-	}
-	var account string
-	e = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,label) VALUES($1,$2,$3,$4) RETURNING id::text`, id.Tenant, code, proxy, b.Label).Scan(&account)
-	if e != nil {
-		dbError(c, e)
-		return
-	}
-	if e = tx.Commit(ctx); e != nil {
-		dbError(c, e)
-		return
-	}
-	a.audit(c, id.Tenant, id.Actor, "account.create", true)
-	ok(c, gin.H{"id": account})
-}
 func (a *App) clientAccounts(c *gin.Context) {
 	id := identity(c)
 	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,p.host,p.port,COALESCE(a.device_id::text,'') FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.tenant_id=$1 AND a.code_id=$2 AND p.enabled ORDER BY a.created_at`, id.Tenant, id.Code)

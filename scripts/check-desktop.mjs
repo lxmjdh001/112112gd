@@ -74,16 +74,7 @@ await api("/proxies/import", {
 });
 const proxies = await api("/proxies");
 const p = proxies.find((x) => x.port === port);
-const account = await api("/platform-accounts", {
-  label: "验收 WhatsApp",
-  codeId: code.id,
-  proxyId: p.id,
-});
-const second = await api("/platform-accounts", {
-  label: "独立环境验证",
-  codeId: code.id,
-  proxyId: p.id,
-});
+let account, second;
 await build({
   stdin: {
     contents:
@@ -114,9 +105,17 @@ try {
   await page.locator("summary").click();
   await page.locator("#api-url").fill("http://127.0.0.1:18081");
   await page.getByRole("button", { name: "进入工作台" }).click();
-  await page.getByRole("button", { name: /验收 WhatsApp/ }).waitFor();
+  await page.getByRole("button", { name: "＋ 添加账号", exact: true }).waitFor();
   await page.screenshot({ path: ".runtime/desktop-shell.png" });
-  await page.getByRole("button", { name: /验收 WhatsApp/ }).click();
+  await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor();
+  await page.locator("#account-label").fill("验收 WhatsApp");
+  await page.locator("#account-proxy").selectOption(p.id);
+  await page.getByRole("button", { name: "添加并登录", exact: true }).click();
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: /验收 WhatsApp/ }).waitFor();
+  account = (await api("/platform-accounts")).find((a) => a.label === "验收 WhatsApp");
+  assert(account?.deviceName, "Client-created account must appear in admin with its device");
   let wa;
   for (let i = 0; i < 50; i++) {
     const status = await app.evaluate(({ webContents }) =>
@@ -134,10 +133,15 @@ try {
   if (!wa) throw Error("Official WhatsApp view did not load");
   // The document load event precedes the official app's asynchronous QR setup.
   for (let i = 0; i < 60; i++) {
-    const ready = await app.evaluate(async ({webContents},id) =>
-      webContents.fromId(id).executeJavaScript(
-        'Array.from(document.querySelectorAll("canvas")).some(c => c.getBoundingClientRect().width > 100)',
-      ), wa);
+    const ready = await app.evaluate(
+      async ({ webContents }, id) =>
+        webContents
+          .fromId(id)
+          .executeJavaScript(
+            'Array.from(document.querySelectorAll("canvas")).some(c => c.getBoundingClientRect().width > 100)',
+          ),
+      wa,
+    );
     if (ready) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
@@ -162,6 +166,53 @@ try {
   assert.equal(snapshot.security.contextIsolation, true);
   assert.equal(snapshot.security.sandbox, true);
   assert(requests.includes("web.whatsapp.com"));
+  // Keep the native page alive, but hide it while the shell's form is open.
+  await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor();
+  assert.equal(
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]
+        .contentView.children.filter((view) =>
+          view.webContents?.getURL().startsWith("https://web.whatsapp.com"),
+        )
+        .every((view) => !view.getVisible()),
+    ),
+    true,
+  );
+  await page.screenshot({ path: ".runtime/desktop-add-account.png" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor({ state: "hidden" });
+  assert.equal(
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]
+        .contentView.children.filter((view) =>
+          view.webContents?.getURL().startsWith("https://web.whatsapp.com"),
+        )
+        .some((view) => view.getVisible()),
+    ),
+    true,
+  );
+  second = {
+    id: await page.evaluate(
+      async (proxyId) =>
+        window.gongdan.createAccount({
+          label: "独立环境验证",
+          platform: "whatsapp",
+          proxyId,
+          requestId: crypto.randomUUID(),
+        }),
+      p.id,
+    ),
+  };
+  await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: "添加并登录", exact: true }).isDisabled(),
+    true,
+  );
+  assert.match(await page.getByRole("dialog", { name: "添加账号" }).innerText(), /账号额度已用完/);
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog", { name: "添加账号" }).waitFor({ state: "hidden" });
   const translation = await app.evaluate(
     async ({ webContents }, { id, modulePath, port }) => {
       const { GoogleFreeTranslator, throughSession } = process
@@ -230,6 +281,9 @@ try {
     JSON.stringify({
       passed: [
         "desktop login code",
+        "client account creation and admin synchronization",
+        "native view preserved behind account form",
+        "account quota feedback",
         "authenticated HTTP proxy",
         "official WhatsApp page",
         "translation overlay",

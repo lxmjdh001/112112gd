@@ -13,6 +13,25 @@ export interface ProxyConfig {
   username: string;
   password: string;
 }
+export interface AccountOptions {
+  maxAccounts: number;
+  usedAccounts: number;
+  platforms: { id: string; name: string }[];
+  proxies: {
+    id: string;
+    label: string;
+    protocol: string;
+    host: string;
+    port: number;
+    group: string;
+  }[];
+}
+export interface NewAccount {
+  label: string;
+  platform: string;
+  proxyId: string;
+  requestId: string;
+}
 export interface ClientAuth {
   accessToken: string;
   deviceId: string;
@@ -37,6 +56,8 @@ export interface ShellAPI {
   refresh(): Promise<void>;
   reload(): Promise<void>;
   open(id: string): Promise<void>;
+  accountForm(open: boolean): Promise<AccountOptions | undefined>;
+  createAccount(account: NewAccount): Promise<string>;
   onState(fn: (s: ViewState) => void): void;
 }
 export const stateLabels: Record<string, string> = {
