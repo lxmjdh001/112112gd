@@ -53,6 +53,7 @@ const state: ViewState = {
   loggedIn: false,
   label: "",
   accounts: [],
+  platforms: [],
   activeId: "",
   statuses: {},
   message: "",
@@ -143,6 +144,7 @@ async function terminate(message: string) {
   accountFormOpen = false;
   state.label = "";
   state.accounts = [];
+  state.platforms = [];
   state.activeId = "";
   state.statuses = {};
   state.message = message;
@@ -178,9 +180,13 @@ function refresh() {
 }
 async function syncAccounts() {
   const generation = epoch;
-  const accounts = await request<Account[]>("/client/accounts");
+  const [accounts, platforms] = await Promise.all([
+    request<Account[]>("/client/accounts"),
+    request<ViewState["platforms"]>("/client/platforms"),
+  ]);
   if (!auth || generation !== epoch) return;
   state.accounts = accounts;
+  state.platforms = platforms;
   const allowed = new Set(
     accounts.filter((account) => account.available).map((account) => account.id),
   );
@@ -192,9 +198,13 @@ async function syncAccounts() {
     }
   }
   for (const account of accounts) {
-    if (account.unavailableReason === "proxy_disabled")
-      state.statuses[account.id] = "proxy_disabled";
-    else if (state.statuses[account.id] === "proxy_disabled") delete state.statuses[account.id];
+    if (
+      account.unavailableReason === "proxy_disabled" ||
+      account.unavailableReason === "platform_not_allowed"
+    )
+      state.statuses[account.id] = account.unavailableReason;
+    else if (["proxy_disabled", "platform_not_allowed"].includes(state.statuses[account.id] || ""))
+      delete state.statuses[account.id];
   }
   bounds();
   emit();

@@ -78,7 +78,7 @@ func (h *harness) call(method, path, token string, body any) (int, map[string]an
 }
 func (h *harness) code(t *testing.T) (string, string) {
 	t.Helper()
-	status, data := h.call("POST", "/login-codes", h.admin, gin.H{"label": "test", "maxDevices": 1, "maxAccounts": 1, "expiresAt": time.Now().Add(time.Hour)})
+	status, data := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "test", "maxDevices": 1, "maxAccounts": 1, "expiresAt": time.Now().Add(time.Hour)})
 	if status != 200 {
 		t.Fatal(data)
 	}

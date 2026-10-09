@@ -9,19 +9,20 @@ import (
 )
 
 type codeInput struct {
-	Label       string    `json:"label"`
-	GroupID     string    `json:"groupId"`
-	ExpiresAt   time.Time `json:"expiresAt"`
-	MaxDevices  int       `json:"maxDevices"`
-	MaxAccounts int       `json:"maxAccounts"`
-	Enabled     bool      `json:"enabled"`
+	AllowedPlatforms *[]string `json:"allowedPlatforms"`
+	Label            string    `json:"label"`
+	GroupID          string    `json:"groupId"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+	MaxDevices       int       `json:"maxDevices"`
+	MaxAccounts      int       `json:"maxAccounts"`
+	Enabled          bool      `json:"enabled"`
 }
 
 func (b codeInput) valid() bool {
 	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now()) && b.MaxDevices > 0 && b.MaxDevices <= 100 && b.MaxAccounts > 0 && b.MaxAccounts <= 500
 }
 func (a *App) listCodes(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,'') FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -31,13 +32,14 @@ func (a *App) listCodes(c *gin.Context) {
 	for rows.Next() {
 		var id, label, suffix, groupID, groupName string
 		var enabled bool
+		var platforms []string
 		var expires, created time.Time
 		var maxD, maxA, devices, accounts int
-		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName); e != nil {
+		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName, &platforms); e != nil {
 			dbError(c, e)
 			return
 		}
-		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName})
+		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName, "allowedPlatforms": platforms})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -47,8 +49,8 @@ func (a *App) listCodes(c *gin.Context) {
 }
 func (a *App) createCode(c *gin.Context) {
 	var b codeInput
-	if c.ShouldBindJSON(&b) != nil || !b.valid() {
-		fail(c, 400, "请检查名称、有效期和额度（设备 1–100，账号 1–500）")
+	if c.ShouldBindJSON(&b) != nil || !b.valid() || b.AllowedPlatforms == nil || len(*b.AllowedPlatforms) == 0 || !validPlatformGrants(*b.AllowedPlatforms) {
+		fail(c, 400, "请检查名称、有效期和额度，并至少勾选一个已开放的平台")
 		return
 	}
 	id := identity(c)
@@ -64,7 +66,7 @@ func (a *App) createCode(c *gin.Context) {
 	}
 	raw := "GD7-" + security.Token()
 	var codeID string
-	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID).Scan(&codeID)
+	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id,allowed_platforms) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID, *b.AllowedPlatforms).Scan(&codeID)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -78,7 +80,7 @@ func (a *App) createCode(c *gin.Context) {
 }
 func (a *App) updateCode(c *gin.Context) {
 	var b codeInput
-	if c.ShouldBindJSON(&b) != nil || len(b.Label) == 0 || len(b.Label) > 100 || b.MaxDevices < 1 || b.MaxDevices > 100 || b.MaxAccounts < 1 || b.MaxAccounts > 500 || b.ExpiresAt.IsZero() {
+	if c.ShouldBindJSON(&b) != nil || len(b.Label) == 0 || len(b.Label) > 100 || b.MaxDevices < 1 || b.MaxDevices > 100 || b.MaxAccounts < 1 || b.MaxAccounts > 500 || b.ExpiresAt.IsZero() || (b.AllowedPlatforms != nil && !validPlatformGrants(*b.AllowedPlatforms)) {
 		fail(c, 400, "参数不正确")
 		return
 	}
@@ -108,7 +110,11 @@ func (a *App) updateCode(c *gin.Context) {
 		fail(c, 409, "额度不能低于现有设备或账号数量，请先解绑")
 		return
 	}
-	_, e = tx.Exec(ctx, `UPDATE login_codes SET label=$1,enabled=$2,expires_at=$3,max_devices=$4,max_accounts=$5 WHERE id=$6`, b.Label, b.Enabled, b.ExpiresAt, b.MaxDevices, b.MaxAccounts, code)
+	var platforms any
+	if b.AllowedPlatforms != nil {
+		platforms = *b.AllowedPlatforms
+	}
+	_, e = tx.Exec(ctx, `UPDATE login_codes SET label=$1,enabled=$2,expires_at=$3,max_devices=$4,max_accounts=$5,allowed_platforms=COALESCE($7,allowed_platforms) WHERE id=$6`, b.Label, b.Enabled, b.ExpiresAt, b.MaxDevices, b.MaxAccounts, code, platforms)
 	if e == nil && !b.Enabled {
 		_, e = tx.Exec(ctx, `DELETE FROM client_sessions WHERE device_id IN(SELECT id FROM devices WHERE code_id=$1)`, code)
 	}

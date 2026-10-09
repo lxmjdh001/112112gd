@@ -1,6 +1,12 @@
 import { requestClient } from "#/api/request";
 export const api = requestClient;
+export interface PlatformOption {
+  id: string;
+  name: string;
+  available: boolean;
+}
 export interface LoginCode {
+  allowedPlatforms: string[];
   id: string;
   label: string;
   groupId: string;
@@ -56,6 +62,7 @@ export const statusNames: Record<string, string> = {
   stale: "状态已过期",
   closed: "客户端已关闭",
   proxy_disabled: "代理已禁用",
+  platform_not_allowed: "平台未授权",
 };
 export const date = (value: string | null) =>
   value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—";

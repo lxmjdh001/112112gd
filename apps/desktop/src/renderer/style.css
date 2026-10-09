@@ -299,3 +299,15 @@ aside {
   border-radius: 8px;
   padding: 11px 18px;
 }
+
+.platform-grants {
+  font-size: 12px;
+  color: #8b93a7;
+  line-height: 1.6;
+  margin: 0 4px 14px;
+  overflow-wrap: anywhere;
+}
+.add-account:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

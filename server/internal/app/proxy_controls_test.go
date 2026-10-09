@@ -175,13 +175,21 @@ func TestProxyPerPlatformLimitAndDisable(t *testing.T) {
 	_, b = h.call("GET", "/client/accounts", client, nil)
 	for _, v := range b["data"].([]any) {
 		row := v.(map[string]any)
-		if row["available"] != false || row["unavailableReason"] != "proxy_disabled" {
+		reason := "proxy_disabled"
+		if row["platform"] != "whatsapp" {
+			reason = "platform_not_allowed"
+		}
+		if row["available"] != false || row["unavailableReason"] != reason {
 			t.Fatal("disabled account still available", row)
 		}
 	}
 	_, b = h.call("GET", "/platform-accounts", h.admin, nil)
 	for _, v := range b["data"].([]any) {
-		if v.(map[string]any)["status"] != "proxy_disabled" {
+		reason := "proxy_disabled"
+		if v.(map[string]any)["platform"] != "whatsapp" {
+			reason = "platform_not_allowed"
+		}
+		if v.(map[string]any)["status"] != reason {
 			t.Fatal("admin state incorrect", v)
 		}
 	}

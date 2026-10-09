@@ -18,6 +18,7 @@ token = (
   await api("/auth/login", { username: env.BOOTSTRAP_USERNAME, password: env.BOOTSTRAP_PASSWORD })
 ).accessToken;
 const code = await api("/login-codes", {
+  allowedPlatforms: ["whatsapp"],
   label: "底库验收",
   maxDevices: 1,
   maxAccounts: 2,

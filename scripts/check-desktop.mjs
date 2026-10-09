@@ -63,6 +63,7 @@ token = (
   await api("/auth/login", { username: env.BOOTSTRAP_USERNAME, password: env.BOOTSTRAP_PASSWORD })
 ).accessToken;
 const code = await api("/login-codes", {
+  allowedPlatforms: ["whatsapp"],
   label: "桌面验收",
   expiresAt: new Date(Date.now() + 86400000).toISOString(),
   maxDevices: 1,
@@ -365,6 +366,37 @@ try {
     true,
     "Storage probe must use the real account partition",
   );
+  // Code platform grants also pause native pages and preserve their profiles.
+  const policy = {
+    label: "桌面验收",
+    enabled: true,
+    maxDevices: 1,
+    maxAccounts: 2,
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+  };
+  await api("/login-codes/" + code.id, { ...policy, allowedPlatforms: [] }, "PATCH");
+  await page.getByRole("button", { name: /验收 WhatsApp.*平台未授权/ }).waitFor({ timeout: 40000 });
+  assert.equal(
+    await page.getByRole("button", { name: "＋ 添加账号", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByRole("heading", { name: "尚未分配可用平台", exact: true }).waitFor();
+  assert.equal(
+    await app.evaluate(
+      ({ webContents }) =>
+        webContents
+          .getAllWebContents()
+          .filter((w) => w.getURL().startsWith("https://web.whatsapp.com")).length,
+    ),
+    0,
+  );
+  await api("/login-codes/" + code.id, { ...policy, allowedPlatforms: ["whatsapp"] }, "PATCH");
+  await page.evaluate(() => window.gongdan.refresh());
+  assert.equal(
+    await page.getByRole("button", { name: "＋ 添加账号", exact: true }).isEnabled(),
+    true,
+  );
+  await page.evaluate((id) => window.gongdan.open(id), account.id);
   // Disabling a proxy must pause its already-open native page on heartbeat.
   await api("/proxies/" + p.id, { enabled: false }, "PATCH");
   await page.getByRole("button", { name: /验收 WhatsApp.*代理已禁用/ }).waitFor({ timeout: 40000 });
@@ -437,6 +469,7 @@ try {
         "customer duplicate overlay and idempotent registration (synthetic native DOM fixture)",
         "Google translation through account proxy",
         "cookie isolation",
+        "code platform revocation closes views; re-grant restores availability and retains profile",
         "proxy quota details",
         "proxy disable closes native view on heartbeat and reenable retains cookies",
         "revocation closes native view",

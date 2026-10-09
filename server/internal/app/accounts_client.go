@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -15,7 +16,8 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 	id := identity(c)
 	ctx := c.Request.Context()
 	var max, used int
-	err := a.DB.QueryRow(ctx, `SELECT max_accounts,(SELECT count(*) FROM platform_accounts WHERE code_id=l.id) FROM login_codes l WHERE id=$1 AND tenant_id=$2`, id.Code, id.Tenant).Scan(&max, &used)
+	var grants []string
+	err := a.DB.QueryRow(ctx, `SELECT max_accounts,allowed_platforms,(SELECT count(*) FROM platform_accounts WHERE code_id=l.id) FROM login_codes l WHERE id=$1 AND tenant_id=$2`, id.Code, id.Tenant).Scan(&max, &grants, &used)
 	if err != nil {
 		dbError(c, err)
 		return
@@ -41,7 +43,7 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 		dbError(c, err)
 		return
 	}
-	ok(c, gin.H{"maxAccounts": max, "usedAccounts": used, "proxies": proxies, "platforms": []gin.H{{"id": "whatsapp", "name": "WhatsApp"}}})
+	ok(c, gin.H{"maxAccounts": max, "usedAccounts": used, "proxies": proxies, "platforms": enabledPlatforms(grants)})
 }
 
 func (a *App) createClientAccount(c *gin.Context) {
@@ -71,13 +73,18 @@ func (a *App) createClientAccount(c *gin.Context) {
 	defer tx.Rollback(ctx)
 	// Serialize account quota and authorization changes for this login code.
 	var max int
-	err = tx.QueryRow(ctx, `SELECT max_accounts FROM login_codes l WHERE id=$1 AND tenant_id=$2 AND enabled AND expires_at>now() FOR UPDATE`, id.Code, id.Tenant).Scan(&max)
+	var grants []string
+	err = tx.QueryRow(ctx, `SELECT max_accounts,allowed_platforms FROM login_codes l WHERE id=$1 AND tenant_id=$2 AND enabled AND expires_at>now() FOR UPDATE`, id.Code, id.Tenant).Scan(&max, &grants)
 	if errors.Is(err, pgx.ErrNoRows) {
 		fail(c, 401, "登录码已停用或到期")
 		return
 	}
 	if err != nil {
 		dbError(c, err)
+		return
+	}
+	if !slices.Contains(grants, body.Platform) {
+		fail(c, 403, "当前登录码未授权此平台，请联系管理员勾选可用平台")
 		return
 	}
 	var authorized bool

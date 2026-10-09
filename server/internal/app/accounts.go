@@ -9,7 +9,7 @@ import (
 )
 
 func (a *App) listAccounts(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,l.label,p.host,p.port,a.observed_status,a.observed_at,COALESCE(d.name,''),COALESCE(d.active,false),d.last_seen,p.enabled FROM platform_accounts a JOIN login_codes l ON a.code_id=l.id JOIN proxies p ON p.id=a.proxy_id LEFT JOIN devices d ON d.id=a.device_id WHERE a.tenant_id=$1 ORDER BY a.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,l.label,p.host,p.port,a.observed_status,a.observed_at,COALESCE(d.name,''),COALESCE(d.active,false),d.last_seen,p.enabled,a.platform=ANY(l.allowed_platforms) FROM platform_accounts a JOIN login_codes l ON a.code_id=l.id JOIN proxies p ON p.id=a.proxy_id LEFT JOIN devices d ON d.id=a.device_id WHERE a.tenant_id=$1 ORDER BY a.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -20,8 +20,8 @@ func (a *App) listAccounts(c *gin.Context) {
 		var id, label, platform, code, host, state, device string
 		var port int
 		var at, seen *time.Time
-		var active, proxyEnabled bool
-		if e = rows.Scan(&id, &label, &platform, &code, &host, &port, &state, &at, &device, &active, &seen, &proxyEnabled); e != nil {
+		var active, proxyEnabled, platformAllowed bool
+		if e = rows.Scan(&id, &label, &platform, &code, &host, &port, &state, &at, &device, &active, &seen, &proxyEnabled, &platformAllowed); e != nil {
 			dbError(c, e)
 			return
 		}
@@ -30,6 +30,9 @@ func (a *App) listAccounts(c *gin.Context) {
 		}
 		if !proxyEnabled {
 			state = "proxy_disabled"
+		}
+		if !platformAllowed {
+			state = "platform_not_allowed"
 		}
 		out = append(out, gin.H{"id": id, "label": label, "platform": platform, "codeLabel": code, "proxyHost": host, "proxyPort": port, "status": state, "observedAt": at, "deviceName": device})
 	}
@@ -41,7 +44,7 @@ func (a *App) listAccounts(c *gin.Context) {
 }
 func (a *App) clientAccounts(c *gin.Context) {
 	id := identity(c)
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,p.host,p.port,COALESCE(a.device_id::text,''),p.enabled FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.tenant_id=$1 AND a.code_id=$2 ORDER BY a.created_at`, id.Tenant, id.Code)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,p.host,p.port,COALESCE(a.device_id::text,''),p.enabled,a.platform=ANY(l.allowed_platforms) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id JOIN login_codes l ON l.id=a.code_id WHERE a.tenant_id=$1 AND a.code_id=$2 ORDER BY a.created_at`, id.Tenant, id.Code)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -51,13 +54,15 @@ func (a *App) clientAccounts(c *gin.Context) {
 	for rows.Next() {
 		var key, label, platform, host, device string
 		var port int
-		var enabled bool
-		if e = rows.Scan(&key, &label, &platform, &host, &port, &device, &enabled); e != nil {
+		var enabled, platformAllowed bool
+		if e = rows.Scan(&key, &label, &platform, &host, &port, &device, &enabled, &platformAllowed); e != nil {
 			dbError(c, e)
 			return
 		}
 		reason := ""
-		if !enabled {
+		if !platformAllowed {
+			reason = "platform_not_allowed"
+		} else if !enabled {
 			reason = "proxy_disabled"
 		} else if device != "" && device != id.Device {
 			reason = "other_device"
@@ -79,11 +84,21 @@ func (a *App) openAccount(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback(ctx)
+	var grants []string
+	e = tx.QueryRow(ctx, `SELECT allowed_platforms FROM login_codes WHERE id=$1 AND tenant_id=$2 AND enabled AND expires_at>now() FOR SHARE`, id.Code, id.Tenant).Scan(&grants)
+	if errors.Is(e, pgx.ErrNoRows) {
+		fail(c, 401, "登录码已停用或到期")
+		return
+	}
+	if e != nil {
+		dbError(c, e)
+		return
+	}
 	var account, device, protocol, host, user, cipher string
 	var port int
-	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),p.protocol,p.host,p.port,p.username,p.password_cipher FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND p.enabled FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code).Scan(&account, &device, &protocol, &host, &port, &user, &cipher)
+	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),p.protocol,p.host,p.port,p.username,p.password_cipher FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND p.enabled AND a.platform=ANY($4::text[]) FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code, grants).Scan(&account, &device, &protocol, &host, &port, &user, &cipher)
 	if errors.Is(e, pgx.ErrNoRows) {
-		fail(c, 404, "账号或代理不可用")
+		fail(c, 404, "账号、平台授权或代理不可用")
 		return
 	}
 	if e != nil {
@@ -124,7 +139,7 @@ func (a *App) accountStatus(c *gin.Context) {
 		return
 	}
 	id := identity(c)
-	r, e := a.DB.Exec(c.Request.Context(), `UPDATE platform_accounts SET observed_status=$1,observed_at=now() WHERE id::text=$2 AND tenant_id=$3 AND code_id=$4 AND device_id=$5 AND EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled)`, b.Status, c.Param("id"), id.Tenant, id.Code, id.Device)
+	r, e := a.DB.Exec(c.Request.Context(), `UPDATE platform_accounts SET observed_status=$1,observed_at=now() WHERE id::text=$2 AND tenant_id=$3 AND code_id=$4 AND device_id=$5 AND EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=platform_accounts.code_id AND platform_accounts.platform=ANY(l.allowed_platforms))`, b.Status, c.Param("id"), id.Tenant, id.Code, id.Device)
 	if e != nil {
 		dbError(c, e)
 		return

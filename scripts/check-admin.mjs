@@ -28,6 +28,15 @@ try {
   await page.getByRole("dialog", { name: "管理分组" }).waitFor({ state: "hidden" });
   assert.match(await page.getByRole("dialog", { name: "创建长期登录码" }).innerText(), /投放一组/);
   await page.getByPlaceholder("例如：客服小林、投手小王").fill("验收 · 使用者01");
+  const createDialog = page.getByRole("dialog", { name: "创建长期登录码" });
+  assert.equal(
+    await createDialog.getByRole("button", { name: "生成登录码", exact: true }).isDisabled(),
+    true,
+  );
+  assert.equal(await createDialog.getByRole("checkbox", { name: /LINE/ }).isDisabled(), true);
+  await createDialog.getByText("WhatsApp", { exact: true }).click();
+  await page.screenshot({ path: ".runtime/login-code-platforms.png", fullPage: true });
+
   await page.getByRole("button", { name: "生成登录码" }).click();
   await page.getByText("登录码已生成", { exact: true }).waitFor();
   const code = await page.locator(".secret").innerText();
@@ -38,9 +47,28 @@ try {
     .locator(".business > .panel .el-table__body-wrapper tr")
     .filter({ hasText: "验收 · 使用者01" });
   assert.match(await firstRow.innerText(), /投放一组/);
+  assert.match(await firstRow.innerText(), /WhatsApp/);
+  await firstRow.getByRole("button", { name: "编辑", exact: true }).click();
+  const editDialog = page.getByRole("dialog", { name: "编辑登录码", exact: true });
+  await editDialog.getByText("WhatsApp", { exact: true }).click();
+  await editDialog.getByRole("button", { name: "保存更改", exact: true }).click();
+  await editDialog.waitFor({ state: "hidden" });
+  await firstRow.getByText("未分配平台", { exact: true }).waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await firstRow.getByText("未分配平台", { exact: true }).waitFor();
+  await firstRow.getByRole("button", { name: "编辑", exact: true }).click();
+  await editDialog.getByText("WhatsApp", { exact: true }).click();
+  await editDialog.getByRole("button", { name: "保存更改", exact: true }).click();
+  await editDialog.waitFor({ state: "hidden" });
+  await firstRow.getByText("WhatsApp", { exact: true }).waitFor();
+
   // A second code without a group supports filtering and a real batch move.
   await page.getByRole("button", { name: "＋ 创建登录码" }).click();
   await page.getByPlaceholder("例如：客服小林、投手小王").fill("验收 · 使用者02");
+  await page
+    .getByRole("dialog", { name: "创建长期登录码" })
+    .getByText("WhatsApp", { exact: true })
+    .click();
   await page.getByRole("button", { name: "生成登录码" }).click();
   await page.getByText("登录码已生成", { exact: true }).waitFor();
   await page.getByRole("button", { name: "已保存，关闭" }).click();
@@ -246,6 +274,7 @@ try {
         "admin login",
         "dashboard",
         "create reusable code",
+        "explicit platform selection, editing, persistence and planned platforms disabled",
         "group create, filter, batch move, rename, reload and delete",
         "proxy validation, groups, limits, persistence, bulk move and enable/disable",
         "all 10 routes",

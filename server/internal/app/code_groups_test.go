@@ -55,7 +55,7 @@ func TestCodeGroupLifecyclePreservesLogin(t *testing.T) {
 	if s, _ := h.call("POST", "/login-code-groups", h.admin, gin.H{"name": "投放一组"}); s != 409 {
 		t.Fatal("duplicate allowed", s)
 	}
-	status, body = h.call("POST", "/login-codes", h.admin, gin.H{"label": "投手", "groupId": group, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1})
+	status, body = h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "投手", "groupId": group, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1})
 	if status != 200 {
 		t.Fatal(body)
 	}
@@ -117,7 +117,7 @@ func TestCodeGroupTenantBoundaryAndAtomicMove(t *testing.T) {
 			t.Fatal("foreign group mutation allowed", method, s)
 		}
 	}
-	if s, _ := h.call("POST", "/login-codes", h.admin, gin.H{"label": "foreign", "groupId": otherGroup, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1}); s != 404 {
+	if s, _ := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "foreign", "groupId": otherGroup, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1}); s != 404 {
 		t.Fatal("foreign group create allowed", s)
 	}
 	for _, body := range []gin.H{

@@ -14,11 +14,22 @@ import {
   ElAlert,
   ElSelect,
   ElOption,
+  ElCheckbox,
+  ElCheckboxGroup,
 } from "element-plus";
-import { api, date, type LoginCode, type LoginCodeGroup } from "#/api/business";
+import {
+  api,
+  date,
+  type LoginCode,
+  type LoginCodeGroup,
+  type PlatformOption,
+} from "#/api/business";
 import LoginCodeGroups from "./components/login-code-groups.vue";
 import "./common.css";
 const rows = ref<LoginCode[]>([]);
+const platforms = ref<PlatformOption[]>([]);
+const editing = ref<LoginCode>();
+const platformName = (id: string) => platforms.value.find((p) => p.id === id)?.name || id;
 const loading = ref(false);
 const saving = ref(false);
 const show = ref(false);
@@ -43,6 +54,7 @@ const visibleRows = computed(() =>
 const ungroupedCount = computed(() => rows.value.filter((row) => !row.groupId).length);
 watch([query, groupFilter], () => table.value?.clearSelection());
 const form = reactive({
+  allowedPlatforms: [] as string[],
   label: "",
   groupId: "",
   maxDevices: 1,
@@ -61,11 +73,13 @@ const devicesOpen = ref(false);
 async function load() {
   loading.value = true;
   try {
-    const [codes, codeGroups] = await Promise.all([
+    const [codes, codeGroups, catalog] = await Promise.all([
       api.get<LoginCode[]>("/login-codes"),
       api.get<LoginCodeGroup[]>("/login-code-groups"),
+      api.get<PlatformOption[]>("/platforms"),
     ]);
     rows.value = codes;
+    platforms.value = catalog;
     groups.value = codeGroups;
     table.value?.clearSelection();
     if (
@@ -80,7 +94,27 @@ async function load() {
   }
 }
 function openCreate() {
+  editing.value = undefined;
+  Object.assign(form, {
+    label: "",
+    allowedPlatforms: [],
+    maxDevices: 1,
+    maxAccounts: 3,
+    expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+  });
   form.groupId = groupFilter.value === "all" ? "" : groupFilter.value;
+  show.value = true;
+}
+function openEdit(row: LoginCode) {
+  editing.value = row;
+  Object.assign(form, {
+    label: row.label,
+    groupId: row.groupId,
+    allowedPlatforms: [...row.allowedPlatforms],
+    maxDevices: row.maxDevices,
+    maxAccounts: row.maxAccounts,
+    expiresAt: row.expiresAt,
+  });
   show.value = true;
 }
 function groupCreated(group: LoginCodeGroup) {
@@ -113,10 +147,19 @@ async function move() {
   }
 }
 async function create() {
+  if (saving.value || (!editing.value && !form.allowedPlatforms.length)) return;
   saving.value = true;
   try {
-    const result = await api.post<{ code: string }>("/login-codes", form);
-    secret.value = result.code;
+    if (editing.value) {
+      await api.request(`/login-codes/${editing.value.id}`, {
+        method: "PATCH",
+        data: { ...form, enabled: editing.value.enabled },
+      });
+      ElMessage.success("登录码已更新");
+    } else {
+      const result = await api.post<{ code: string }>("/login-codes", form);
+      secret.value = result.code;
+    }
     show.value = false;
     form.label = "";
     await load();
@@ -178,7 +221,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>登录码列表</h1>
-        <p class="subtitle">有效期内可重复登录，可设置设备数与平台账号额度。</p>
+        <p class="subtitle">创建时勾选客户端可用平台，并设置有效期、设备数与账号额度。</p>
       </div>
       <ElButton type="primary" @click="openCreate">＋ 创建登录码</ElButton>
     </div>
@@ -226,6 +269,17 @@ onMounted(load);
           <template #default="{ row }"
             ><span :class="{ muted: !row.groupId }">{{ row.groupName || "未分组" }}</span></template
           > </ElTableColumn
+        ><ElTableColumn label="可用平台" min-width="155"
+          ><template #default="{ row }"
+            ><span v-if="!row.allowedPlatforms.length" class="muted">未分配平台</span
+            ><ElTag
+              v-for="platform in row.allowedPlatforms"
+              :key="platform"
+              size="small"
+              style="margin: 2px 4px 2px 0"
+              >{{ platformName(platform) }}</ElTag
+            ></template
+          ></ElTableColumn
         ><ElTableColumn label="状态" width="100"
           ><template #default="{ row }"
             ><ElTag :type="!row.enabled ? 'info' : expired(row.expiresAt) ? 'danger' : 'success'">{{
@@ -242,8 +296,9 @@ onMounted(load);
           ></ElTableColumn
         ><ElTableColumn label="到期时间" min-width="170"
           ><template #default="{ row }">{{ date(row.expiresAt) }}</template></ElTableColumn
-        ><ElTableColumn label="操作" width="210" fixed="right"
+        ><ElTableColumn label="操作" width="250" fixed="right"
           ><template #default="{ row }"
+            ><ElButton link type="primary" @click="openEdit(row)">编辑</ElButton
             ><ElButton link type="primary" @click="openMove([row])">分组</ElButton
             ><ElButton link type="primary" @click="reset(row)">重置</ElButton
             ><ElButton link :type="row.enabled ? 'danger' : 'primary'" @click="toggle(row)">{{
@@ -253,7 +308,13 @@ onMounted(load);
         ></ElTable
       >
     </div>
-    <ElDialog v-model="show" title="创建长期登录码" width="480px" :close-on-click-modal="false"
+    <ElDialog
+      v-model="show"
+      :title="editing ? '编辑登录码' : '创建长期登录码'"
+      width="560px"
+      :close-on-click-modal="false"
+      :show-close="!saving"
+      :close-on-press-escape="!saving"
       ><form class="form-grid" @submit.prevent="create">
         <label class="field"
           >使用者 / 备注名称<ElInput
@@ -262,7 +323,7 @@ onMounted(load);
             placeholder="例如：客服小林、投手小王"
             required
         /></label>
-        <div class="field">
+        <div v-if="!editing" class="field">
           <span>选择分组</span>
           <div class="group-select-row">
             <ElSelect v-model="form.groupId" aria-label="选择分组" filterable>
@@ -277,6 +338,42 @@ onMounted(load);
             <ElButton @click="groupsOpen = true">新建分组</ElButton>
           </div>
         </div>
+        <div class="field">
+          <span
+            >客户端可用平台
+            <span v-if="!editing" style="color: var(--el-color-danger)">*</span></span
+          >
+          <ElCheckboxGroup
+            v-model="form.allowedPlatforms"
+            aria-label="客户端可用平台"
+            :disabled="saving"
+            class="platform-choices"
+          >
+            <ElCheckbox
+              v-for="platform in platforms"
+              :key="platform.id"
+              :value="platform.id"
+              :disabled="!platform.available"
+              border
+              >{{ platform.name
+              }}<span v-if="!platform.available" class="muted"> · 待开放</span></ElCheckbox
+            >
+          </ElCheckboxGroup>
+          <small>客户端只能添加和打开已勾选的平台，平台账号由使用者在客户端登录。</small>
+          <small v-if="editing"
+            >取消授权后，已打开的对应平台会在客户端下次同步时暂停，本地登录资料保留。</small
+          >
+          <ElAlert
+            v-if="!form.allowedPlatforms.length"
+            :title="
+              editing
+                ? '未选择任何平台，客户端将无法添加或打开平台账号。'
+                : '请至少勾选一个已开放的平台。'
+            "
+            type="warning"
+            :closable="false"
+          />
+        </div>
         <label class="field"
           >有效期至<ElDatePicker
             v-model="form.expiresAt"
@@ -288,7 +385,13 @@ onMounted(load);
           >最多设备数<ElInputNumber v-model="form.maxDevices" :min="1" :max="100" /></label
         ><label class="field"
           >平台账号额度<ElInputNumber v-model="form.maxAccounts" :min="1" :max="500" /></label
-        ><ElButton native-type="submit" type="primary" :loading="saving">生成登录码</ElButton>
+        ><ElButton
+          native-type="submit"
+          type="primary"
+          :loading="saving"
+          :disabled="!editing && !form.allowedPlatforms.length"
+          >{{ editing ? "保存更改" : "生成登录码" }}</ElButton
+        >
       </form></ElDialog
     ><ElDialog
       :model-value="!!secret"
@@ -340,6 +443,14 @@ onMounted(load);
   </div>
 </template>
 <style scoped>
+.platform-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.platform-choices .el-checkbox {
+  margin: 0;
+}
 .group-select-row {
   display: flex;
   gap: 10px;

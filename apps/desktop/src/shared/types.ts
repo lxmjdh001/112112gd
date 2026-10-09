@@ -5,7 +5,7 @@ export interface Account {
   proxyHost: string;
   proxyPort: number;
   available: boolean;
-  unavailableReason?: "proxy_disabled" | "other_device" | "";
+  unavailableReason?: "proxy_disabled" | "other_device" | "platform_not_allowed" | "";
 }
 export interface ProxyConfig {
   protocol: "socks5" | "http" | "https";
@@ -47,6 +47,7 @@ export interface ViewState {
   loggedIn: boolean;
   label: string;
   accounts: Account[];
+  platforms: { id: string; name: string }[];
   activeId: string;
   message: string;
   statuses: Record<string, string>;
@@ -71,4 +72,5 @@ export const stateLabels: Record<string, string> = {
   network_error: "网络异常",
   closed: "已关闭",
   proxy_disabled: "代理已禁用",
+  platform_not_allowed: "平台未授权",
 };

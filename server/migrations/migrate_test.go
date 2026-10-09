@@ -78,8 +78,12 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 	if err = db.QueryRow(ctx, `SELECT max_accounts_per_platform=1 AND group_id IS NULL AND enabled FROM proxies WHERE id=$1`, blankProxy).Scan(&preserved); err != nil || !preserved {
 		t.Fatal("ungrouped defaults wrong", err)
 	}
+	var grants []string
+	if err = db.QueryRow(ctx, `SELECT allowed_platforms FROM login_codes LIMIT 1`).Scan(&grants); err != nil || len(grants) != 1 || grants[0] != "whatsapp" {
+		t.Fatal("legacy code lost WhatsApp permission", grants, err)
+	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 6 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 7 {
 		t.Fatal("migration not idempotent", err, versions)
 	}
 }
