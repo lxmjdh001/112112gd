@@ -43,7 +43,7 @@ async function save() {
     await api.post("/platform-accounts", form);
     show.value = false;
     form.label = "";
-    ElMessage.success("账号位已创建，员工可在客户端打开并扫码");
+    ElMessage.success("账号位已创建，使用者可在客户端打开并扫码");
     await load();
   } finally {
     saving.value = false;
@@ -57,7 +57,7 @@ onMounted(load);
       <div>
         <h1>账号列表</h1>
         <p class="subtitle">
-          为登录码分配独立的 WhatsApp 环境。员工首次打开时绑定设备，随后在官方页面扫码。
+          为登录码分配独立的 WhatsApp 环境。使用者首次打开时绑定设备，随后在官方页面扫码。
         </p>
       </div>
       <ElButton type="primary" @click="open">＋ 创建账号位</ElButton>
@@ -124,7 +124,7 @@ onMounted(load);
             maxlength="100"
             required /></label
         ><label class="field"
-          >所属登录码<ElSelect v-model="form.codeId" placeholder="选择员工登录码"
+          >所属登录码<ElSelect v-model="form.codeId" placeholder="选择登录码"
             ><ElOption
               v-for="c in codes.filter(
                 (c) => c.enabled && new Date(c.expiresAt).getTime() > Date.now(),

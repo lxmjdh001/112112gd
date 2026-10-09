@@ -8,7 +8,7 @@ const form = reactive({ username: "", password: "" });
 <template>
   <form class="login-form" @submit.prevent="auth.authLogin(form)">
     <h1>登录管理中心</h1>
-    <p>管理员登录后，可为员工生成客户端登录码。</p>
+    <p>管理员登录后，可生成客户端登录码。</p>
     <label for="username">管理员账号</label
     ><ElInput
       id="username"
@@ -29,7 +29,7 @@ const form = reactive({ username: "", password: "" });
       required
     /><ElButton native-type="submit" type="primary" size="large" :loading="auth.loginLoading"
       >登录</ElButton
-    ><small>员工请打开客户端，使用管理员分配的长期登录码。</small>
+    ><small>请在客户端使用管理员分配的长期登录码。</small>
   </form>
 </template>
 <style scoped>

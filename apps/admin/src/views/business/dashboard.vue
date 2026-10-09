@@ -20,7 +20,7 @@ onMounted(async () => {
     <div class="page-head">
       <div>
         <h1>团队控制台</h1>
-        <p class="subtitle">统一管理工作账号，让员工在熟悉的官方界面中开始工作。</p>
+        <p class="subtitle">统一管理工作账号，让使用者在熟悉的官方界面中开始工作。</p>
       </div>
       <ElButton type="primary" @click="router.push('/login-codes')">创建登录码</ElButton>
     </div>
@@ -46,8 +46,8 @@ onMounted(async () => {
       <div class="steps">
         <div class="step">
           <b>01</b>
-          <h3>创建员工登录码</h3>
-          <p class="subtitle">设置有效期、设备数与平台账号额度。员工无需账号密码。</p>
+          <h3>创建登录码</h3>
+          <p class="subtitle">设置有效期、设备数与平台账号额度。使用者无需账号密码。</p>
           <ElButton link type="primary" @click="router.push('/login-codes')">管理登录码 →</ElButton>
         </div>
         <div class="step">
@@ -72,7 +72,7 @@ onMounted(async () => {
         已接入登录码、设备、代理、账号位和操作日志。推广、账户账务、底库、线索及客户运营按后续阶段开放。
       </p>
       <p class="subtitle">
-        账号位是供员工登录的平台环境；当前版本不采集 WhatsApp
+        账号位是供使用者登录的平台环境；当前版本不采集 WhatsApp
         手机号或聊天记录。网页就绪状态不等同于消息已送达。
       </p>
     </div>

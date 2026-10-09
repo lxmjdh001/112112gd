@@ -60,7 +60,7 @@ async function toggle(row: LoginCode) {
   await ElMessageBox.confirm(
     row.enabled
       ? "停用后，在线客户端将在下一次心跳失去访问权限。"
-      : "恢复后员工可再次使用该登录码登录。",
+      : "恢复后使用者可再次使用该登录码登录。",
     row.enabled ? "停用登录码" : "启用登录码",
     { type: "warning" },
   );
@@ -110,7 +110,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>登录码列表</h1>
-        <p class="subtitle">长期有效、可重复登录。通过设备额度控制员工使用范围。</p>
+        <p class="subtitle">有效期内可重复登录，可设置设备数与平台账号额度。</p>
       </div>
       <ElButton type="primary" @click="show = true">＋ 创建登录码</ElButton>
     </div>
@@ -132,8 +132,8 @@ onMounted(load);
             `${r.label}${r.maskedCode}`.toLowerCase().includes(query.toLowerCase()),
           )
         "
-        empty-text="还没有登录码，先为一名员工创建登录码"
-        ><ElTableColumn prop="label" label="名称 / 员工" min-width="140" /><ElTableColumn
+        empty-text="还没有登录码，点击“创建登录码”开始"
+        ><ElTableColumn prop="label" label="名称 / 使用者" min-width="140" /><ElTableColumn
           label="登录码"
           min-width="175"
           ><template #default="{ row }"
@@ -168,10 +168,10 @@ onMounted(load);
     <ElDialog v-model="show" title="创建长期登录码" width="480px" :close-on-click-modal="false"
       ><form class="form-grid" @submit.prevent="create">
         <label class="field"
-          >员工 / 备注名称<ElInput
+          >使用者 / 备注名称<ElInput
             v-model="form.label"
             maxlength="100"
-            placeholder="例如：客服小林"
+            placeholder="例如：客服小林、投手小王"
             required /></label
         ><label class="field"
           >有效期至<ElDatePicker
@@ -192,14 +192,14 @@ onMounted(load);
       width="540px"
       :close-on-click-modal="false"
       @close="secret = ''"
-      ><ElAlert title="完整登录码仅显示本次，请复制后交给员工。" type="success" :closable="false" />
+      ><ElAlert title="完整登录码仅显示本次，请复制后交给使用者。" type="success" :closable="false" />
       <p class="secret" style="margin-top: 18px">{{ secret }}</p>
       <template #footer
         ><ElButton @click="secret = ''">已保存，关闭</ElButton
         ><ElButton type="primary" @click="copy">复制登录码</ElButton></template
       ></ElDialog
     ><ElDialog v-model="devicesOpen" title="设备管理" width="760px"
-      ><ElTable :data="devices" empty-text="员工登录客户端后，设备会出现在这里"
+      ><ElTable :data="devices" empty-text="使用者登录客户端后，设备会出现在这里"
         ><ElTableColumn prop="name" label="设备" /><ElTableColumn
           prop="codeLabel"
           label="所属登录码"
