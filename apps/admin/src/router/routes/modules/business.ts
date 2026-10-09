@@ -33,13 +33,13 @@ const routes: RouteRecordRaw[] = [
   {
     name: "Promotion",
     path: "/promotion",
-    component: () => import("#/views/business/planned.vue"),
+    component: () => import("#/views/business/promotion.vue"),
     meta: { title: "推广中心", icon: "lucide:megaphone", order: 4, authority: ["admin"] },
   },
   {
     name: "AccountCenter",
     path: "/account-center",
-    component: () => import("#/views/business/planned.vue"),
+    component: () => import("#/views/business/account-center.vue"),
     meta: { title: "账户中心", icon: "lucide:circle-user-round", order: 5, authority: ["admin"] },
   },
   {

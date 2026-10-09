@@ -18,8 +18,15 @@ func (a *App) adminLogin(c *gin.Context) {
 		fail(c, 400, "请填写账号和密码")
 		return
 	}
+	ctx := c.Request.Context()
+	tx, e := a.DB.Begin(ctx)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	defer tx.Rollback(ctx)
 	var id, tenant, hash string
-	e := a.DB.QueryRow(c.Request.Context(), `SELECT id::text,tenant_id::text,password_hash FROM admins WHERE username=$1`, b.Username).Scan(&id, &tenant, &hash)
+	e = tx.QueryRow(ctx, `SELECT id::text,tenant_id::text,password_hash FROM admins WHERE username=$1 FOR SHARE`, b.Username).Scan(&id, &tenant, &hash)
 	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
 		dbError(c, e)
 		return
@@ -30,7 +37,11 @@ func (a *App) adminLogin(c *gin.Context) {
 		return
 	}
 	token := security.Token()
-	if _, e = a.DB.Exec(c.Request.Context(), `INSERT INTO admin_sessions VALUES($1,$2,now()+interval '8 hours')`, security.Hash(token), id); e != nil {
+	if _, e = tx.Exec(ctx, `INSERT INTO admin_sessions VALUES($1,$2,now()+interval '8 hours')`, security.Hash(token), id); e != nil {
+		dbError(c, e)
+		return
+	}
+	if e = tx.Commit(ctx); e != nil {
 		dbError(c, e)
 		return
 	}
@@ -39,12 +50,12 @@ func (a *App) adminLogin(c *gin.Context) {
 }
 func (a *App) userInfo(c *gin.Context) {
 	id := identity(c)
-	var name string
-	if e := a.DB.QueryRow(c.Request.Context(), `SELECT username FROM admins WHERE id=$1`, id.Actor).Scan(&name); e != nil {
+	var name, display string
+	if e := a.DB.QueryRow(c.Request.Context(), `SELECT username,COALESCE(NULLIF(display_name,''),username) FROM admins WHERE id=$1`, id.Actor).Scan(&name, &display); e != nil {
 		dbError(c, e)
 		return
 	}
-	ok(c, gin.H{"userId": id.Actor, "username": name, "realName": name, "roles": []string{"admin"}, "homePath": "/dashboard", "tenantId": id.Tenant, "avatar": "/logo.svg"})
+	ok(c, gin.H{"userId": id.Actor, "username": name, "realName": display, "roles": []string{"admin"}, "homePath": "/dashboard", "tenantId": id.Tenant, "avatar": "/logo.svg"})
 }
 func (a *App) adminLogout(c *gin.Context) {
 	_, e := a.DB.Exec(c.Request.Context(), `DELETE FROM admin_sessions WHERE token_hash=$1`, security.Hash(c.GetHeader("Authorization")[7:]))

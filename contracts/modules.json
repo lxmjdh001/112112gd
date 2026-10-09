@@ -68,7 +68,7 @@
       "name": "推广中心",
       "route": "/promotion",
       "completion_phase": "P7",
-      "status": "planned",
+      "status": "manual_commerce_implemented",
       "dependencies": [
         "identity",
         "billing"
@@ -77,14 +77,15 @@
         "promotion:read",
         "promotion:manage",
         "promotion:review-withdrawal"
-      ]
+      ],
+      "notes": "人工充值审核、余额流水、推广注册返佣、佣金转余额与提现审核已实现；自动支付、套餐购买、付费计量待接入。平台运营与团队账户权限分别校验。"
     },
     {
       "key": "account-center",
       "name": "账户中心",
       "route": "/account-center",
       "completion_phase": "P7",
-      "status": "planned",
+      "status": "manual_commerce_implemented",
       "dependencies": [
         "identity",
         "billing"
@@ -102,7 +103,8 @@
         "钱包日志",
         "字符日志",
         "购买记录"
-      ]
+      ],
+      "notes": "人工充值审核、余额流水、推广注册返佣、佣金转余额与提现审核已实现；自动支付、套餐购买、付费计量待接入。平台运营与团队账户权限分别校验。"
     },
     {
       "key": "login-logs",

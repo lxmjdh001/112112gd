@@ -18,6 +18,9 @@ var clientAccountCreation string
 //go:embed 004_proxy_controls.sql
 var proxyControls string
 
+//go:embed 005_account_promotion.sql
+var accountPromotion string
+
 func Run(ctx context.Context, db *pgxpool.Pool) error {
 	tx, e := db.Begin(ctx)
 	if e != nil {
@@ -33,7 +36,7 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	for _, migration := range []struct {
 		version int
 		sql     string
-	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}} {
+	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}, {5, accountPromotion}} {
 		var applied bool
 		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, migration.version).Scan(&applied); e != nil {
 			return e

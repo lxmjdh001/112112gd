@@ -252,6 +252,18 @@ try {
         .writeFileSync(dest, (await webContents.fromId(id).capturePage()).toPNG()),
     { id: wa, dest: path.resolve(".runtime/whatsapp-translation.png") },
   );
+  const usage = await api("/account/usage");
+  assert(
+    usage.items.some(
+      (row) =>
+        row.accountName === "验收 WhatsApp" && row.inputChars > 0 && row.provider === "google-free",
+    ),
+    "Successful native translation must report free usage metadata",
+  );
+  assert(
+    !JSON.stringify(usage).includes("Hello, how are you?"),
+    "Translation text must not be sent to management service",
+  );
   const isolation = await app.evaluate(
     async ({ webContents, session }, { id, tenant, current, other }) => {
       const a = webContents.fromId(id).session;

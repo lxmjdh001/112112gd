@@ -25,7 +25,10 @@ type attempt struct {
 	n     int
 	start time.Time
 }
-type Identity struct{ Tenant, Actor, Device, Code string }
+type Identity struct {
+	Tenant, Actor, Device, Code string
+	Operator                    bool
+}
 
 func New(db *pgxpool.Pool, key []byte) *App {
 	return &App{DB: db, Key: key, attempts: map[string]attempt{}}
@@ -101,10 +104,13 @@ func (a *App) Routes() *gin.Engine {
 	})
 	v := r.Group("/api/v1")
 	v.POST("/auth/login", a.rate, a.adminLogin)
+	v.GET("/auth/registration", a.registrationInfo)
+	v.POST("/auth/register", a.rate, a.registerAdmin)
 	v.POST("/client/auth", a.rate, a.clientLogin)
 	admin := v.Group("")
 	admin.Use(a.auth(false))
 	admin.GET("/user/info", a.userInfo)
+	a.commerceRoutes(admin)
 	admin.GET("/auth/codes", func(c *gin.Context) { ok(c, []string{"admin"}) })
 	admin.POST("/auth/logout", a.adminLogout)
 	admin.GET("/dashboard", a.dashboard)
@@ -138,6 +144,7 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/logout", a.clientLogout)
 	client.POST("/accounts/:id/open", a.openAccount)
 	client.POST("/accounts/:id/status", a.accountStatus)
+	client.POST("/usage", a.recordUsage)
 	return r
 }
 func (a *App) auth(client bool) gin.HandlerFunc {
@@ -153,7 +160,7 @@ func (a *App) auth(client bool) gin.HandlerFunc {
 			e = a.DB.QueryRow(c.Request.Context(), `SELECT d.tenant_id::text,d.id::text,d.code_id::text FROM client_sessions s JOIN devices d ON d.id=s.device_id JOIN login_codes l ON l.id=d.code_id WHERE s.token_hash=$1 AND s.expires_at>now() AND d.active AND l.enabled AND l.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Device, &id.Code)
 			id.Actor = id.Device
 		} else {
-			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor)
+			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text,a.platform_operator FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor, &id.Operator)
 		}
 		if errors.Is(e, pgx.ErrNoRows) {
 			fail(c, 401, "登录已失效，登录码可能已停用或到期")
@@ -185,6 +192,9 @@ func (a *App) Bootstrap(ctx context.Context, username, password string) error {
 		return e
 	}
 	if n > 0 {
+		if _, e = tx.Exec(ctx, `UPDATE admins SET platform_operator=true WHERE username=$1`, username); e != nil {
+			return e
+		}
 		return tx.Commit(ctx)
 	}
 	h, e := bcrypt.GenerateFromPassword([]byte(password), 12)
@@ -195,7 +205,7 @@ func (a *App) Bootstrap(ctx context.Context, username, password string) error {
 	if e = tx.QueryRow(ctx, `INSERT INTO tenants(name) VALUES('我的团队') RETURNING id::text`).Scan(&tenant); e != nil {
 		return e
 	}
-	if _, e = tx.Exec(ctx, `INSERT INTO admins(tenant_id,username,password_hash) VALUES($1,$2,$3)`, tenant, username, string(h)); e != nil {
+	if _, e = tx.Exec(ctx, `INSERT INTO admins(tenant_id,username,password_hash,platform_operator) VALUES($1,$2,$3,true)`, tenant, username, string(h)); e != nil {
 		return e
 	}
 	return tx.Commit(ctx)

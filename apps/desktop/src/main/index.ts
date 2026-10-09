@@ -11,7 +11,7 @@ import {
   type Session,
 } from "electron";
 import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { hostname } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -335,7 +335,16 @@ async function openAccount(id: string) {
       bridge,
       proxyAuth,
       status: "loading",
-      translator: new GoogleFreeTranslator(throughSession(ses, proxyAuth)),
+      translator: new GoogleFreeTranslator(throughSession(ses, proxyAuth), (usage) => {
+        // Free usage metadata only: never send message content to the management API.
+        if (generation === epoch && auth && runtimes.has(id))
+          void request("/client/usage", {
+            ...usage,
+            accountId: id,
+            provider: "google-free",
+            requestId: randomUUID(),
+          }).catch(() => {});
+      }),
     };
     if (
       generation !== epoch ||

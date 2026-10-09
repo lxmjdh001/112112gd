@@ -5,14 +5,6 @@ import { ElTag } from "element-plus";
 import "./common.css";
 const route = useRoute();
 const modules: Record<string, { desc: string; items: string[] }> = {
-  "/promotion": {
-    desc: "推广链接、注册归属与返佣记录将在账务模块完成后接入。",
-    items: ["专属推广链接", "推广客户", "佣金明细", "结算记录"],
-  },
-  "/account-center": {
-    desc: "个人资料、余额与消费记录将使用统一账户流水。",
-    items: ["个人资料", "充值与充值记录", "钱包日志", "字符用量", "购买记录"],
-  },
   "/baseline": {
     desc: "原始联系人将按团队隔离，导入后统一规范化和去重。",
     items: ["联系人导入", "导入记录", "去重规则", "底库统计"],

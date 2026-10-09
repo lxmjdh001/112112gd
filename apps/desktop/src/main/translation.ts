@@ -37,7 +37,16 @@ export class GoogleFreeTranslator {
   private inFlight = new Map<string, Promise<Translation>>();
   private timestamps: number[] = [];
   private fetcher: Fetcher;
-  constructor(fetcher: Fetcher) {
+  private onUsage?: (usage: {
+    inputChars: number;
+    outputChars: number;
+    targetLanguage: string;
+  }) => void;
+  constructor(
+    fetcher: Fetcher,
+    onUsage?: (usage: { inputChars: number; outputChars: number; targetLanguage: string }) => void,
+  ) {
+    this.onUsage = onUsage;
     this.fetcher = fetcher;
   }
   async translate(text: string, target: string): Promise<Translation> {
@@ -80,11 +89,17 @@ export class GoogleFreeTranslator {
     }
     if (response.status === 429) throw new Error("Google 暂时限流，请稍后重试");
     if (!response.ok) throw new Error(`翻译服务暂不可用（${response.status}）`);
-    return {
+    const result: Translation = {
       ...parseGoogle(await response.json()),
       targetLanguage: target,
       provider: "google-free",
     };
+    this.onUsage?.({
+      inputChars: [...text].length,
+      outputChars: [...result.text].length,
+      targetLanguage: target,
+    });
+    return result;
   }
   clear() {
     this.cache.clear();

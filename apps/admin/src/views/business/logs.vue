@@ -14,6 +14,23 @@ interface Log {
 const rows = ref<Log[]>([]);
 const query = ref("");
 const names: Record<string, string> = {
+  "admin.register": "网站账户注册",
+  "account.profile.update": "更新个人资料",
+  "account.password.update": "修改网站密码",
+  "commerce.settings.update": "更新结算规则",
+  "recharge.request": "提交充值申请",
+  "recharge.cancel": "取消充值申请",
+  "recharge.credit": "确认充值到账",
+  "recharge.reject": "拒绝充值申请",
+  "recharge.refund": "充值退款冲正",
+  "promotion.link.update": "更新推广链接",
+  "commission.transfer": "佣金转入余额",
+  "withdrawal.request": "申请佣金提现",
+  "withdrawal.cancel": "取消提现申请",
+  "withdrawal.approve": "通过提现审核",
+  "withdrawal.reject": "拒绝提现申请",
+  "withdrawal.pay": "确认提现打款",
+  "withdrawal.destination.view": "查看提现收款信息",
   "admin.login": "管理员登录",
   "client.login": "客户端登录",
   "client.logout": "客户端退出",

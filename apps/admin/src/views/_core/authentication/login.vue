@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { reactive } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { ElButton, ElInput } from "element-plus";
 import { useAuthStore } from "#/store";
+import { useRouter } from "vue-router";
+import { api } from "#/api/business";
+const router = useRouter(),
+  registrationEnabled = ref(false);
+onMounted(async () => {
+  try {
+    registrationEnabled.value = (await api.get<{ enabled: boolean }>("/auth/registration")).enabled;
+  } catch {}
+});
 const auth = useAuthStore();
 const form = reactive({ username: "", password: "" });
 </script>
@@ -9,7 +18,7 @@ const form = reactive({ username: "", password: "" });
   <form class="login-form" @submit.prevent="auth.authLogin(form)">
     <h1>登录管理中心</h1>
     <p>管理员登录后，可生成客户端登录码。</p>
-    <label for="username">管理员账号</label
+    <label for="username">登录账号</label
     ><ElInput
       id="username"
       v-model="form.username"
@@ -29,7 +38,10 @@ const form = reactive({ username: "", password: "" });
       required
     /><ElButton native-type="submit" type="primary" size="large" :loading="auth.loginLoading"
       >登录</ElButton
-    ><small>请在客户端使用管理员分配的长期登录码。</small>
+    ><small>请在客户端使用管理员分配的长期登录码。</small
+    ><ElButton v-if="registrationEnabled" link @click="router.push('/auth/register')"
+      >创建管理账户</ElButton
+    >
   </form>
 </template>
 <style scoped>

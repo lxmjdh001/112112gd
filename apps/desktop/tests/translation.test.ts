@@ -17,11 +17,17 @@ test("parses multiple translation segments and preserves punctuation", () => {
 });
 test("encodes source text; caches and coalesces requests", async () => {
   let calls = 0;
-  const t = new GoogleFreeTranslator(async (url) => {
-    calls++;
-    assert.equal(new URL(url).searchParams.get("q"), "a & b?");
-    return new Response(JSON.stringify([[["甲和乙"]], null, "en"]));
-  });
+  const usage: unknown[] = [];
+  const t = new GoogleFreeTranslator(
+    async (url) => {
+      calls++;
+      assert.equal(new URL(url).searchParams.get("q"), "a & b?");
+      return new Response(JSON.stringify([[["甲和乙"]], null, "en"]));
+    },
+    (event) => {
+      usage.push(event);
+    },
+  );
   const [a, b] = await Promise.all([
     t.translate("a & b?", "zh-CN"),
     t.translate("a & b?", "zh-CN"),
@@ -29,8 +35,10 @@ test("encodes source text; caches and coalesces requests", async () => {
   assert.equal(a.text, b.text);
   await t.translate("a & b?", "zh-CN");
   assert.equal(calls, 1);
+  assert.deepEqual(usage, [{ inputChars: 6, outputChars: 3, targetLanguage: "zh-CN" }]);
   await t.translate("a & b?", "en");
   assert.equal(calls, 2);
+  assert.equal(usage.length, 2);
 });
 test("rejects oversize/empty/unsupported requests before sending", async () => {
   const t = new GoogleFreeTranslator(async () => {

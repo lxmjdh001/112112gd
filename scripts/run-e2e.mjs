@@ -85,6 +85,7 @@ try {
   );
   await ready("http://127.0.0.1:5779");
   await run(process.execPath, ["scripts/check-admin.mjs"]);
+  await run(process.execPath, ["scripts/check-commerce.mjs"]);
   if (!adminOnly) await run(process.execPath, ["scripts/check-desktop.mjs"]);
   console.log(
     adminOnly
