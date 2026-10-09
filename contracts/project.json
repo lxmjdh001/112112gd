@@ -2,8 +2,8 @@
   "schema_version": 1,
   "project": "gongdan007",
   "planning_date": "2026-10-09",
-  "phase": "P0",
-  "business_implementation": "not_started",
+  "phase": "P1-P4 foundation slice",
+  "business_implementation": "foundation_implemented_real_account_acceptance_pending",
   "confirmed": {
     "desktop_required": true,
     "chat_ui": "official-platform-web",
@@ -13,31 +13,35 @@
     "first_platform": "whatsapp",
     "admin_ui_excludes": [
       "Ant Design Pro"
-    ]
+    ],
+    "translation_provider": "google-free-web-endpoint"
   },
   "selection": {
     "admin": {
       "repository": "https://github.com/vbenjs/vue-vben-admin",
-      "candidate_tag": "v5.7.0",
       "variant": "apps/web-ele",
-      "license_at_tag": "MIT"
+      "license_at_tag": "MIT",
+      "pinned_tag": "v5.7.0",
+      "upstream_commit": "63a38dce49ba109f61607994e21ba921d8e970e9"
     },
     "server": {
       "language": "Go",
       "framework": "Gin",
       "database": "PostgreSQL",
-      "candidate_go_version": "go1.27.2"
+      "tested_go_version": "go1.25.3",
+      "minimum_go_version": "1.25.0",
+      "tested_postgresql_version": "17.7"
     },
     "desktop": {
       "framework": "Electron",
-      "candidate_version": "v44.7.0",
       "language": "TypeScript",
-      "shell_ui": "Vue 3",
-      "remote_content": "WebContentsView"
+      "shell_ui": "TypeScript DOM shell; official WebContentsView chat",
+      "remote_content": "WebContentsView",
+      "pinned_version": "v44.7.0"
     }
   },
   "source_control": {
     "remote": null,
-    "state": "local_planning_repository"
+    "state": "local_implementation_repository"
   }
 }

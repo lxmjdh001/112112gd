@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "planned",
+  "status": "foundation_in_development",
   "admin_template": "vue-vben-admin",
   "admin_variant": "element-plus",
   "client_mode": "native-platform-web",
@@ -12,7 +12,7 @@
       "name": "首页控制台",
       "route": "/dashboard",
       "completion_phase": "P4",
-      "status": "planned",
+      "status": "foundation_implemented",
       "dependencies": [
         "identity",
         "devices",
@@ -29,7 +29,7 @@
       "name": "登录码列表",
       "route": "/login-codes",
       "completion_phase": "P3",
-      "status": "planned",
+      "status": "foundation_implemented",
       "dependencies": [
         "identity",
         "devices"
@@ -48,7 +48,7 @@
       "name": "账号列表",
       "route": "/platform-accounts",
       "completion_phase": "P4",
-      "status": "planned",
+      "status": "foundation_implemented",
       "dependencies": [
         "identity",
         "devices",
@@ -60,7 +60,8 @@
         "platform-accounts:assign",
         "platform-accounts:command",
         "platform-accounts:remove"
-      ]
+      ],
+      "notes": "已分配账号位及网页状态；真实手机号 / 平台身份同步待扫码后验证"
     },
     {
       "key": "promotion",
@@ -108,7 +109,7 @@
       "name": "登录日志",
       "route": "/login-logs",
       "completion_phase": "P3",
-      "status": "planned",
+      "status": "foundation_implemented",
       "dependencies": [
         "identity",
         "audit"
@@ -123,7 +124,7 @@
       "name": "代理管理",
       "route": "/proxies",
       "completion_phase": "P4",
-      "status": "planned",
+      "status": "foundation_implemented",
       "dependencies": [
         "identity"
       ],

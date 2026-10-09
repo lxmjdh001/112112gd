@@ -1,0 +1,71 @@
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { ElButton, ElInput, ElTable, ElTableColumn, ElTag } from "element-plus";
+import { api, date } from "#/api/business";
+import "./common.css";
+interface Log {
+  id: number;
+  action: string;
+  success: boolean;
+  ip: string;
+  device: string;
+  createdAt: string;
+}
+const rows = ref<Log[]>([]);
+const query = ref("");
+const names: Record<string, string> = {
+  "admin.login": "管理员登录",
+  "client.login": "客户端登录",
+  "client.logout": "客户端退出",
+  "code.create": "创建登录码",
+  "code.update": "更新登录码",
+  "code.reset": "重置登录码",
+  "device.unbind": "解绑设备",
+  "proxy.import": "批量导入代理",
+  "account.create": "创建账号位",
+};
+async function load() {
+  rows.value = await api.get("/login-logs");
+}
+onMounted(load);
+</script>
+<template>
+  <div class="business">
+    <div class="page-head">
+      <div>
+        <h1>登录与操作日志</h1>
+        <p class="subtitle">查看本团队最近 200 条登录和关键管理操作。</p>
+      </div>
+      <ElButton @click="load">刷新</ElButton>
+    </div>
+    <div class="panel">
+      <div class="toolbar">
+        <ElInput v-model="query" placeholder="搜索 IP、设备或操作" clearable style="width: 300px" />
+      </div>
+      <ElTable
+        :data="
+          rows.filter((r) => `${r.ip}${r.device}${names[r.action] || r.action}`.includes(query))
+        "
+        empty-text="暂无日志"
+        ><ElTableColumn label="操作" width="160"
+          ><template #default="{ row }">{{
+            names[row.action] || row.action
+          }}</template></ElTableColumn
+        ><ElTableColumn prop="ip" label="IP 地址" width="150" /><ElTableColumn
+          prop="device"
+          label="设备 / 浏览器"
+          min-width="260"
+          show-overflow-tooltip
+        /><ElTableColumn label="结果" width="100"
+          ><template #default="{ row }"
+            ><ElTag :type="row.success ? 'success' : 'danger'">{{
+              row.success ? "成功" : "失败"
+            }}</ElTag></template
+          ></ElTableColumn
+        ><ElTableColumn label="时间" width="190"
+          ><template #default="{ row }">{{ date(row.createdAt) }}</template></ElTableColumn
+        ></ElTable
+      >
+    </div>
+  </div>
+</template>

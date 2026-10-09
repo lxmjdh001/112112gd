@@ -1,0 +1,264 @@
+import { _electron as electron } from "playwright";
+import { readFile, writeFile, mkdtemp } from "node:fs/promises";
+import http from "node:http";
+import net from "node:net";
+import { once } from "node:events";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import assert from "node:assert/strict";
+import { build } from "../apps/desktop/node_modules/esbuild/lib/main.js";
+const env = JSON.parse(await readFile(".runtime/e2e.json", "utf8"));
+const requests = [];
+const sockets = new Set();
+const track = (s) => {
+  sockets.add(s);
+  s.on("error", () => {});
+  s.once("close", () => sockets.delete(s));
+  return s;
+};
+const proxy = http.createServer((_req, res) => res.writeHead(400).end());
+proxy.on("connection", track);
+proxy.on("connect", (req, client, head) => {
+  if (
+    req.headers["proxy-authorization"] !==
+    "Basic " + Buffer.from("e2e:test-password").toString("base64")
+  ) {
+    client.end(
+      'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="e2e"\r\nContent-Length: 0\r\n\r\n',
+    );
+    return;
+  }
+  const url = new URL("http://" + req.url);
+  requests.push(url.hostname);
+  const upstream = track(
+    net.connect(Number(url.port), url.hostname, () => {
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      if (head.length) upstream.write(head);
+      client.pipe(upstream);
+      upstream.pipe(client);
+    }),
+  );
+  client.once("close", () => upstream.destroy());
+  upstream.once("close", () => client.destroy());
+  upstream.on("error", () => client.destroy());
+});
+proxy.listen(0, "127.0.0.1");
+await once(proxy, "listening");
+const port = proxy.address().port;
+let token;
+async function api(route, data, method) {
+  const r = await fetch("http://127.0.0.1:18081/api/v1" + route, {
+    method: method || (data ? "POST" : "GET"),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+    },
+    body: data ? JSON.stringify(data) : undefined,
+  });
+  const j = await r.json();
+  if (!r.ok) throw Error(j.message);
+  return j.data;
+}
+token = (
+  await api("/auth/login", { username: env.BOOTSTRAP_USERNAME, password: env.BOOTSTRAP_PASSWORD })
+).accessToken;
+const code = await api("/login-codes", {
+  label: "桌面验收",
+  expiresAt: new Date(Date.now() + 86400000).toISOString(),
+  maxDevices: 1,
+  maxAccounts: 2,
+});
+await api("/proxies/import", {
+  lines: `http://e2e:test-password@127.0.0.1:${port}`,
+  group: "E2E 本机测试出口",
+});
+const proxies = await api("/proxies");
+const p = proxies.find((x) => x.port === port);
+const account = await api("/platform-accounts", {
+  label: "验收 WhatsApp",
+  codeId: code.id,
+  proxyId: p.id,
+});
+const second = await api("/platform-accounts", {
+  label: "独立环境验证",
+  codeId: code.id,
+  proxyId: p.id,
+});
+await build({
+  stdin: {
+    contents:
+      "export {GoogleFreeTranslator} from '../apps/desktop/src/main/translation.ts';export {throughSession} from '../apps/desktop/src/main/network.ts';",
+    resolveDir: path.resolve(".runtime"),
+  },
+  outfile: ".runtime/translation-probe.cjs",
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  external: ["electron"],
+});
+const userData = await mkdtemp(path.join(tmpdir(), "gongdan007-e2e-"));
+let app;
+try {
+  app = await electron.launch({
+    executablePath: path.resolve(
+      "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+    ),
+    args: [path.resolve("apps/desktop")],
+    env: { ...process.env, GONGDAN_USER_DATA: userData },
+    timeout: 30000,
+  });
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.locator("#login-code").fill(code.code);
+  await page.locator("summary").click();
+  await page.locator("#api-url").fill("http://127.0.0.1:18081");
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await page.getByRole("button", { name: /验收 WhatsApp/ }).waitFor();
+  await page.screenshot({ path: ".runtime/desktop-shell.png" });
+  await page.getByRole("button", { name: /验收 WhatsApp/ }).click();
+  let wa;
+  for (let i = 0; i < 50; i++) {
+    const status = await app.evaluate(({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((w) => w.getURL().startsWith("https://web.whatsapp.com"))
+        .map((w) => ({ id: w.id, loading: w.isLoading() })),
+    );
+    if (status.length && !status[0].loading) {
+      wa = status[0].id;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (!wa) throw Error("Official WhatsApp view did not load");
+  // The document load event precedes the official app's asynchronous QR setup.
+  for (let i = 0; i < 60; i++) {
+    const ready = await app.evaluate(async ({webContents},id) =>
+      webContents.fromId(id).executeJavaScript(
+        'Array.from(document.querySelectorAll("canvas")).some(c => c.getBoundingClientRect().width > 100)',
+      ), wa);
+    if (ready) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  const snapshot = await app.evaluate(
+    async ({ webContents }, { id, dest }) => {
+      const w = webContents.fromId(id);
+      await (await w.capturePage()).toPNG();
+      process.getBuiltinModule("fs").writeFileSync(dest, (await w.capturePage()).toPNG());
+      return {
+        url: w.getURL(),
+        qr: await w.executeJavaScript('!!document.querySelector("[data-ref] canvas,canvas")'),
+        overlay: await w.executeJavaScript('!!document.getElementById("gongdan-translation")'),
+        security: w.getLastWebPreferences(),
+      };
+    },
+    { id: wa, dest: path.resolve(".runtime/whatsapp-native.png") },
+  );
+  assert.equal(snapshot.url, "https://web.whatsapp.com/");
+  assert.equal(snapshot.overlay, true);
+  assert.equal(snapshot.qr, true, "Official QR must be visible");
+  assert.equal(snapshot.security.nodeIntegration, false);
+  assert.equal(snapshot.security.contextIsolation, true);
+  assert.equal(snapshot.security.sandbox, true);
+  assert(requests.includes("web.whatsapp.com"));
+  const translation = await app.evaluate(
+    async ({ webContents }, { id, modulePath, port }) => {
+      const { GoogleFreeTranslator, throughSession } = process
+        .getBuiltinModule("module")
+        .createRequire(modulePath)(modulePath);
+      const translator = new GoogleFreeTranslator(
+        throughSession(webContents.fromId(id).session, {
+          host: "127.0.0.1",
+          port,
+          username: "e2e",
+          password: "test-password",
+        }),
+      );
+      return translator.translate("Hello, how are you?", "zh-CN");
+    },
+    { id: wa, modulePath: path.resolve(".runtime/translation-probe.cjs"), port },
+  );
+  assert(translation.text);
+  assert(requests.includes("translate.googleapis.com"));
+  await app.evaluate(
+    ({ webContents }, id) => webContents.fromId(id).send("wa:selection", "Hello, how are you?"),
+    wa,
+  );
+  await new Promise((r) => setTimeout(r, 4000));
+  await app.evaluate(
+    async ({ webContents }, { id, dest }) =>
+      process
+        .getBuiltinModule("fs")
+        .writeFileSync(dest, (await webContents.fromId(id).capturePage()).toPNG()),
+    { id: wa, dest: path.resolve(".runtime/whatsapp-translation.png") },
+  );
+  const isolation = await app.evaluate(
+    async ({ webContents, session }, { id, tenant, other }) => {
+      const a = webContents.fromId(id).session;
+      await a.cookies.set({
+        url: "https://web.whatsapp.com",
+        name: "gd7_isolation_probe",
+        value: "one",
+      });
+      const b = session.fromPartition(`persist:gd7-${tenant}-${other}`);
+      return (await b.cookies.get({ name: "gd7_isolation_probe" })).length;
+    },
+    { id: wa, tenant: (await api("/user/info")).tenantId, other: second.id },
+  );
+  assert.equal(isolation, 0);
+  await api(
+    "/login-codes/" + code.id,
+    {
+      label: "桌面验收",
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      maxDevices: 1,
+      maxAccounts: 2,
+      enabled: false,
+    },
+    "PATCH",
+  );
+  await page.locator("#login-code").waitFor({ timeout: 40000 });
+  const remaining = await app.evaluate(
+    ({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((w) => w.getURL().startsWith("https://web.whatsapp.com")).length,
+  );
+  assert.equal(remaining, 0);
+  console.log(
+    JSON.stringify({
+      passed: [
+        "desktop login code",
+        "authenticated HTTP proxy",
+        "official WhatsApp page",
+        "translation overlay",
+        "Google translation through account proxy",
+        "cookie isolation",
+        "revocation closes native view",
+      ],
+      qr: snapshot.qr,
+      translation: translation.text,
+      rendererErrors: errors,
+    }),
+  );
+} catch (e) {
+  if (app) {
+    console.error(
+      "windows",
+      await app.evaluate(({ webContents }) =>
+        webContents
+          .getAllWebContents()
+          .map((w) => ({ id: w.id, url: w.getURL(), loading: w.isLoading() })),
+      ),
+    );
+    const page = await app.firstWindow();
+    await page.screenshot({ path: ".runtime/desktop-failure.png" });
+    console.error((await page.locator("body").innerText()).slice(0, 1300));
+  }
+  throw e;
+} finally {
+  if (app) await app.close();
+  for (const s of sockets) s.destroy();
+  proxy.close();
+}

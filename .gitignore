@@ -26,3 +26,7 @@ profiles/
 backups/
 uploads/
 docs/references/*.png
+
+.runtime/
+*.tsbuildinfo
+!apps/admin/.env

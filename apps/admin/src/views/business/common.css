@@ -1,0 +1,147 @@
+.business {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  font-size: 14px;
+}
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  gap: 16px;
+}
+.page-head h1 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.5px;
+}
+.subtitle {
+  font-size: 13px;
+  color: #8b93a7;
+  line-height: 1.7;
+  margin-top: 7px;
+}
+.panel {
+  background: var(--el-bg-color, #fff);
+  border: 1px solid var(--el-border-color-lighter, #eceef3);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.grow {
+  flex: 1;
+}
+.form-grid {
+  display: grid;
+  gap: 18px;
+}
+.field {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.field small {
+  color: #8b93a7;
+  line-height: 1.7;
+}
+.muted {
+  color: #8b93a7;
+}
+.code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.business .el-table {
+  font-size: 13px;
+}
+.business .el-table th.el-table__cell {
+  background: var(--el-fill-color-light);
+  height: 44px;
+}
+.business .el-table td.el-table__cell {
+  height: 56px;
+}
+.business .el-input,
+.business .el-select {
+  font-size: 13px;
+}
+.business .el-dialog__title {
+  font-size: 18px;
+}
+.business .el-dialog {
+  border-radius: 14px;
+}
+.business .el-button {
+  font-size: 13px;
+}
+.secret {
+  word-break: break-all;
+  background: var(--el-fill-color-light);
+  padding: 18px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.stat {
+  padding: 22px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+}
+.stat strong {
+  display: block;
+  font-size: 30px;
+  font-weight: 650;
+  margin: 12px 0 4px;
+}
+.stat span {
+  font-size: 13px;
+  color: #8b93a7;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.step {
+  padding: 22px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+}
+.step h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.step b {
+  color: #4d6cf5;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+@media (max-width: 900px) {
+  .stats,
+  .steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .business {
+    padding: 16px;
+  }
+}
