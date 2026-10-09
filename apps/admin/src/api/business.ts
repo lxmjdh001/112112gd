@@ -25,7 +25,15 @@ export interface ProxyItem {
   protocol: string;
   username: string;
   group: string;
+  groupId: string;
   enabled: boolean;
+  maxAccountsPerPlatform: number;
+  platformUsage: Record<string, number>;
+}
+export interface ProxyGroup {
+  id: string;
+  name: string;
+  proxyCount: number;
 }
 export interface Account {
   id: string;
@@ -47,6 +55,7 @@ export const statusNames: Record<string, string> = {
   unknown: "状态待确认",
   stale: "状态已过期",
   closed: "客户端已关闭",
+  proxy_disabled: "代理已禁用",
 };
 export const date = (value: string | null) =>
   value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—";

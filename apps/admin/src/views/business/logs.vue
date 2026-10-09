@@ -26,6 +26,10 @@ const names: Record<string, string> = {
   "code_group.delete": "删除登录码分组",
   "device.unbind": "解绑设备",
   "proxy.import": "批量导入代理",
+  "proxy.update": "更新代理设置",
+  "proxy_group.create": "创建代理分组",
+  "proxy_group.rename": "重命名代理分组",
+  "proxy_group.delete": "删除代理分组",
   "account.create": "后台预分配账号（历史）",
   "client.account.create": "客户端添加账号",
 };

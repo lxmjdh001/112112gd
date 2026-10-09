@@ -165,11 +165,38 @@ function bounds() {
       });
   }
 }
-async function refresh() {
+let refreshing: { epoch: number; promise: Promise<void> } | undefined;
+function refresh() {
+  if (!refreshing || refreshing.epoch !== epoch) {
+    const pending = { epoch, promise: Promise.resolve() };
+    pending.promise = syncAccounts().finally(() => {
+      if (refreshing === pending) refreshing = undefined;
+    });
+    refreshing = pending;
+  }
+  return refreshing.promise;
+}
+async function syncAccounts() {
   const generation = epoch;
   const accounts = await request<Account[]>("/client/accounts");
   if (!auth || generation !== epoch) return;
   state.accounts = accounts;
+  const allowed = new Set(
+    accounts.filter((account) => account.available).map((account) => account.id),
+  );
+  for (const runtime of [...runtimes.values()]) {
+    if (!allowed.has(runtime.id)) {
+      await closeRuntime(runtime);
+      if (generation !== epoch || !auth) return;
+      if (state.activeId === runtime.id) state.activeId = "";
+    }
+  }
+  for (const account of accounts) {
+    if (account.unavailableReason === "proxy_disabled")
+      state.statuses[account.id] = "proxy_disabled";
+    else if (state.statuses[account.id] === "proxy_disabled") delete state.statuses[account.id];
+  }
+  bounds();
   emit();
 }
 async function heartbeat() {
@@ -179,6 +206,8 @@ async function heartbeat() {
     const generation = epoch;
     const result = await request<{ leaseSeconds: number }>("/client/heartbeat", {});
     if (auth && epoch === generation) {
+      await refresh();
+      if (!auth || epoch !== generation) return;
       leaseUntil = performance.now() + Math.min(result.leaseSeconds, 150) * 1000;
       state.message = "";
       emit();
@@ -308,7 +337,11 @@ async function openAccount(id: string) {
       status: "loading",
       translator: new GoogleFreeTranslator(throughSession(ses, proxyAuth)),
     };
-    if (generation !== epoch || !auth) {
+    if (
+      generation !== epoch ||
+      !auth ||
+      !state.accounts.some((account) => account.id === id && account.available)
+    ) {
       await closeRuntime(runtime);
       return;
     }

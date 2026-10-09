@@ -20,7 +20,7 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 		dbError(c, err)
 		return
 	}
-	rows, err := a.DB.Query(ctx, `SELECT id::text,label,protocol,host,port,group_name FROM proxies WHERE tenant_id=$1 AND enabled ORDER BY created_at,id`, id.Tenant)
+	rows, err := a.DB.Query(ctx, `SELECT p.id::text,p.label,p.protocol,p.host,p.port,COALESCE(g.name,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT platform,count(*) AS used FROM platform_accounts WHERE proxy_id=p.id GROUP BY platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 AND p.enabled ORDER BY p.created_at,p.id`, id.Tenant)
 	if err != nil {
 		dbError(c, err)
 		return
@@ -29,12 +29,13 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 	proxies := []gin.H{}
 	for rows.Next() {
 		var key, label, protocol, host, group string
-		var port int
-		if err = rows.Scan(&key, &label, &protocol, &host, &port, &group); err != nil {
+		var port, maxPerPlatform int
+		var usage map[string]int
+		if err = rows.Scan(&key, &label, &protocol, &host, &port, &group, &maxPerPlatform, &usage); err != nil {
 			dbError(c, err)
 			return
 		}
-		proxies = append(proxies, gin.H{"id": key, "label": label, "protocol": protocol, "host": host, "port": port, "group": group})
+		proxies = append(proxies, gin.H{"id": key, "label": label, "protocol": protocol, "host": host, "port": port, "group": group, "maxAccountsPerPlatform": maxPerPlatform, "platformUsage": usage})
 	}
 	if err = rows.Err(); err != nil {
 		dbError(c, err)
@@ -112,13 +113,23 @@ func (a *App) createClientAccount(c *gin.Context) {
 		fail(c, 409, "已达到当前登录码的账号额度，请联系管理员调整")
 		return
 	}
-	err = tx.QueryRow(ctx, `SELECT id::text FROM proxies WHERE id::text=$1 AND tenant_id=$2 AND enabled FOR SHARE`, body.ProxyID, id.Tenant).Scan(&proxy)
+	var proxyMax int
+	err = tx.QueryRow(ctx, `SELECT id::text,max_accounts_per_platform FROM proxies WHERE id::text=$1 AND tenant_id=$2 AND enabled FOR UPDATE`, body.ProxyID, id.Tenant).Scan(&proxy, &proxyMax)
 	if errors.Is(err, pgx.ErrNoRows) {
 		fail(c, 400, "代理不可用，请刷新后选择")
 		return
 	}
 	if err != nil {
 		dbError(c, err)
+		return
+	}
+	var proxyUsed int
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts WHERE proxy_id=$1 AND platform=$2`, proxy, body.Platform).Scan(&proxyUsed); err != nil {
+		dbError(c, err)
+		return
+	}
+	if proxyUsed >= proxyMax {
+		fail(c, 409, "该代理在当前平台的账号额度已用完，请选择其他代理")
 		return
 	}
 	err = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,device_id,label,platform,client_request_id,created_by_device_id) VALUES($1,$2,$3,$4,$5,$6,$7,$4) RETURNING id::text`, id.Tenant, id.Code, proxy, id.Device, body.Label, body.Platform, requestID).Scan(&account)

@@ -5,6 +5,7 @@ export interface Account {
   proxyHost: string;
   proxyPort: number;
   available: boolean;
+  unavailableReason?: "proxy_disabled" | "other_device" | "";
 }
 export interface ProxyConfig {
   protocol: "socks5" | "http" | "https";
@@ -24,6 +25,8 @@ export interface AccountOptions {
     host: string;
     port: number;
     group: string;
+    maxAccountsPerPlatform: number;
+    platformUsage: Record<string, number>;
   }[];
 }
 export interface NewAccount {
@@ -67,4 +70,5 @@ export const stateLabels: Record<string, string> = {
   unknown: "状态待确认",
   network_error: "网络异常",
   closed: "已关闭",
+  proxy_disabled: "代理已禁用",
 };

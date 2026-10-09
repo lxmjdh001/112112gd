@@ -71,6 +71,7 @@ const code = await api("/login-codes", {
 await api("/proxies/import", {
   lines: `http://e2e:test-password@127.0.0.1:${port}`,
   group: "E2E 本机测试出口",
+  maxAccountsPerPlatform: 2,
 });
 const proxies = await api("/proxies");
 const p = proxies.find((x) => x.port === port);
@@ -213,6 +214,13 @@ try {
   assert.match(await page.getByRole("dialog", { name: "添加账号" }).innerText(), /账号额度已用完/);
   await page.keyboard.press("Escape");
   await page.getByRole("dialog", { name: "添加账号" }).waitFor({ state: "hidden" });
+  const fullOption = await page.evaluate(async (proxyId) => {
+    const options = await window.gongdan.accountForm(true);
+    await window.gongdan.accountForm(false);
+    return options.proxies.find((proxy) => proxy.id === proxyId);
+  }, p.id);
+  assert.equal(fullOption.platformUsage.whatsapp, 2);
+  assert.equal(fullOption.maxAccountsPerPlatform, 2);
   const translation = await app.evaluate(
     async ({ webContents }, { id, modulePath, port }) => {
       const { GoogleFreeTranslator, throughSession } = process
@@ -245,19 +253,70 @@ try {
     { id: wa, dest: path.resolve(".runtime/whatsapp-translation.png") },
   );
   const isolation = await app.evaluate(
-    async ({ webContents, session }, { id, tenant, other }) => {
+    async ({ webContents, session }, { id, tenant, current, other }) => {
       const a = webContents.fromId(id).session;
       await a.cookies.set({
-        url: "https://web.whatsapp.com",
+        url: "https://gd7-storage-probe.invalid",
         name: "gd7_isolation_probe",
         value: "one",
+        expirationDate: Date.now() / 1000 + 3600,
       });
       const b = session.fromPartition(`persist:gd7-${tenant}-${other}`);
-      return (await b.cookies.get({ name: "gd7_isolation_probe" })).length;
+      return {
+        otherCount: (await b.cookies.get({ name: "gd7_isolation_probe" })).length,
+        currentValue: (await a.cookies.get({ name: "gd7_isolation_probe" }))[0]?.value,
+        matchingPartition: a === session.fromPartition(`persist:gd7-${tenant}-${current}`),
+      };
     },
-    { id: wa, tenant: (await api("/user/info")).tenantId, other: second.id },
+    { id: wa, tenant: (await api("/user/info")).tenantId, current: account.id, other: second.id },
   );
-  assert.equal(isolation, 0);
+  assert.equal(isolation.otherCount, 0);
+  assert.equal(isolation.currentValue, "one", "Storage probe must exist before disable");
+  assert.equal(
+    isolation.matchingPartition,
+    true,
+    "Storage probe must use the real account partition",
+  );
+  // Disabling a proxy must pause its already-open native page on heartbeat.
+  await api("/proxies/" + p.id, { enabled: false }, "PATCH");
+  await page.getByRole("button", { name: /验收 WhatsApp.*代理已禁用/ }).waitFor({ timeout: 40000 });
+  assert.equal(await page.getByRole("button", { name: /验收 WhatsApp/ }).isDisabled(), true);
+  assert.equal(
+    await app.evaluate(
+      ({ webContents }) =>
+        webContents
+          .getAllWebContents()
+          .filter((w) => w.getURL().startsWith("https://web.whatsapp.com")).length,
+    ),
+    0,
+  );
+  assert.equal(
+    (await api("/platform-accounts")).find((row) => row.id === account.id).status,
+    "proxy_disabled",
+  );
+  const whileDisabled = await app.evaluate(
+    async ({ session }, { tenant, account }) => {
+      return (
+        await session
+          .fromPartition(`persist:gd7-${tenant}-${account}`)
+          .cookies.get({ name: "gd7_isolation_probe" })
+      )[0]?.value;
+    },
+    { tenant: (await api("/user/info")).tenantId, account: account.id },
+  );
+  assert.equal(whileDisabled, "one", "Closing a disabled view must retain its storage");
+  // Re-enabling retains the same profile and never requires creating a new account.
+  await api("/proxies/" + p.id, { enabled: true }, "PATCH");
+  await page.evaluate(() => window.gongdan.refresh());
+  await page.getByRole("button", { name: /验收 WhatsApp/ }).click();
+  const retained = await app.evaluate(
+    async ({ session }, { tenant, account }) => {
+      const s = session.fromPartition(`persist:gd7-${tenant}-${account}`);
+      return (await s.cookies.get({ name: "gd7_isolation_probe" }))[0]?.value;
+    },
+    { tenant: (await api("/user/info")).tenantId, account: account.id },
+  );
+  assert.equal(retained, "one", "Proxy disable must retain local login storage");
   await api(
     "/login-codes/" + code.id,
     {
@@ -289,6 +348,8 @@ try {
         "translation overlay",
         "Google translation through account proxy",
         "cookie isolation",
+        "proxy quota details",
+        "proxy disable closes native view on heartbeat and reenable retains cookies",
         "revocation closes native view",
       ],
       qr: snapshot.qr,

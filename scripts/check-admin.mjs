@@ -127,7 +127,102 @@ try {
   await page.getByPlaceholder(/127.0.0.1:1080/).fill("host:0\n127.0.0.1:1080");
   await page.getByRole("button", { name: "识别并保存代理" }).click();
   await page.getByText(/第 1 行/).waitFor();
-  await page.locator(".el-dialog__headerbtn").click();
+  const proxyDialog = page.getByRole("dialog", { name: "批量添加代理" });
+  await proxyDialog.getByRole("button", { name: "新建分组", exact: true }).click();
+  const proxyGroups = page.getByRole("dialog", { name: "管理代理分组" });
+  await proxyGroups.getByPlaceholder("分组名称，例如：美国代理").fill("美国测试代理");
+  await proxyGroups.getByRole("button", { name: "新建分组", exact: true }).click();
+  await proxyGroups.waitFor({ state: "hidden" });
+  assert.match(await proxyDialog.innerText(), /美国测试代理/);
+  await proxyDialog
+    .getByRole("spinbutton", { name: "每平台最多关联账号数", exact: true })
+    .fill("3");
+  await proxyDialog
+    .getByRole("switch", { name: "启用代理", exact: true })
+    .locator("xpath=ancestor::div[contains(@class, 'el-switch')]")
+    .click();
+  await page.getByPlaceholder(/127.0.0.1:1080/).fill("alpha.test:1080\nbeta.test:1080");
+  await page.screenshot({ path: ".runtime/admin-proxy-import.png", fullPage: true });
+  await proxyDialog.getByRole("button", { name: "识别并保存代理" }).click();
+  await proxyDialog.waitFor({ state: "hidden" });
+  const proxyRows = page.locator(".business > .panel .el-table__body-wrapper tr");
+  await proxyRows.filter({ hasText: "alpha.test" }).waitFor();
+  assert.equal(await proxyRows.count(), 2);
+  assert.equal(await proxyRows.filter({ hasText: "已禁用" }).count(), 2);
+  async function selectProxyFilter(name, label) {
+    await page
+      .getByRole("combobox", { name, exact: true })
+      .locator("xpath=ancestor::div[contains(@class, 'el-select__wrapper')]")
+      .click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    await page.getByRole("option", { name: label, exact: true }).waitFor({ state: "hidden" });
+  }
+  await selectProxyFilter("筛选代理分组", "美国测试代理（2）");
+  await selectProxyFilter("筛选代理状态", "已禁用");
+  await page.locator(".business > .panel .el-table__header-wrapper .el-checkbox").click();
+  await page.getByRole("button", { name: "批量启用", exact: true }).click();
+  await page.getByText("没有符合条件的代理", { exact: true }).waitFor();
+  await selectProxyFilter("筛选代理状态", "已启用");
+  assert.equal(await proxyRows.count(), 2);
+  await proxyRows
+    .filter({ hasText: "alpha.test" })
+    .getByRole("button", { name: "设置", exact: true })
+    .click();
+  const proxySettings = page.getByRole("dialog", { name: "代理设置" });
+  assert.equal(
+    await proxySettings.getByRole("spinbutton", { name: "调整每平台上限" }).inputValue(),
+    "3",
+  );
+  await proxySettings.getByRole("spinbutton", { name: "调整每平台上限" }).fill("2");
+  await proxySettings.getByRole("button", { name: "保存设置", exact: true }).click();
+  await proxySettings.waitFor({ state: "hidden" });
+  await page.reload({ waitUntil: "networkidle" });
+  await proxyRows.filter({ hasText: "alpha.test" }).waitFor();
+  await proxyRows
+    .filter({ hasText: "alpha.test" })
+    .getByRole("button", { name: "设置", exact: true })
+    .click();
+  assert.equal(
+    await proxySettings.getByRole("spinbutton", { name: "调整每平台上限" }).inputValue(),
+    "2",
+  );
+  await proxySettings.locator(".el-dialog__headerbtn").click();
+  await proxySettings.waitFor({ state: "hidden" });
+  await page.locator(".business > .panel .el-table__header-wrapper .el-checkbox").click();
+  await page.getByRole("button", { name: "移动分组", exact: true }).click();
+  await selectProxyFilter("目标代理分组", "未分组");
+  await page
+    .getByRole("dialog", { name: "移动代理分组" })
+    .getByRole("button", { name: "确认移动" })
+    .click();
+  await page.getByRole("dialog", { name: "移动代理分组" }).waitFor({ state: "hidden" });
+  await selectProxyFilter("筛选代理分组", "未分组（2）");
+  assert.match(
+    await page
+      .getByRole("combobox", { name: "筛选代理分组", exact: true })
+      .locator("xpath=ancestor::div[contains(@class, 'el-select__wrapper')]")
+      .innerText(),
+    /未分组/,
+  );
+  await page.locator(".business > .panel .el-table__header-wrapper .el-checkbox").click();
+  await page.getByRole("button", { name: "批量禁用", exact: true }).click();
+  await page
+    .locator(".el-message-box")
+    .getByRole("button", { name: "确认禁用", exact: true })
+    .click();
+  await selectProxyFilter("筛选代理状态", "已禁用");
+  await proxyRows.filter({ hasText: "已禁用" }).first().waitFor();
+  assert.equal(await proxyRows.filter({ hasText: "已禁用" }).count(), 2);
+  await page.getByRole("button", { name: "管理分组", exact: true }).click();
+  await proxyGroups.getByRole("button", { name: "删除", exact: true }).click();
+  await page
+    .locator(".el-message-box")
+    .getByRole("button", { name: "删除分组", exact: true })
+    .click();
+  await page.getByText("暂无分组，创建后可分类管理代理", { exact: true }).waitFor();
+  await proxyGroups.getByRole("button", { name: "完成", exact: true }).click();
+  await proxyGroups.waitFor({ state: "hidden" });
+  await page.screenshot({ path: ".runtime/admin-proxies.png", fullPage: true });
   for (const route of [
     "#/platform-accounts",
     "#/promotion",
@@ -152,7 +247,7 @@ try {
         "dashboard",
         "create reusable code",
         "group create, filter, batch move, rename, reload and delete",
-        "proxy validation",
+        "proxy validation, groups, limits, persistence, bulk move and enable/disable",
         "all 10 routes",
       ],
       browserErrors: errors,

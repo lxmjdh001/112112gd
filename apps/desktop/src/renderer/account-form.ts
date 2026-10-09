@@ -43,13 +43,33 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
         <p class="quota">当前登录码账号额度：${options.usedAccounts} / ${options.maxAccounts}</p>
         <label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
         <label for="account-label">账号名称</label><input id="account-label" placeholder="例如：投放 WhatsApp 01" maxlength="100" value="WhatsApp ${getState().accounts.length + 1}" required />
-        <label for="account-proxy">选择代理</label><select id="account-proxy" required><option value="">请选择代理</option>${options.proxies.map((p) => `<option value="${escape(p.id)}">${escape(`${p.group} · ${p.protocol}://${p.host}:${p.port}`)}</option>`).join("")}</select>
+        <label for="account-proxy">选择代理</label><select id="account-proxy" required><option value="">请选择代理</option></select>
         ${!options.proxies.length ? '<p class="error">暂无可用代理，请联系管理员在网站“代理管理”中添加后重试。</p>' : ""}
         ${limit ? '<p class="error">账号额度已用完，请联系管理员调整。</p>' : ""}
         <p class="error" role="alert" id="account-error"></p>
         <div class="dialog-actions"><button class="secondary" type="button" data-cancel>取消</button><button class="primary" type="submit" ${limit || !options.proxies.length ? "disabled" : ""}>添加并登录</button></div>
       </form>`;
       document.body.append(modal);
+      const platformSelect = modal.querySelector<HTMLSelectElement>("#account-platform")!;
+      const proxySelect = modal.querySelector<HTMLSelectElement>("#account-proxy")!;
+      const renderProxies = () => {
+        const previous = proxySelect.value;
+        proxySelect.innerHTML =
+          '<option value="">请选择代理</option>' +
+          options.proxies
+            .map((proxy) => {
+              const used = proxy.platformUsage[platformSelect.value] || 0;
+              const full = used >= proxy.maxAccountsPerPlatform;
+              return `<option value="${escape(proxy.id)}" ${full ? "disabled" : ""}>${escape(`${proxy.group || "未分组"} · ${proxy.protocol}://${proxy.host}:${proxy.port} · ${used}/${proxy.maxAccountsPerPlatform}${full ? "（已满）" : ""}`)}</option>`;
+            })
+            .join("");
+        if (
+          [...proxySelect.options].some((option) => option.value === previous && !option.disabled)
+        )
+          proxySelect.value = previous;
+      };
+      renderProxies();
+      platformSelect.addEventListener("change", renderProxies);
       modal.showModal();
       let saving = false;
       const cancel = () => {
