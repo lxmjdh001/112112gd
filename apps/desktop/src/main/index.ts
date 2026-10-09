@@ -7,10 +7,11 @@ import {
   Menu,
   clipboard,
   safeStorage,
+  powerMonitor,
   type IpcMainInvokeEvent,
   type Session,
 } from "electron";
-import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm, rename } from "node:fs/promises";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { hostname } from "node:os";
@@ -42,15 +43,17 @@ const shellFile = path.join(baseDir, "index.html");
 let win: BrowserWindow;
 let auth: ClientAuth | undefined;
 let deviceIdentity = "";
-let leaseUntil = 0;
 let epoch = 0;
 let opening = false;
-let beating = false;
+let restoringAccount = "";
 let accountFormOpen = false;
 let creatingAccount = false;
+let quitting = false;
+let readyToQuit = false;
 let apiURL = "http://127.0.0.1:18080";
 const state: ViewState = {
   loggedIn: false,
+  connection: "connecting",
   label: "",
   accounts: [],
   platforms: [],
@@ -88,8 +91,7 @@ function requireRuntime(event: {
     !runtime ||
     event.senderFrame !== event.sender.mainFrame ||
     event.senderFrame?.url.startsWith("https://web.whatsapp.com/") !== true ||
-    !auth ||
-    performance.now() >= leaseUntil
+    !auth
   )
     throw new Error("账号授权不可用");
   return runtime;
@@ -111,18 +113,48 @@ async function request<T>(
     signal: AbortSignal.timeout(10000),
     redirect: "error",
   });
+  // A confirmed revocation is different from an unreachable management service.
+  if (res.status === 401 && auth && auth === requestAuth)
+    await terminate("登录权限已失效，请联系管理员或重新输入登录码");
   const result = (await res.json()) as { code: number; data: T; message?: string };
   if (!res.ok) {
-    if (res.status === 401 && auth && auth === requestAuth)
-      await terminate("登录权限已失效，请联系管理员或重新输入登录码");
     throw new Error(result.message || "请求未完成");
   }
   return result.data;
 }
-async function saveAuth() {
-  if (!auth || !safeStorage.isEncryptionAvailable()) return;
-  await writeFile(credentialsFile(), safeStorage.encryptString(JSON.stringify({ apiURL, auth })), {
-    mode: 0o600,
+let saving = Promise.resolve();
+function saveAuth() {
+  const generation = epoch;
+  const pending = saving
+    .catch(() => {})
+    .then(async () => {
+      if (!auth || generation !== epoch || !safeStorage.isEncryptionAvailable()) return;
+      const encrypted = safeStorage.encryptString(
+        JSON.stringify({
+          apiURL,
+          auth,
+          accounts: state.accounts,
+          platforms: state.platforms,
+          activeId: state.activeId || restoringAccount,
+        }),
+      );
+      const temporary = credentialsFile() + ".tmp";
+      await writeFile(temporary, encrypted, { mode: 0o600 });
+      if (!auth || generation !== epoch) {
+        await rm(temporary, { force: true });
+        return;
+      }
+      await rename(temporary, credentialsFile());
+    });
+  saving = pending;
+  return pending;
+}
+function persistSession() {
+  void saveAuth().catch(() => {
+    if (auth) {
+      state.message = "登录状态暂未保存到本机，请检查磁盘可用空间";
+      emit();
+    }
   });
 }
 async function closeRuntime(runtime: Runtime) {
@@ -140,7 +172,8 @@ async function closeRuntime(runtime: Runtime) {
 async function terminate(message: string) {
   epoch++;
   auth = undefined;
-  leaseUntil = 0;
+  restoringAccount = "";
+  state.connection = "connecting";
   accountFormOpen = false;
   state.label = "";
   state.accounts = [];
@@ -149,7 +182,9 @@ async function terminate(message: string) {
   state.statuses = {};
   state.message = message;
   await Promise.allSettled([...runtimes.values()].map(closeRuntime));
-  await rm(credentialsFile(), { force: true });
+  // Serialize removal after pending writes so logout cannot resurrect saved credentials.
+  saving = saving.catch(() => {}).then(() => rm(credentialsFile(), { force: true }));
+  await saving;
   emit();
 }
 function bounds() {
@@ -190,6 +225,8 @@ async function syncAccounts() {
   const allowed = new Set(
     accounts.filter((account) => account.available).map((account) => account.id),
   );
+  if (state.activeId && !allowed.has(state.activeId)) state.activeId = "";
+  if (restoringAccount && !allowed.has(restoringAccount)) restoringAccount = "";
   for (const runtime of [...runtimes.values()]) {
     if (!allowed.has(runtime.id)) {
       await closeRuntime(runtime);
@@ -207,28 +244,44 @@ async function syncAccounts() {
       delete state.statuses[account.id];
   }
   bounds();
+  persistSession();
   emit();
 }
-async function heartbeat() {
-  if (!auth || beating) return;
-  beating = true;
+let beating: { epoch: number; promise: Promise<void> } | undefined;
+function heartbeat(): Promise<void> {
+  if (!auth || quitting) return Promise.resolve();
+  if (beating?.epoch === epoch) return beating.promise;
+  const pending = { epoch, promise: Promise.resolve() };
+  pending.promise = reconnect().finally(() => {
+    if (beating === pending) beating = undefined;
+  });
+  beating = pending;
+  return pending.promise;
+}
+async function reconnect() {
+  const generation = epoch;
   try {
-    const generation = epoch;
-    const result = await request<{ leaseSeconds: number }>("/client/heartbeat", {});
+    await request("/client/heartbeat", {});
     if (auth && epoch === generation) {
       await refresh();
       if (!auth || epoch !== generation) return;
-      leaseUntil = performance.now() + Math.min(result.leaseSeconds, 150) * 1000;
+      state.connection = "online";
       state.message = "";
       emit();
     }
   } catch {
-    if (auth) {
-      state.message = "管理服务暂时不可达，正在重试连接";
+    if (auth && generation === epoch) {
+      state.connection = "reconnecting";
+      state.message = "管理服务暂时不可达，登录已保留，正在自动重连";
       emit();
     }
-  } finally {
-    beating = false;
+    return;
+  }
+  if (auth && generation === epoch && restoringAccount && !opening && !accountFormOpen) {
+    const id = restoringAccount;
+    restoringAccount = "";
+    // Restore the last selected account only after fresh server authorization.
+    void openAccount(id).catch(() => {});
   }
 }
 async function login(code: string, url: string) {
@@ -259,11 +312,12 @@ async function login(code: string, url: string) {
   });
   if (epoch !== generation) return;
   auth = result;
-  leaseUntil = performance.now() + Math.min(result.leaseSeconds, 150) * 1000;
   state.label = result.label;
-  await saveAuth();
-  await refresh();
+  state.connection = "connecting";
+  state.message = "正在同步工作台…";
+  persistSession();
   emit();
+  await heartbeat();
 }
 async function updateStatus(runtime: Runtime, status: string) {
   if (!runtimes.has(runtime.id) || !auth) return;
@@ -278,11 +332,13 @@ async function updateStatus(runtime: Runtime, status: string) {
 }
 async function openAccount(id: string) {
   if (opening) throw new Error("正在打开账号，请稍后");
-  if (!auth || performance.now() >= leaseUntil) throw new Error("请先登录客户端");
+  if (!auth) throw new Error("请先登录客户端");
   const account = state.accounts.find((x) => x.id === id);
   if (!account || !account.available) throw new Error("账号不可用或已被其他设备绑定");
   if (runtimes.has(id)) {
     state.activeId = id;
+    restoringAccount = "";
+    persistSession();
     bounds();
     emit();
     return;
@@ -303,7 +359,7 @@ async function openAccount(id: string) {
     const browserUA = chromiumUserAgent(app.userAgentFallback, app.getName());
     ses.setUserAgent(browserUA);
     ses.webRequest.onBeforeRequest((_details, callback) =>
-      callback({ cancel: !runtimes.has(id) || !auth || performance.now() >= leaseUntil }),
+      callback({ cancel: !runtimes.has(id) || !auth }),
     );
     let host = p.host,
       port = p.port,
@@ -367,6 +423,8 @@ async function openAccount(id: string) {
     runtimes.set(id, runtime);
     win.contentView.addChildView(view);
     state.activeId = id;
+    restoringAccount = "";
+    persistSession();
     bounds();
     emit();
     const current = runtime;
@@ -404,10 +462,11 @@ async function openAccount(id: string) {
     await updateStatus(current, "loading");
     await wc.loadURL(adapter.homeURL);
   } catch {
-    if (runtime) {
+    if (runtime && runtimes.get(id) === runtime) {
       await updateStatus(runtime, "network_error");
       await closeRuntime(runtime);
     } else await bridge?.close();
+    if (generation !== epoch || !auth) return;
     state.activeId = "";
     bounds();
     state.message = "账号打开失败，请检查代理地址、认证信息和网络连接后重试";
@@ -459,16 +518,14 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("shell:logout", async (event) => {
     requireShell(event);
-    try {
-      await request("/client/logout", {});
-    } finally {
-      await terminate("已退出客户端，平台登录资料保留在本机");
-    }
+    // Remove local authorization immediately even when the service cannot be reached.
+    void request("/client/logout", {}).catch(() => {});
+    await terminate("已退出客户端，平台登录资料保留在本机");
   });
   ipcMain.handle("shell:reload", async (event) => {
     requireShell(event);
     const runtime = runtimes.get(state.activeId);
-    if (!runtime || !auth || performance.now() >= leaseUntil) throw Error("没有可重新加载的账号");
+    if (!runtime || !auth) throw Error("没有可重新加载的账号");
     await updateStatus(runtime, "loading");
     try {
       await runtime.view.webContents.loadURL(getPlatform("whatsapp").homeURL);
@@ -478,7 +535,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("shell:refresh", async (event) => {
     requireShell(event);
-    await refresh();
+    await heartbeat();
   });
   ipcMain.handle("shell:open", async (event, id) => {
     requireShell(event);
@@ -491,7 +548,7 @@ app.whenReady().then(async () => {
       bounds();
       return;
     }
-    if (open !== true || !auth || performance.now() >= leaseUntil) throw Error("请先登录客户端");
+    if (open !== true || !auth) throw Error("请先登录客户端");
     const generation = epoch;
     const options = await request<AccountOptions>("/client/account-options");
     if (!auth || generation !== epoch) throw Error("登录状态已变化，请重试");
@@ -501,7 +558,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("shell:create-account", async (event, input: NewAccount) => {
     requireShell(event);
-    if (!auth || performance.now() >= leaseUntil) throw Error("请先登录客户端");
+    if (!auth) throw Error("请先登录客户端");
     if (creatingAccount) throw Error("正在添加账号，请稍后");
     if (
       !input ||
@@ -583,22 +640,22 @@ app.whenReady().then(async () => {
       if (typeof saved.apiURL === "string" && saved.auth?.accessToken) {
         apiURL = saved.apiURL;
         auth = saved.auth;
-        await heartbeat();
-        if (auth && performance.now() < leaseUntil) {
-          state.label = auth.label;
-          await refresh();
-        } else await terminate("请重新输入登录码");
+        state.label = auth!.label;
+        state.accounts = Array.isArray(saved.accounts) ? saved.accounts : [];
+        state.platforms = Array.isArray(saved.platforms) ? saved.platforms : [];
+        restoringAccount = typeof saved.activeId === "string" ? saved.activeId : "";
+        state.message = "登录已保留，正在恢复连接…";
       }
     }
-  } catch {
-    await terminate("");
+  } catch (error) {
+    // A read/decryption problem must not delete the only copy of the saved session.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+      state.message = "暂时无法读取本机登录状态，请重新打开客户端或输入登录码";
   }
   emit();
+  void heartbeat();
   setInterval(() => void heartbeat(), 30000);
-  setInterval(() => {
-    if (auth && performance.now() >= leaseUntil)
-      void terminate("授权连接超时，账号已暂停，请重新登录");
-  }, 1000);
+  powerMonitor.on("resume", () => void heartbeat());
 });
 app.on("second-instance", () => {
   if (win) {
@@ -607,9 +664,20 @@ app.on("second-instance", () => {
   }
 });
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => {
-  for (const r of runtimes.values()) {
-    r.view.webContents.close();
-    void r.bridge?.close();
-  }
+app.on("before-quit", (event) => {
+  if (readyToQuit) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
+  // Finish the local encrypted snapshot before closing; quitting is not a logout.
+  void saveAuth()
+    .catch(() => {})
+    .finally(() => {
+      for (const r of runtimes.values()) {
+        if (!r.view.webContents.isDestroyed()) r.view.webContents.close();
+        void r.bridge?.close();
+      }
+      readyToQuit = true;
+      app.quit();
+    });
 });

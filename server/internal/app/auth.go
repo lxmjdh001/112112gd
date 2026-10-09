@@ -126,7 +126,8 @@ func (a *App) clientLogin(c *gin.Context) {
 	}
 	token := security.Token()
 	if _, e = tx.Exec(ctx, `DELETE FROM client_sessions WHERE device_id=$1`, device); e == nil {
-		_, e = tx.Exec(ctx, `INSERT INTO client_sessions VALUES($1,$2,now()+interval '7 days')`, security.Hash(token), device)
+		// The device session lasts until logout/revocation. Code expiry is checked on every request.
+		_, e = tx.Exec(ctx, `INSERT INTO client_sessions VALUES($1,$2,'infinity')`, security.Hash(token), device)
 	}
 	if e != nil {
 		dbError(c, e)

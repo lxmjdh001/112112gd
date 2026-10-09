@@ -61,6 +61,17 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Existing live credentials become durable; expired/inactive sessions stay invalid.
+	var device, inactive string
+	if err = db.QueryRow(ctx, `INSERT INTO devices(tenant_id,code_id,identity_hash,name) VALUES($1,$2,'live-device','existing') RETURNING id::text`, tenant, code).Scan(&device); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(ctx, `INSERT INTO devices(tenant_id,code_id,identity_hash,name,active) VALUES($1,$2,'inactive-device','existing',false) RETURNING id::text`, tenant, code).Scan(&inactive); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(ctx, `INSERT INTO client_sessions VALUES('live-token',$1,now()+interval '7 days'),('expired-token',$1,now()-interval '1 day'),('inactive-token',$2,now()+interval '7 days')`, device, inactive); err != nil {
+		t.Fatal(err)
+	}
 	for range 2 {
 		if err = Run(ctx, db); err != nil {
 			t.Fatal(err)
@@ -83,7 +94,14 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		t.Fatal("legacy code lost WhatsApp permission", grants, err)
 	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 7 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 8 {
 		t.Fatal("migration not idempotent", err, versions)
+	}
+	if err = db.QueryRow(ctx, `SELECT expires_at='infinity'::timestamptz FROM client_sessions WHERE token_hash='live-token'`).Scan(&preserved); err != nil || !preserved {
+		t.Fatal("live session did not become persistent", err)
+	}
+	var resurrected int
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM client_sessions WHERE token_hash IN ('expired-token','inactive-token') AND expires_at='infinity'::timestamptz`).Scan(&resurrected); err != nil || resurrected != 0 {
+		t.Fatal("expired or inactive session was extended", resurrected, err)
 	}
 }

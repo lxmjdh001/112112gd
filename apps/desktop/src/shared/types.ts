@@ -45,6 +45,7 @@ export interface ClientAuth {
 }
 export interface ViewState {
   loggedIn: boolean;
+  connection: "connecting" | "online" | "reconnecting";
   label: string;
   accounts: Account[];
   platforms: { id: string; name: string }[];

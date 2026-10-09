@@ -4,6 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 const schema = "gd007_e2e_" + randomBytes(5).toString("hex");
 const adminOnly = process.argv.includes("--admin-only");
+const desktopOnly = process.argv.includes("--desktop-only");
+if (adminOnly && desktopOnly) throw Error("Choose only one focused suite");
 const pg = process.env.GONGDAN_PG_BIN || "/opt/homebrew/opt/postgresql@17/bin";
 const database =
   process.env.TEST_DATABASE_URL || "postgres://127.0.0.1:55437/gongdan007?sslmode=disable";
@@ -52,7 +54,7 @@ async function ready(url) {
   }
   throw Error("Service did not start: " + url);
 }
-for (const port of [18081, 5779]) {
+for (const port of desktopOnly ? [18081] : [18081, 5779]) {
   try {
     await fetch(`http://127.0.0.1:${port}`);
     throw Error("E2E port is already occupied: " + port);
@@ -64,30 +66,35 @@ await mkdir(".runtime", { recursive: true });
 await writeFile(".runtime/e2e.json", JSON.stringify(settings), { mode: 0o600 });
 sql("CREATE SCHEMA " + schema);
 try {
-  await run("pnpm", ["build:admin"]);
+  if (!desktopOnly) await run("pnpm", ["build:admin"]);
   if (!adminOnly) await run("pnpm", ["build:desktop"]);
   launch("go", ["run", "./cmd/api"], settings, path.resolve("server"));
   await ready("http://127.0.0.1:18081/healthz");
-  launch(
-    "pnpm",
-    [
-      "--filter",
-      "@gongdan/admin",
-      "exec",
-      "vite",
-      "preview",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      "5779",
-    ],
-    { GONGDAN_API_TARGET: "http://127.0.0.1:18081" },
-  );
-  await ready("http://127.0.0.1:5779");
-  await run(process.execPath, ["scripts/check-admin.mjs"]);
-  await run(process.execPath, ["scripts/check-commerce.mjs"]);
-  await run(process.execPath, ["scripts/check-baseline.mjs"]);
-  if (!adminOnly) await run(process.execPath, ["scripts/check-desktop.mjs"]);
+  if (!desktopOnly) {
+    launch(
+      "pnpm",
+      [
+        "--filter",
+        "@gongdan/admin",
+        "exec",
+        "vite",
+        "preview",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "5779",
+      ],
+      { GONGDAN_API_TARGET: "http://127.0.0.1:18081" },
+    );
+    await ready("http://127.0.0.1:5779");
+    await run(process.execPath, ["scripts/check-admin.mjs"]);
+    await run(process.execPath, ["scripts/check-commerce.mjs"]);
+    await run(process.execPath, ["scripts/check-baseline.mjs"]);
+  }
+  if (!adminOnly) {
+    await run(process.execPath, ["scripts/check-desktop.mjs"]);
+    await run(process.execPath, ["scripts/check-client-session.mjs"]);
+  }
   console.log(
     adminOnly
       ? "Admin end-to-end checks passed."

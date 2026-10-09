@@ -6,6 +6,7 @@ import { once } from "node:events";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
+import { waitClientState } from "./desktop-wait.mjs";
 import { build } from "../apps/desktop/node_modules/esbuild/lib/main.js";
 const env = JSON.parse(await readFile(".runtime/e2e.json", "utf8"));
 const requests = [];
@@ -100,7 +101,7 @@ try {
     env: { ...process.env, GONGDAN_USER_DATA: userData },
     timeout: 30000,
   });
-  const page = await app.firstWindow();
+  let page = await app.firstWindow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.locator("#login-code").fill(code.code);
@@ -366,6 +367,63 @@ try {
     true,
     "Storage probe must use the real account partition",
   );
+  // Simulate a sleep longer than the old 150-second lease while management is down.
+  // Native chat and its authenticated proxy must survive without a reload or new profile.
+  await app.evaluate(() => {
+    globalThis.gd7OriginalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw new TypeError("Simulated management outage");
+    };
+    globalThis.gd7OriginalNow = performance.now.bind(performance);
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: () => globalThis.gd7OriginalNow() + 180000,
+    });
+  });
+  await page.evaluate(() => window.gongdan.refresh());
+  await new Promise((r) => setTimeout(r, 2000));
+  const offlineState = await page.evaluate(() => window.gongdan.state());
+  assert.equal(offlineState.loggedIn, true);
+  assert.equal(offlineState.connection, "reconnecting");
+  assert.equal(offlineState.activeId, account.id);
+  assert.equal(await app.evaluate(({ webContents }, id) => !!webContents.fromId(id), wa), true);
+  await app.evaluate(({ powerMonitor }) => {
+    globalThis.fetch = globalThis.gd7OriginalFetch;
+    delete performance.now;
+    powerMonitor.emit("resume");
+  });
+  await waitClientState(page, (s) => s.connection === "online");
+  assert.equal(await app.evaluate(({ webContents }, id) => !!webContents.fromId(id), wa), true);
+  // A process restart restores the selected official page using its original cookie partition.
+  await app.close();
+  app = await electron.launch({
+    executablePath: path.resolve(
+      "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+    ),
+    args: [path.resolve("apps/desktop")],
+    env: { ...process.env, GONGDAN_USER_DATA: userData },
+    timeout: 30000,
+  });
+  page = await app.firstWindow();
+  page.on("pageerror", (e) => errors.push(e.message));
+  await waitClientState(page, (s) => s.loggedIn && s.activeId === account.id);
+  let restored;
+  for (let i = 0; i < 150; i++) {
+    restored = await app.evaluate(async ({ webContents }) => {
+      const native = webContents
+        .getAllWebContents()
+        .find((w) => w.getURL().startsWith("https://web.whatsapp.com"));
+      return native
+        ? {
+            id: native.id,
+            cookie: (await native.session.cookies.get({ name: "gd7_isolation_probe" }))[0]?.value,
+          }
+        : null;
+    });
+    if (restored) break;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  assert.equal(restored?.cookie, "one", "Restart must reopen the original persistent profile");
   // Code platform grants also pause native pages and preserve their profiles.
   const policy = {
     label: "桌面验收",
@@ -469,6 +527,8 @@ try {
         "customer duplicate overlay and idempotent registration (synthetic native DOM fixture)",
         "Google translation through account proxy",
         "cookie isolation",
+        "management outage beyond old lease retains native chat; resume reconnects without reopening",
+        "restart restores login, selected official account and its cookies",
         "code platform revocation closes views; re-grant restores availability and retains profile",
         "proxy quota details",
         "proxy disable closes native view on heartbeat and reenable retains cookies",

@@ -60,7 +60,22 @@ function render(state: ViewState) {
   }
   const allowedNames = state.platforms.map((p) => p.name).join("、");
   const hasPlatforms = state.platforms.length > 0;
-  container.innerHTML = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 · 独立环境 · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasPlatforms ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${state.accounts.map((a) => `<button class="account ${a.id === state.activeId ? "active" : ""}" data-id="${escape(a.id)}" ${a.available ? "" : "disabled"}><span class="wa">W</span><span><b>${escape(a.label)}</b><small>${a.available ? stateLabels[state.statuses[a.id] || ""] || "点击打开官方页面" : a.unavailableReason === "proxy_disabled" ? "代理已禁用" : a.unavailableReason === "platform_not_allowed" ? "平台未授权" : "已绑定其他设备"}</small></span></button>`).join("") || `<p class="muted">${hasPlatforms ? "点击上方添加已授权平台的账号。" : "请联系管理员为登录码勾选可用平台。"}</p>`}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">W</span><h2>${!hasPlatforms ? "尚未分配可用平台" : state.accounts.length ? "打开账号，开始工作" : "添加账号，开始工作"}</h2><p class="muted">${!hasPlatforms ? "请管理员在网站的登录码设置中勾选可用平台，再点击刷新。" : state.accounts.length ? "从左侧选择已授权的平台账号，在官方页面中登录。聊天右下角的翻译按钮可翻译选中文字和回复内容。" : "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const reconnecting = state.connection !== "online";
+  const emptyTitle = reconnecting
+    ? "登录已保留，正在恢复连接"
+    : !hasPlatforms
+      ? "尚未分配可用平台"
+      : state.accounts.length
+        ? "打开账号，开始工作"
+        : "添加账号，开始工作";
+  const emptyHelp = reconnecting
+    ? "无需重新输入登录码，连接恢复后会自动同步账号。已打开的聊天页面会继续保留。"
+    : !hasPlatforms
+      ? "请管理员在网站的登录码设置中勾选可用平台，再点击刷新。"
+      : state.accounts.length
+        ? "从左侧选择已授权的平台账号，在官方页面中登录。聊天右下角的翻译按钮可翻译选中文字和回复内容。"
+        : "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。";
+  container.innerHTML = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 · 独立环境 · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasPlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${state.accounts.map((a) => `<button class="account ${a.id === state.activeId ? "active" : ""}" data-id="${escape(a.id)}" ${a.available ? "" : "disabled"}><span class="wa">W</span><span><b>${escape(a.label)}</b><small>${a.available ? stateLabels[state.statuses[a.id] || ""] || "点击打开官方页面" : a.unavailableReason === "proxy_disabled" ? "代理已禁用" : a.unavailableReason === "platform_not_allowed" ? "平台未授权" : "已绑定其他设备"}</small></span></button>`).join("") || `<p class="muted">${reconnecting ? "正在恢复账号列表…" : hasPlatforms ? "点击上方添加已授权平台的账号。" : "请联系管理员为登录码勾选可用平台。"}</p>`}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">W</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
   container.querySelector("#add-account")!.addEventListener("click", () => void accountForm.open());
   container
     .querySelectorAll<HTMLButtonElement>("[data-id]")
@@ -91,3 +106,7 @@ async function action(fn: () => Promise<void>) {
 }
 window.gongdan.onState(render);
 void window.gongdan.state().then(render);
+
+window.addEventListener("online", () => {
+  if (current?.loggedIn) void window.gongdan.refresh().catch(() => {});
+});
