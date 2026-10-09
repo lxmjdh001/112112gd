@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "status": "planned",
+  "admin_template": "vue-vben-admin",
+  "admin_variant": "element-plus",
+  "client_mode": "native-platform-web",
+  "first_platform": "whatsapp",
+  "login_code_mode": "reusable",
+  "modules": [
+    {
+      "key": "dashboard",
+      "name": "首页控制台",
+      "route": "/dashboard",
+      "completion_phase": "P4",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "devices",
+        "accounts",
+        "leads"
+      ],
+      "permissions": [
+        "dashboard:read"
+      ],
+      "notes": "P2 完成页面与权限框架，P4 接入真实账号数据，P5 至 P7 随业务补齐指标"
+    },
+    {
+      "key": "login-codes",
+      "name": "登录码列表",
+      "route": "/login-codes",
+      "completion_phase": "P3",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "devices"
+      ],
+      "permissions": [
+        "login-codes:read",
+        "login-codes:create",
+        "login-codes:update",
+        "login-codes:disable",
+        "login-codes:reset",
+        "login-codes:export"
+      ]
+    },
+    {
+      "key": "platform-accounts",
+      "name": "账号列表",
+      "route": "/platform-accounts",
+      "completion_phase": "P4",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "devices",
+        "proxies"
+      ],
+      "permissions": [
+        "platform-accounts:read",
+        "platform-accounts:annotate",
+        "platform-accounts:assign",
+        "platform-accounts:command",
+        "platform-accounts:remove"
+      ]
+    },
+    {
+      "key": "promotion",
+      "name": "推广中心",
+      "route": "/promotion",
+      "completion_phase": "P7",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "billing"
+      ],
+      "permissions": [
+        "promotion:read",
+        "promotion:manage",
+        "promotion:review-withdrawal"
+      ]
+    },
+    {
+      "key": "account-center",
+      "name": "账户中心",
+      "route": "/account-center",
+      "completion_phase": "P7",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "billing"
+      ],
+      "permissions": [
+        "account-center:read",
+        "account-center:purchase",
+        "account-center:topup",
+        "account-center:review-topup"
+      ],
+      "children": [
+        "个人资料",
+        "充值",
+        "充值记录",
+        "钱包日志",
+        "字符日志",
+        "购买记录"
+      ]
+    },
+    {
+      "key": "login-logs",
+      "name": "登录日志",
+      "route": "/login-logs",
+      "completion_phase": "P3",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "audit"
+      ],
+      "permissions": [
+        "login-logs:read",
+        "login-logs:export"
+      ]
+    },
+    {
+      "key": "proxies",
+      "name": "代理管理",
+      "route": "/proxies",
+      "completion_phase": "P4",
+      "status": "planned",
+      "dependencies": [
+        "identity"
+      ],
+      "permissions": [
+        "proxies:read",
+        "proxies:create",
+        "proxies:update",
+        "proxies:import",
+        "proxies:export",
+        "proxies:bind",
+        "proxies:test",
+        "proxies:reveal-secret"
+      ]
+    },
+    {
+      "key": "baseline",
+      "name": "底库管理",
+      "route": "/baseline",
+      "completion_phase": "P5",
+      "status": "planned",
+      "dependencies": [
+        "identity"
+      ],
+      "permissions": [
+        "baseline:read",
+        "baseline:import",
+        "baseline:export",
+        "baseline:configure-dedup"
+      ]
+    },
+    {
+      "key": "leads",
+      "name": "线索列表",
+      "route": "/leads",
+      "completion_phase": "P5",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "baseline",
+        "accounts"
+      ],
+      "permissions": [
+        "leads:read",
+        "leads:create",
+        "leads:update",
+        "leads:assign",
+        "leads:export",
+        "leads:share"
+      ]
+    },
+    {
+      "key": "customer-operations",
+      "name": "客户运营",
+      "route": "/customers",
+      "completion_phase": "P6",
+      "status": "planned",
+      "dependencies": [
+        "identity",
+        "leads",
+        "archive",
+        "controls"
+      ],
+      "permissions": [
+        "customer-operations:read",
+        "customer-operations:update",
+        "customer-operations:assign",
+        "customer-operations:tag",
+        "customer-operations:followup",
+        "customer-operations:read-chat",
+        "customer-operations:manage-rules",
+        "customer-operations:review-alert"
+      ],
+      "children": [
+        "客户列表",
+        "聊天记录",
+        "标签管理",
+        "标签统计",
+        "跟进记录",
+        "敏感词监控",
+        "钱包监控",
+        "敏感行为监控"
+      ],
+      "notes": "客户基础在 P5，聊天归档和监控在 P6，后者依赖原生网页数据采集能力验证"
+    }
+  ]
+}

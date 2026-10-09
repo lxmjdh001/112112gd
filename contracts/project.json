@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "project": "gongdan007",
+  "planning_date": "2026-10-09",
+  "phase": "P0",
+  "business_implementation": "not_started",
+  "confirmed": {
+    "desktop_required": true,
+    "chat_ui": "official-platform-web",
+    "login_code": "reusable_until_expiry_or_revocation",
+    "device_limit": true,
+    "code_reset_and_disable": true,
+    "first_platform": "whatsapp",
+    "admin_ui_excludes": [
+      "Ant Design Pro"
+    ]
+  },
+  "selection": {
+    "admin": {
+      "repository": "https://github.com/vbenjs/vue-vben-admin",
+      "candidate_tag": "v5.7.0",
+      "variant": "apps/web-ele",
+      "license_at_tag": "MIT"
+    },
+    "server": {
+      "language": "Go",
+      "framework": "Gin",
+      "database": "PostgreSQL",
+      "candidate_go_version": "go1.27.2"
+    },
+    "desktop": {
+      "framework": "Electron",
+      "candidate_version": "v44.7.0",
+      "language": "TypeScript",
+      "shell_ui": "Vue 3",
+      "remote_content": "WebContentsView"
+    }
+  },
+  "source_control": {
+    "remote": null,
+    "state": "local_planning_repository"
+  }
+}
