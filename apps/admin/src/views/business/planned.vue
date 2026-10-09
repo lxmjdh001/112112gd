@@ -5,10 +5,6 @@ import { ElTag } from "element-plus";
 import "./common.css";
 const route = useRoute();
 const modules: Record<string, { desc: string; items: string[] }> = {
-  "/baseline": {
-    desc: "原始联系人将按团队隔离，导入后统一规范化和去重。",
-    items: ["联系人导入", "导入记录", "去重规则", "底库统计"],
-  },
   "/leads": {
     desc: "线索将关联来源、负责人和跟进状态，与客户库分开管理。",
     items: ["线索列表", "线索分配", "来源追踪", "共享记录"],

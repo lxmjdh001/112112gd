@@ -146,7 +146,7 @@
       "name": "底库管理",
       "route": "/baseline",
       "completion_phase": "P5",
-      "status": "planned",
+      "status": "baseline_dedup_implemented",
       "dependencies": [
         "identity"
       ],
@@ -155,7 +155,8 @@
         "baseline:import",
         "baseline:export",
         "baseline:configure-dedup"
-      ]
+      ],
+      "notes": "客户账号和实际公网 IP 底库、批量导入预览与失败行、启停、团队内同平台跨客服查重、对话登记与重新计算。原生客户端自动查重提示，登记由使用者确认；真实已登录 DOM 识别、自动新对话采集、客户 IP 来源采集和 LINE 客户端仍待验证或接入。"
     },
     {
       "key": "leads",

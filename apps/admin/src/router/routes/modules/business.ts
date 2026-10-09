@@ -45,7 +45,7 @@ const routes: RouteRecordRaw[] = [
   {
     name: "Baseline",
     path: "/baseline",
-    component: () => import("#/views/business/planned.vue"),
+    component: () => import("#/views/business/baseline.vue"),
     meta: { title: "底库管理", icon: "lucide:database", order: 6, authority: ["admin"] },
   },
   {

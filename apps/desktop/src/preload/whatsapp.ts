@@ -1,9 +1,11 @@
+import { installCustomerPanel } from "./customer.ts";
 import { ipcRenderer } from "electron";
 import { observeWhatsApp } from "../../../../packages/platform/whatsapp/index.ts";
 
 // This preload runs in an isolated world. No privileged API is exposed to WhatsApp.
 window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.whatsapp.com") return;
+  installCustomerPanel();
   const host = document.createElement("div");
   host.id = "gongdan-translation";
   host.style.cssText =

@@ -521,6 +521,31 @@ app.whenReady().then(async () => {
       creatingAccount = false;
     }
   });
+  for (const [channel, route] of [
+    ["wa:customer-check", "/client/customers/check"],
+    ["wa:conversation", "/client/conversations"],
+  ] as const) {
+    ipcMain.handle(channel, async (event, payload) => {
+      const runtime = requireRuntime(event);
+      if (
+        !payload ||
+        typeof payload.identifier !== "string" ||
+        payload.identifier.length > 100 ||
+        typeof payload.ip !== "string" ||
+        payload.ip.length > 60
+      )
+        throw Error("客户参数无效");
+      const generation = epoch;
+      const result = await request(route, {
+        accountId: runtime.id,
+        identifier: payload.identifier,
+        ip: payload.ip,
+      });
+      if (generation !== epoch || runtimes.get(runtime.id) !== runtime)
+        throw Error("账号状态已变化");
+      return result;
+    });
+  }
   ipcMain.handle("wa:translate", async (event, payload) => {
     const runtime = requireRuntime(event);
     if (!payload || typeof payload.text !== "string" || typeof payload.target !== "string")

@@ -264,6 +264,82 @@ try {
     !JSON.stringify(usage).includes("Hello, how are you?"),
     "Translation text must not be sent to management service",
   );
+  // Synthetic visible-chat fixture exercises the isolated preload and real IPC.
+  // No phone is paired and no WhatsApp message is sent by this test.
+  await api("/baselines/import", {
+    platform: "whatsapp",
+    text: "447410419512",
+    requestId: crypto.randomUUID(),
+    source: "native overlay fixture",
+  });
+  await app.evaluate(async ({ webContents }, id) => {
+    const w = webContents.fromId(id);
+    await w.executeJavaScript(
+      `(() => {const pane=document.createElement('div');pane.id='pane-side';pane.dataset.gd7Fixture='true';const main=document.createElement('div');main.id='main';main.dataset.gd7Fixture='true';const message=document.createElement('div');message.dataset.id='false_447410419512@s.whatsapp.net_FIXTURE';main.append(message);document.body.append(pane,main)})()`,
+    );
+  }, wa);
+  await new Promise((r) => setTimeout(r, 2500));
+  async function customerOverlay(action) {
+    return app.evaluate(
+      async ({ webContents }, { id, action }) => {
+        const w = webContents.fromId(id);
+        const debug = w.debugger;
+        debug.attach("1.3");
+        try {
+          const tree = await debug.sendCommand("DOM.getDocument", { depth: -1, pierce: true });
+          const flatten = (n) => [
+            n,
+            ...(n.children || []).flatMap(flatten),
+            ...(n.shadowRoots || []).flatMap(flatten),
+          ];
+          const host = flatten(tree.root).find((n) => n.attributes?.includes("gongdan-customer"));
+          if (!host) throw Error("customer overlay missing");
+          const nodes = flatten(host);
+          if (action === "text")
+            return nodes
+              .filter((n) => n.nodeType === 3)
+              .map((n) => n.nodeValue)
+              .join(" ");
+          const button = nodes.find(
+            (n) =>
+              n.nodeName === "BUTTON" &&
+              n.attributes?.some(
+                (v, i, a) => v === "class" && a[i + 1].split(" ").includes(action),
+              ),
+          );
+          if (!button) throw Error("overlay button missing: " + action);
+          const object = await debug.sendCommand("DOM.resolveNode", { nodeId: button.nodeId });
+          await debug.sendCommand("Runtime.callFunctionOn", {
+            objectId: object.object.objectId,
+            functionDeclaration: "function(){this.click()}",
+            returnByValue: true,
+          });
+        } finally {
+          debug.detach();
+        }
+      },
+      { id: wa, action },
+    );
+  }
+  await customerOverlay("trigger");
+  assert.match(await customerOverlay("text"), /重复用户/);
+  await customerOverlay("save");
+  await new Promise((r) => setTimeout(r, 500));
+  assert.match(await customerOverlay("text"), /登记成功/);
+  await customerOverlay("save");
+  await new Promise((r) => setTimeout(r, 500));
+  assert.match(await customerOverlay("text"), /未重复计数/);
+  const recorded = await api("/conversations?search=447410419512");
+  assert.equal(
+    recorded.items.filter((row) => row.accountName === "验收 WhatsApp" && row.duplicateAccount)
+      .length,
+    1,
+  );
+  await app.evaluate(async ({ webContents }, id) => {
+    await webContents
+      .fromId(id)
+      .executeJavaScript("document.querySelectorAll('[data-gd7-fixture]').forEach(n=>n.remove())");
+  }, wa);
   const isolation = await app.evaluate(
     async ({ webContents, session }, { id, tenant, current, other }) => {
       const a = webContents.fromId(id).session;
@@ -358,6 +434,7 @@ try {
         "authenticated HTTP proxy",
         "official WhatsApp page",
         "translation overlay",
+        "customer duplicate overlay and idempotent registration (synthetic native DOM fixture)",
         "Google translation through account proxy",
         "cookie isolation",
         "proxy quota details",

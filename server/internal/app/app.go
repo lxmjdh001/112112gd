@@ -111,6 +111,7 @@ func (a *App) Routes() *gin.Engine {
 	admin.Use(a.auth(false))
 	admin.GET("/user/info", a.userInfo)
 	a.commerceRoutes(admin)
+	a.baselineRoutes(admin)
 	admin.GET("/auth/codes", func(c *gin.Context) { ok(c, []string{"admin"}) })
 	admin.POST("/auth/logout", a.adminLogout)
 	admin.GET("/dashboard", a.dashboard)
@@ -145,6 +146,8 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/accounts/:id/open", a.openAccount)
 	client.POST("/accounts/:id/status", a.accountStatus)
 	client.POST("/usage", a.recordUsage)
+	client.POST("/customers/check", a.checkClientCustomer)
+	client.POST("/conversations", a.recordClientConversation)
 	return r
 }
 func (a *App) auth(client bool) gin.HandlerFunc {

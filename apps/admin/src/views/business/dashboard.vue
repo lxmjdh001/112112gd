@@ -68,7 +68,7 @@ onMounted(async () => {
     <div class="panel">
       <h2 class="section-title">当前版本 · 基础工作流</h2>
       <p class="subtitle">
-        已接入登录码、设备、代理、客户端账号、账户账务、推广返佣与操作日志。底库、线索及客户运营按后续阶段开放。
+        已接入登录码、设备、代理、客户端账号、账户账务、推广返佣、底库查重与操作日志。线索及客户运营按后续阶段开放。
       </p>
       <p class="subtitle">
         账号由客户端添加并同步到后台。当前版本不采集 WhatsApp
