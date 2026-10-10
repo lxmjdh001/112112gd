@@ -78,7 +78,7 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		}
 	}
 	var unchanged bool
-	if err = db.QueryRow(ctx, `SELECT code_hash='preserved-hash' AND max_devices=2 AND max_accounts=3 AND group_id IS NULL FROM login_codes WHERE id=$1`, code).Scan(&unchanged); err != nil || !unchanged {
+	if err = db.QueryRow(ctx, `SELECT code_hash='preserved-hash' AND max_devices=2 AND max_accounts=3 AND group_id IS NULL AND code_cipher='' FROM login_codes WHERE id=$1`, code).Scan(&unchanged); err != nil || !unchanged {
 		t.Fatal("legacy code changed during upgrade", err)
 	}
 
@@ -94,7 +94,7 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		t.Fatal("legacy code lost WhatsApp permission", grants, err)
 	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 8 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 9 {
 		t.Fatal("migration not idempotent", err, versions)
 	}
 	if err = db.QueryRow(ctx, `SELECT expires_at='infinity'::timestamptz FROM client_sessions WHERE token_hash='live-token'`).Scan(&preserved); err != nil || !preserved {

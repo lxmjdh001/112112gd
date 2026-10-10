@@ -34,6 +34,12 @@ const loading = ref(false);
 const saving = ref(false);
 const show = ref(false);
 const secret = ref("");
+const secretTitle = ref("登录码已生成");
+const copyingID = ref("");
+const recoverOpen = ref(false);
+const recovering = ref(false);
+const recoverRow = ref<LoginCode>();
+const originalCode = ref("");
 const query = ref("");
 const groups = ref<LoginCodeGroup[]>([]);
 const groupFilter = ref("all");
@@ -158,6 +164,7 @@ async function create() {
       ElMessage.success("登录码已更新");
     } else {
       const result = await api.post<{ code: string }>("/login-codes", form);
+      secretTitle.value = "登录码已生成";
       secret.value = result.code;
     }
     show.value = false;
@@ -188,6 +195,7 @@ async function reset(row: LoginCode) {
     { type: "warning" },
   );
   const result = await api.post<{ code: string }>(`/login-codes/${row.id}/reset`);
+  secretTitle.value = "登录码已生成";
   secret.value = result.code;
   await load();
 }
@@ -205,12 +213,45 @@ async function unbind(row: Device) {
   await deviceList();
   await load();
 }
-async function copy() {
+async function writeCode(value: string) {
   try {
-    await navigator.clipboard.writeText(secret.value);
-    ElMessage.success("已复制");
+    await navigator.clipboard.writeText(value);
+    ElMessage.success("登录码已复制");
   } catch {
+    secretTitle.value = "复制登录码";
+    secret.value = value;
     ElMessage.warning("请手动选择并复制登录码");
+  }
+}
+async function copyRow(row: LoginCode) {
+  if (copyingID.value) return;
+  if (!row.canCopy) {
+    recoverRow.value = row;
+    originalCode.value = "";
+    recoverOpen.value = true;
+    return;
+  }
+  copyingID.value = row.id;
+  try {
+    const result = await api.post<{ code: string }>(`/login-codes/${row.id}/copy`);
+    await writeCode(result.code);
+  } finally {
+    copyingID.value = "";
+  }
+}
+async function recover() {
+  if (!recoverRow.value || recovering.value) return;
+  recovering.value = true;
+  try {
+    const result = await api.post<{ code: string }>(`/login-codes/${recoverRow.value.id}/recover`, {
+      code: originalCode.value.trim(),
+    });
+    recoverOpen.value = false;
+    originalCode.value = "";
+    await writeCode(result.code);
+    await load();
+  } finally {
+    recovering.value = false;
   }
 }
 const expired = (value: string) => Date.parse(value) < Date.now();
@@ -261,9 +302,19 @@ onMounted(load);
           prop="label"
           label="名称 / 使用者"
           min-width="140"
-        /><ElTableColumn label="登录码" min-width="175"
+        /><ElTableColumn label="登录码" min-width="235"
           ><template #default="{ row }"
-            ><span class="code">{{ row.maskedCode }}</span></template
+            ><div class="code-actions">
+              <span class="code">{{ row.maskedCode }}</span
+              ><ElButton
+                link
+                type="primary"
+                :loading="copyingID === row.id"
+                :disabled="!!copyingID && copyingID !== row.id"
+                @click="copyRow(row)"
+                >复制</ElButton
+              >
+            </div></template
           ></ElTableColumn
         ><ElTableColumn label="分组" min-width="120" show-overflow-tooltip>
           <template #default="{ row }"
@@ -395,19 +446,19 @@ onMounted(load);
       </form></ElDialog
     ><ElDialog
       :model-value="!!secret"
-      title="登录码已生成"
+      :title="secretTitle"
       width="540px"
       :close-on-click-modal="false"
       @close="secret = ''"
       ><ElAlert
-        title="完整登录码仅显示本次，请复制后交给使用者。"
+        title="可随时在登录码列表点击“复制”，再次获取完整登录码。"
         type="success"
         :closable="false"
       />
       <p class="secret" style="margin-top: 18px">{{ secret }}</p>
       <template #footer
         ><ElButton @click="secret = ''">已保存，关闭</ElButton
-        ><ElButton type="primary" @click="copy">复制登录码</ElButton></template
+        ><ElButton type="primary" @click="writeCode(secret)">复制登录码</ElButton></template
       ></ElDialog
     ><ElDialog v-model="devicesOpen" title="设备管理" width="760px"
       ><ElTable :data="devices" empty-text="使用者登录客户端后，设备会出现在这里"
@@ -430,6 +481,44 @@ onMounted(load);
       @created="groupCreated"
       @changed="load"
     />
+    <ElDialog
+      v-model="recoverOpen"
+      title="补存原登录码"
+      width="520px"
+      :close-on-click-modal="false"
+      :show-close="!recovering"
+      :close-on-press-escape="!recovering"
+      @closed="originalCode = ''"
+    >
+      <form class="form-grid" @submit.prevent="recover">
+        <ElAlert
+          title="这条登录码由旧版创建，尚未保存完整码。"
+          type="info"
+          :closable="false"
+          description="粘贴原登录码后保存，以后即可直接复制。使用者下次用原码登录客户端时也会自动补存。"
+        />
+        <label class="field"
+          >原登录码
+          <ElInput
+            v-model="originalCode"
+            placeholder="粘贴完整的 GD7-… 登录码"
+            type="password"
+            show-password
+            autocomplete="off"
+            maxlength="100"
+            required
+          />
+          <small>补存不会改变登录码，也不会让已登录的客户端退出。</small>
+        </label>
+        <ElButton
+          native-type="submit"
+          type="primary"
+          :loading="recovering"
+          :disabled="!originalCode.trim()"
+          >保存并复制</ElButton
+        >
+      </form>
+    </ElDialog>
     <ElDialog v-model="moveOpen" title="移动分组" width="420px" :close-on-click-modal="false">
       <form class="form-grid" @submit.prevent="move">
         <p>将 {{ moveIDs.length }} 个登录码移动到：</p>
@@ -443,6 +532,12 @@ onMounted(load);
   </div>
 </template>
 <style scoped>
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
 .platform-choices {
   display: flex;
   flex-wrap: wrap;

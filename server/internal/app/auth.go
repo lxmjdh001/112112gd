@@ -133,6 +133,16 @@ func (a *App) clientLogin(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
+	// A verified legacy code can be recovered without changing its value or other sessions.
+	encrypted, e := security.Seal(a.Key, b.Code)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	if _, e = tx.Exec(ctx, `UPDATE login_codes SET code_cipher=$1 WHERE id=$2 AND code_cipher=''`, encrypted, code); e != nil {
+		dbError(c, e)
+		return
+	}
 	if e = tx.Commit(ctx); e != nil {
 		dbError(c, e)
 		return

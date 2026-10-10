@@ -12,6 +12,7 @@ export interface LoginCode {
   groupId: string;
   groupName: string;
   maskedCode: string;
+  canCopy: boolean;
   enabled: boolean;
   expiresAt: string;
   maxDevices: number;

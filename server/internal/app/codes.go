@@ -22,7 +22,7 @@ func (b codeInput) valid() bool {
 	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now()) && b.MaxDevices > 0 && b.MaxDevices <= 100 && b.MaxAccounts > 0 && b.MaxAccounts <= 500
 }
 func (a *App) listCodes(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms,l.code_cipher<>'' FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -31,15 +31,15 @@ func (a *App) listCodes(c *gin.Context) {
 	out := []gin.H{}
 	for rows.Next() {
 		var id, label, suffix, groupID, groupName string
-		var enabled bool
+		var enabled, canCopy bool
 		var platforms []string
 		var expires, created time.Time
 		var maxD, maxA, devices, accounts int
-		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName, &platforms); e != nil {
+		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName, &platforms, &canCopy); e != nil {
 			dbError(c, e)
 			return
 		}
-		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName, "allowedPlatforms": platforms})
+		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName, "allowedPlatforms": platforms, "canCopy": canCopy})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -65,8 +65,13 @@ func (a *App) createCode(c *gin.Context) {
 		return
 	}
 	raw := "GD7-" + security.Token()
+	encrypted, e := security.Seal(a.Key, raw)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
 	var codeID string
-	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id,allowed_platforms) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID, *b.AllowedPlatforms).Scan(&codeID)
+	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id,allowed_platforms,code_cipher) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9,$10) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID, *b.AllowedPlatforms, encrypted).Scan(&codeID)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -139,8 +144,13 @@ func (a *App) resetCode(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 	raw := "GD7-" + security.Token()
+	encrypted, e := security.Seal(a.Key, raw)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
 	var code string
-	e = tx.QueryRow(ctx, `UPDATE login_codes SET code_hash=$1,suffix=$2 WHERE id::text=$3 AND tenant_id=$4 RETURNING id::text`, security.Hash(raw), raw[len(raw)-6:], c.Param("id"), id.Tenant).Scan(&code)
+	e = tx.QueryRow(ctx, `UPDATE login_codes SET code_hash=$1,suffix=$2,code_cipher=$5 WHERE id::text=$3 AND tenant_id=$4 RETURNING id::text`, security.Hash(raw), raw[len(raw)-6:], c.Param("id"), id.Tenant, encrypted).Scan(&code)
 	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "登录码不存在")
 		return

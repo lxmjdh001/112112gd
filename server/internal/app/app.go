@@ -121,6 +121,8 @@ func (a *App) Routes() *gin.Engine {
 	admin.POST("/login-codes/move-group", a.moveCodesGroup)
 	admin.PATCH("/login-codes/:id", a.updateCode)
 	admin.POST("/login-codes/:id/reset", a.resetCode)
+	admin.POST("/login-codes/:id/copy", a.copyCode)
+	admin.POST("/login-codes/:id/recover", a.rate, a.recoverCode)
 	admin.GET("/login-code-groups", a.listCodeGroups)
 	admin.POST("/login-code-groups", a.createCodeGroup)
 	admin.PATCH("/login-code-groups/:id", a.renameCodeGroup)

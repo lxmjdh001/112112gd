@@ -1,9 +1,24 @@
 import { chromium } from "playwright";
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 const env = JSON.parse(await readFile(".runtime/e2e.json", "utf8"));
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+// Verify the exact value sent to the clipboard without overwriting the user's clipboard.
+await page.addInitScript(() => {
+  window.__copiedCode = "";
+  window.__copyDenied = false;
+  Object.defineProperty(navigator, "clipboard", {
+    value: {
+      writeText: async (value) => {
+        if (window.__copyDenied) throw new DOMException("Denied", "NotAllowedError");
+        window.__copiedCode = value;
+      },
+    },
+    configurable: true,
+  });
+});
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.setDefaultTimeout(15000);
@@ -37,7 +52,12 @@ try {
   await createDialog.getByText("WhatsApp", { exact: true }).click();
   await page.screenshot({ path: ".runtime/login-code-platforms.png", fullPage: true });
 
+  const creation = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/login-codes") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "生成登录码" }).click();
+  const createdID = (await (await creation).json()).data.id;
   await page.getByText("登录码已生成", { exact: true }).waitFor();
   const code = await page.locator(".secret").innerText();
   if (!code.startsWith("GD7-")) throw Error("No login code");
@@ -48,6 +68,65 @@ try {
     .filter({ hasText: "验收 · 使用者01" });
   assert.match(await firstRow.innerText(), /投放一组/);
   assert.match(await firstRow.innerText(), /WhatsApp/);
+  async function copyFromRow() {
+    await page.evaluate(() => {
+      window.__copiedCode = "";
+    });
+    await firstRow.getByRole("button", { name: "复制", exact: true }).click();
+    await page.waitForFunction((expected) => window.__copiedCode === expected, code);
+  }
+  await copyFromRow();
+  await page.reload({ waitUntil: "networkidle" });
+  await firstRow.waitFor();
+  await copyFromRow();
+  assert(
+    !(await firstRow.innerText()).includes(code),
+    "The table must keep the complete code masked",
+  );
+  // If the browser blocks clipboard access, expose a selectable value with a retry button.
+  await page.evaluate(() => {
+    window.__copyDenied = true;
+  });
+  await firstRow.getByRole("button", { name: "复制", exact: true }).click();
+  const copyDialog = page.getByRole("dialog", { name: "复制登录码", exact: true });
+  await copyDialog.waitFor();
+  assert.equal(await copyDialog.locator(".secret").innerText(), code);
+  await page.evaluate(() => {
+    window.__copyDenied = false;
+  });
+  await copyDialog.getByRole("button", { name: "复制登录码", exact: true }).click();
+  await copyDialog.getByRole("button", { name: "已保存，关闭", exact: true }).click();
+  // Simulate a pre-upgrade hash-only row in this test's isolated schema.
+  assert.match(env.schema, /^gd007_e2e_[0-9a-f]+$/);
+  assert.match(createdID, /^[0-9a-f-]{36}$/);
+  const fixtureDatabase = new URL(env.DATABASE_URL);
+  fixtureDatabase.searchParams.delete("search_path");
+  const legacy = spawnSync(
+    (process.env.GONGDAN_PG_BIN || "/opt/homebrew/opt/postgresql@17/bin") + "/psql",
+    [
+      fixtureDatabase.toString(),
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      `UPDATE ${env.schema}.login_codes SET code_cipher='' WHERE id='${createdID}'`,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(legacy.status, 0, "Legacy fixture setup failed");
+  await page.reload({ waitUntil: "networkidle" });
+  await firstRow.getByRole("button", { name: "复制", exact: true }).click();
+  const recovery = page.getByRole("dialog", { name: "补存原登录码", exact: true });
+  await recovery.getByPlaceholder("粘贴完整的 GD7-… 登录码").fill("GD7-incorrect-original-code");
+  await recovery.getByRole("button", { name: "保存并复制", exact: true }).click();
+  await page.getByText("原登录码与当前记录不匹配，请检查后重试", { exact: true }).waitFor();
+  await recovery.getByPlaceholder("粘贴完整的 GD7-… 登录码").fill(code);
+  await recovery.getByRole("button", { name: "保存并复制", exact: true }).click();
+  await recovery.waitFor({ state: "hidden" });
+  await page.waitForFunction((expected) => window.__copiedCode === expected, code);
+  await page.reload({ waitUntil: "networkidle" });
+  await firstRow.waitFor();
+  await copyFromRow();
+  await page.screenshot({ path: ".runtime/login-code-copy.png", fullPage: true });
   await firstRow.getByRole("button", { name: "编辑", exact: true }).click();
   const editDialog = page.getByRole("dialog", { name: "编辑登录码", exact: true });
   await editDialog.getByText("WhatsApp", { exact: true }).click();
@@ -274,6 +353,7 @@ try {
         "admin login",
         "dashboard",
         "create reusable code",
+        "repeat code copy after reload, clipboard denial fallback and legacy recovery",
         "explicit platform selection, editing, persistence and planned platforms disabled",
         "group create, filter, batch move, rename, reload and delete",
         "proxy validation, groups, limits, persistence, bulk move and enable/disable",
