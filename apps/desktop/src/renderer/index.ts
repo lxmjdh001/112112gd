@@ -1,4 +1,4 @@
-import type { ShellAPI, ViewState } from "../shared/types.ts";
+import type { Account, ShellAPI, ViewState } from "../shared/types.ts";
 import { stateLabels } from "../shared/types.ts";
 import { createAccountForm } from "./account-form.ts";
 import { mountCloudChat } from "../../../../packages/cloud-chat/index.ts";
@@ -23,6 +23,60 @@ const escape = (s: string) =>
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
+const whatsappLogo =
+  '<img class="platform-logo" src="assets/whatsapp.svg" alt="" aria-hidden="true" draggable="false" />';
+function accountMarkup(account: Account, state: ViewState) {
+  const isAPI = account.connectionType === "cloud";
+  const status = isAPI
+    ? account.available
+      ? "点击打开聊天"
+      : account.unavailableReason === "api_disabled"
+        ? "API 已停用"
+        : "平台未授权"
+    : account.available
+      ? stateLabels[state.statuses[account.id] || ""] || "点击打开官方页面"
+      : account.unavailableReason === "proxy_disabled"
+        ? "代理已禁用"
+        : account.unavailableReason === "platform_not_allowed"
+          ? "平台未授权"
+          : "已绑定其他设备";
+  return `<button class="account ${account.id === state.activeId ? "active" : ""}" data-id="${escape(account.id)}" ${account.available ? "" : "disabled"}>
+    <span class="wa">${whatsappLogo}</span><span class="account-info"><b>${escape(account.label)}</b><small>${escape(status)}</small></span>
+  </button>`;
+}
+function accountGroups(state: ViewState) {
+  const groups = [
+    {
+      id: "whatsapp",
+      name: "WhatsApp",
+      description: "扫码登录",
+      empty: "添加账号后，在官方页面扫码登录。",
+    },
+    {
+      id: "whatsapp_cloud",
+      name: "WhatsApp API",
+      description: "业务号码",
+      empty: "后台分配的 API 号码会显示在这里。",
+    },
+  ];
+  return (
+    groups
+      .map((group) => {
+        const accounts = state.accounts.filter(
+          (account) =>
+            (account.connectionType === "cloud" ? "whatsapp_cloud" : account.platform) === group.id,
+        );
+        if (!accounts.length && !state.platforms.some((platform) => platform.id === group.id))
+          return "";
+        return `<section class="account-group" data-platform="${group.id}" aria-labelledby="group-${group.id}">
+      <div class="platform-heading">${whatsappLogo}<h2 id="group-${group.id}">${group.name}</h2><span class="platform-count">${accounts.length}</span></div>
+      <p class="platform-description">${group.description}</p>
+      ${accounts.map((account) => accountMarkup(account, state)).join("") || `<p class="group-empty">${group.empty}</p>`}
+    </section>`;
+      })
+      .join("") || '<p class="group-empty">请联系管理员为登录码勾选可用平台。</p>'
+  );
+}
 function render(state: ViewState) {
   const wasLoggedIn = current?.loggedIn;
   current = state;
@@ -86,7 +140,7 @@ function render(state: ViewState) {
         : hasNativePlatforms
           ? "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"
           : "请管理员在 WhatsApp API 号码管理中，将号码分配给当前登录码。";
-  const shellMarkup = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasNativePlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${state.accounts.map((a) => `<button class="account ${a.id === state.activeId ? "active" : ""}" data-id="${escape(a.id)}" ${a.available ? "" : "disabled"}><span class="wa">W</span><span><b>${escape(a.label)}</b><small>${a.connectionType === "cloud" ? (a.available ? "WhatsApp API · 点击打开" : a.unavailableReason === "api_disabled" ? "API 已停用" : "平台未授权") : a.available ? stateLabels[state.statuses[a.id] || ""] || "点击打开官方页面" : a.unavailableReason === "proxy_disabled" ? "代理已禁用" : a.unavailableReason === "platform_not_allowed" ? "平台未授权" : "已绑定其他设备"}</small></span></button>`).join("") || `<p class="muted">${reconnecting ? "正在恢复账号列表…" : hasNativePlatforms ? "点击上方添加已授权平台的账号。" : hasPlatforms ? "管理员分配的 API 号码会显示在这里。" : "请联系管理员为登录码勾选可用平台。"}</p>`}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">W</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const shellMarkup = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasNativePlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${accountGroups(state)}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;

@@ -47,3 +47,5 @@ await build({
 await copyFile("src/renderer/index.html", "dist/index.html");
 await copyFile("src/renderer/style.css", "dist/style.css");
 await copyFile("../../packages/cloud-chat/style.css", "dist/cloud-chat.css");
+await mkdir("dist/assets", { recursive: true });
+await copyFile("src/renderer/assets/whatsapp.svg", "dist/assets/whatsapp.svg");
