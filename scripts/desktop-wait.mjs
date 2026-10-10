@@ -4,7 +4,15 @@ import assert from "node:assert/strict";
 export async function waitClientState(page, predicate, timeout = 40000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const state = await page.evaluate(() => window.gongdan?.state());
+    let state;
+    try {
+      state = await page.evaluate(() => window.gongdan?.state());
+    } catch (error) {
+      // firstWindow can resolve before the initial renderer navigation finishes.
+      // Retry that navigation race, but surface real IPC and application errors.
+      if (page.isClosed() || !String(error).includes("Execution context was destroyed"))
+        throw error;
+    }
     if (state && predicate(state)) return state;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }

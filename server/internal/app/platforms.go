@@ -15,6 +15,7 @@ type platformOption struct {
 // visible in the admin selector but cannot be granted until their adapter ships.
 var platformCatalog = []platformOption{
 	{ID: "whatsapp", Name: "WhatsApp", Available: true},
+	{ID: "whatsapp_cloud", Name: "WhatsApp API", Available: true},
 	{ID: "line", Name: "LINE", Available: false},
 }
 

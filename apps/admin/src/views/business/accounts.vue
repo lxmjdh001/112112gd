@@ -15,7 +15,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>账号列表</h1>
-        <p class="subtitle">账号在客户端添加并登录，所属登录码、设备与网页状态自动同步到这里。</p>
+        <p class="subtitle">原生平台账号在客户端添加并登录；业务号码在 WhatsApp API 模块接入，统一展示于此。</p>
       </div>
     </div>
     <div class="panel">
@@ -38,8 +38,10 @@ onMounted(load);
           label="所属登录码"
           min-width="130"
         /><ElTableColumn label="平台" width="120"
-          ><template #default>WhatsApp</template></ElTableColumn
-        ><ElTableColumn label="网页状态" min-width="160"
+          ><template #default="{ row }">{{
+            row.connectionType === "cloud" ? "WhatsApp API" : "WhatsApp"
+          }}</template></ElTableColumn
+        ><ElTableColumn label="账号状态" min-width="160"
           ><template #default="{ row }"
             ><ElTag
               :type="
@@ -53,9 +55,9 @@ onMounted(load);
             ></template
           ></ElTableColumn
         ><ElTableColumn label="代理出口" min-width="170"
-          ><template #default="{ row }"
-            >{{ row.proxyHost }}:{{ row.proxyPort }}</template
-          ></ElTableColumn
+          ><template #default="{ row }">{{
+            row.connectionType === "cloud" ? "官方 Cloud API" : `${row.proxyHost}:${row.proxyPort}`
+          }}</template></ElTableColumn
         ><ElTableColumn prop="deviceName" label="绑定设备" min-width="130" /><ElTableColumn
           label="最近状态上报"
           min-width="170"

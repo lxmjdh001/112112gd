@@ -35,6 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 	a := app.New(db, key)
+	go a.RunCloudOutbox(ctx)
 	if u := os.Getenv("BOOTSTRAP_USERNAME"); u != "" {
 		if e = a.Bootstrap(ctx, u, os.Getenv("BOOTSTRAP_PASSWORD")); e != nil {
 			slog.Error("bootstrap failed", "error", e)

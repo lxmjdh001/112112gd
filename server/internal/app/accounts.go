@@ -43,7 +43,12 @@ func (a *App) listAccounts(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
-	ok(c, out)
+	cloud, e := a.cloudAccountRows(c, false)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	ok(c, append(out, cloud...))
 }
 func (a *App) clientAccounts(c *gin.Context) {
 	id := identity(c)
@@ -76,7 +81,12 @@ func (a *App) clientAccounts(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
-	ok(c, out)
+	cloud, e := a.cloudAccountRows(c, true)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	ok(c, append(out, cloud...))
 }
 func (a *App) openAccount(c *gin.Context) {
 	id := identity(c)

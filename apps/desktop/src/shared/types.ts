@@ -1,11 +1,18 @@
 export interface Account {
+  connectionType?: "web" | "cloud";
+  status?: string;
   id: string;
   label: string;
   platform: string;
   proxyHost: string;
   proxyPort: number;
   available: boolean;
-  unavailableReason?: "proxy_disabled" | "other_device" | "platform_not_allowed" | "";
+  unavailableReason?:
+    | "proxy_disabled"
+    | "other_device"
+    | "platform_not_allowed"
+    | "api_disabled"
+    | "";
 }
 export interface ProxyConfig {
   protocol: "socks5" | "http" | "https";
@@ -54,6 +61,7 @@ export interface ViewState {
   apiURL: string;
 }
 export interface ShellAPI {
+  cloudRequest<T>(numberId: string, path: string, body?: unknown): Promise<T>;
   state(): Promise<ViewState>;
   login(code: string): Promise<void>;
   logout(): Promise<void>;

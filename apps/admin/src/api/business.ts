@@ -41,6 +41,7 @@ export interface ProxyGroup {
   proxyCount: number;
 }
 export interface Account {
+  connectionType?: "web" | "cloud";
   id: string;
   label: string;
   platform: string;
@@ -52,6 +53,9 @@ export interface Account {
   observedAt: string | null;
 }
 export const statusNames: Record<string, string> = {
+  api_connected: "API 授权已验证",
+  api_auth_error: "API 授权需检查",
+  api_disabled: "API 已停用",
   not_opened: "尚未打开",
   loading: "加载中",
   qr_required: "等待扫码",

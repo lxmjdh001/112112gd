@@ -43,7 +43,9 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 		dbError(c, err)
 		return
 	}
-	ok(c, gin.H{"usedAccounts": used, "proxies": proxies, "platforms": enabledPlatforms(grants)})
+	platforms := enabledPlatforms(grants)
+	platforms = slices.DeleteFunc(platforms, func(p platformOption) bool { return p.ID == "whatsapp_cloud" })
+	ok(c, gin.H{"usedAccounts": used, "proxies": proxies, "platforms": platforms})
 }
 
 func (a *App) createClientAccount(c *gin.Context) {

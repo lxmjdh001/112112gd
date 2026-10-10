@@ -25,6 +25,17 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "账号列表", icon: "lucide:monitor-smartphone", order: 2, authority: ["admin"] },
   },
   {
+    name: "WhatsAppCloud",
+    path: "/whatsapp-api",
+    component: () => import("#/views/business/whatsapp-cloud.vue"),
+    meta: {
+      title: "WhatsApp API",
+      icon: "lucide:messages-square",
+      order: 2.5,
+      authority: ["admin"],
+    },
+  },
+  {
     name: "Proxies",
     path: "/proxies",
     component: () => import("#/views/business/proxies.vue"),

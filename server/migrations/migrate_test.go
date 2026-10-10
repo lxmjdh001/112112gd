@@ -101,7 +101,7 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		t.Fatal("legacy code lost WhatsApp permission", grants, err)
 	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 11 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 12 {
 		t.Fatal("migration not idempotent", err, versions)
 	}
 	if err = db.QueryRow(ctx, `SELECT expires_at='infinity'::timestamptz FROM client_sessions WHERE token_hash='live-token'`).Scan(&preserved); err != nil || !preserved {

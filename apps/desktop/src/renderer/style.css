@@ -311,3 +311,16 @@ aside {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.cloud-client-content {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  height: calc(100vh - 58px);
+}
+.cloud-client-widget {
+  height: 100%;
+}
+.wa-cloud-chat .wc-language {
+  width: auto;
+}

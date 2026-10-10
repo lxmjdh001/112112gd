@@ -8,18 +8,23 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"gongdan007/server/internal/security"
+	"gongdan007/server/internal/whatsappcloud"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
 type App struct {
-	DB       *pgxpool.Pool
-	Key      []byte
-	mu       sync.Mutex
-	attempts map[string]attempt
+	DB              *pgxpool.Pool
+	Key             []byte
+	mu              sync.Mutex
+	attempts        map[string]attempt
+	Cloud           *whatsappcloud.Client
+	PublicURL       string
+	TranslationHTTP *http.Client
 }
 type attempt struct {
 	n     int
@@ -31,7 +36,7 @@ type Identity struct {
 }
 
 func New(db *pgxpool.Pool, key []byte) *App {
-	return &App{DB: db, Key: key, attempts: map[string]attempt{}}
+	return &App{DB: db, Key: key, attempts: map[string]attempt{}, Cloud: whatsappcloud.New(os.Getenv("WHATSAPP_GRAPH_VERSION")), PublicURL: strings.TrimRight(os.Getenv("GONGDAN_PUBLIC_URL"), "/"), TranslationHTTP: &http.Client{Timeout: 12 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 func ok(c *gin.Context, v any) { c.JSON(200, gin.H{"code": 0, "data": v}) }
 func fail(c *gin.Context, status int, msg string) {
@@ -90,7 +95,14 @@ func (a *App) Routes() *gin.Engine {
 	r.Use(func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256*1024)
+		limit := int64(256 * 1024)
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/whatsapp-cloud/webhooks/") {
+			limit = 2 << 20
+		}
+		if strings.Contains(c.Request.URL.Path, "/whatsapp-cloud/numbers/") && strings.HasSuffix(c.Request.URL.Path, "/media") && c.Request.Method == "POST" {
+			limit = 23 << 20
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
 	r.GET("/healthz", func(c *gin.Context) {
@@ -154,6 +166,7 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/usage", a.recordUsage)
 	client.POST("/customers/check", a.checkClientCustomer)
 	client.POST("/conversations", a.recordClientConversation)
+	a.cloudRoutes(v, admin, client)
 	return r
 }
 func (a *App) auth(client bool) gin.HandlerFunc {

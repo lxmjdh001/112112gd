@@ -117,7 +117,7 @@ async function request<T>(
       ...(requestAuth ? { Authorization: "Bearer " + requestAuth.accessToken } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(route.includes("/whatsapp-cloud/") ? 30000 : 10000),
     redirect: "error",
   });
   // A confirmed revocation is different from an unreachable management service.
@@ -327,6 +327,17 @@ async function openAccount(id: string) {
   if (!auth) throw new Error("请先登录客户端");
   const account = state.accounts.find((x) => x.id === id);
   if (!account || !account.available) throw new Error("账号不可用或已被其他设备绑定");
+  if (account.connectionType === "cloud") {
+    const generation = epoch;
+    await request(`/client/whatsapp-cloud/numbers/${id}/chats?offset=0`);
+    if (!auth || generation !== epoch) return;
+    state.activeId = id;
+    restoringAccount = "";
+    persistSession();
+    bounds();
+    emit();
+    return;
+  }
   if (runtimes.has(id)) {
     state.activeId = id;
     restoringAccount = "";
@@ -505,6 +516,36 @@ app.whenReady().then(async () => {
   ipcMain.handle("shell:state", (event) => {
     requireShell(event);
     return state;
+  });
+  ipcMain.handle("shell:cloud-request", async (event, numberId, route, body) => {
+    requireShell(event);
+    if (
+      !auth ||
+      typeof numberId !== "string" ||
+      typeof route !== "string" ||
+      !state.accounts.some((a) => a.id === numberId && a.connectionType === "cloud" && a.available)
+    )
+      throw Error("API 号码未授权");
+    const parsed = new URL(route, "https://cloud.invalid");
+    const uuid = "[0-9a-f-]{36}";
+    const getRoute = new RegExp(`^/(chats|templates|chats/${uuid}/messages)$`);
+    const postRoute = new RegExp(
+      `^/(chats|chats/${uuid}/(messages|read)|media|media/${uuid}/download|translate)$`,
+    );
+    if (
+      parsed.origin !== "https://cloud.invalid" ||
+      parsed.hash ||
+      !(body === undefined ? getRoute : postRoute).test(parsed.pathname) ||
+      [...parsed.searchParams.keys()].some((k) => !["before", "offset", "search"].includes(k))
+    )
+      throw Error("API 请求路径无效");
+    const generation = epoch;
+    const result = await request(
+      `/client/whatsapp-cloud/numbers/${numberId}${parsed.pathname}${parsed.search}`,
+      body,
+    );
+    if (!auth || generation !== epoch) throw Error("登录状态已变化");
+    return result;
   });
   ipcMain.handle("shell:login", async (event, code) => {
     requireShell(event);
