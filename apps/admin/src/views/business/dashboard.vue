@@ -46,7 +46,7 @@ onMounted(async () => {
         <div class="step">
           <b>01</b>
           <h3>创建登录码</h3>
-          <p class="subtitle">设置有效期、设备数与平台账号额度。使用者无需账号密码。</p>
+          <p class="subtitle">勾选可用平台并设置有效期。使用者无需账号密码。</p>
           <ElButton link type="primary" @click="router.push('/login-codes')">管理登录码 →</ElButton>
         </div>
         <div class="step">

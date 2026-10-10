@@ -20,8 +20,7 @@ token = (
 const code = await api("/login-codes", {
   allowedPlatforms: ["whatsapp"],
   label: "底库验收",
-  maxDevices: 1,
-  maxAccounts: 2,
+
   expiresAt: new Date(Date.now() + 86400000).toISOString(),
 });
 const client = (
@@ -31,7 +30,7 @@ const client = (
     "",
   )
 ).accessToken;
-await api("/proxies/import", { lines: "socks5://127.0.0.1:12222", maxAccountsPerPlatform: 2 });
+await api("/proxies/import", { lines: "socks5://198.51.100.25:12222", maxAccountsPerPlatform: 2 });
 const proxy = (await api("/proxies")).find((p) => p.port === 12222);
 const accounts = [];
 for (const label of ["底库客服 A", "底库客服 B"])

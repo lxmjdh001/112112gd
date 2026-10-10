@@ -12,7 +12,7 @@ import (
 func (a *App) copyCode(c *gin.Context) {
 	id := identity(c)
 	var encrypted, hash string
-	err := a.DB.QueryRow(c.Request.Context(), `SELECT code_cipher,code_hash FROM login_codes WHERE id::text=$1 AND tenant_id=$2`, c.Param("id"), id.Tenant).Scan(&encrypted, &hash)
+	err := a.DB.QueryRow(c.Request.Context(), `SELECT code_cipher,code_hash FROM login_codes WHERE id::text=$1 AND tenant_id=$2 AND deleted_at IS NULL`, c.Param("id"), id.Tenant).Scan(&encrypted, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		fail(c, 404, "登录码不存在")
 		return
@@ -56,7 +56,7 @@ func (a *App) recoverCode(c *gin.Context) {
 	id := identity(c)
 	// Verify against the current hash in the same update, so a concurrent reset cannot
 	// restore a previous code or change a device's authorization.
-	result, err := a.DB.Exec(c.Request.Context(), `UPDATE login_codes SET code_cipher=$1 WHERE id::text=$2 AND tenant_id=$3 AND code_hash=$4`, encrypted, c.Param("id"), id.Tenant, security.Hash(b.Code))
+	result, err := a.DB.Exec(c.Request.Context(), `UPDATE login_codes SET code_cipher=$1 WHERE id::text=$2 AND tenant_id=$3 AND code_hash=$4 AND deleted_at IS NULL`, encrypted, c.Param("id"), id.Tenant, security.Hash(b.Code))
 	if err != nil {
 		dbError(c, err)
 		return

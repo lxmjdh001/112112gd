@@ -45,7 +45,7 @@ func TestPersistentClientSessionAndRevocation(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "code-disable":
-				status, _ = h.call("PATCH", "/login-codes/"+id, h.admin, gin.H{"label": "test", "enabled": false, "maxDevices": 1, "maxAccounts": 1, "expiresAt": time.Now().Add(time.Hour)})
+				status, _ = h.call("PATCH", "/login-codes/"+id, h.admin, gin.H{"label": "test", "enabled": false, "expiresAt": time.Now().Add(time.Hour)})
 				if status != 200 {
 					t.Fatal("disable failed", status)
 				}

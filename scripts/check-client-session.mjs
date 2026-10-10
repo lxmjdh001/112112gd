@@ -30,8 +30,7 @@ token = (
 ).accessToken;
 const policy = {
   label: "登录保留验收",
-  maxDevices: 1,
-  maxAccounts: 1,
+
   allowedPlatforms: ["whatsapp"],
   expiresAt: new Date(Date.now() + 86400000).toISOString(),
 };
@@ -92,7 +91,12 @@ async function launch() {
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
     ),
     args: [path.resolve("apps/desktop")],
-    env: { ...process.env, GONGDAN_USER_DATA: userData },
+    env: {
+      ...process.env,
+      GONGDAN_USER_DATA: userData,
+      GONGDAN_API_URL: address,
+      GONGDAN_E2E: "1",
+    },
     timeout: 30000,
   });
   page = await app.firstWindow();
@@ -104,8 +108,8 @@ async function waitState(connection) {
 }
 async function login() {
   await page.locator("#login-code").fill(code.code);
-  await page.locator("summary").click();
-  await page.locator("#api-url").fill(address);
+  assert.equal(await page.locator("#api-url").count(), 0);
+  assert.equal(await page.getByText("服务连接设置", { exact: true }).count(), 0);
   await page.getByRole("button", { name: "进入工作台", exact: true }).click();
 }
 try {

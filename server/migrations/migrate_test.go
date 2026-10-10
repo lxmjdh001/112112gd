@@ -56,6 +56,10 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 	if err = db.QueryRow(ctx, `INSERT INTO proxies(tenant_id,label,protocol,host,port,username,password_cipher,group_name) VALUES($1,'blank','socks5','blank-host',1080,'','','') RETURNING id::text`, tenant).Scan(&blankProxy); err != nil {
 		t.Fatal(err)
 	}
+	var sameIPProxy string
+	if err = db.QueryRow(ctx, `INSERT INTO proxies(tenant_id,label,protocol,host,port,username,password_cipher) VALUES($1,'same fixed host','http','OLD-HOST.',1081,'','preserved') RETURNING id::text`, tenant).Scan(&sameIPProxy); err != nil {
+		t.Fatal(err)
+	}
 	for range 3 {
 		if _, err = db.Exec(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,label) VALUES($1,$2,$3,'existing')`, tenant, code, proxy); err != nil {
 			t.Fatal(err)
@@ -78,7 +82,7 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		}
 	}
 	var unchanged bool
-	if err = db.QueryRow(ctx, `SELECT code_hash='preserved-hash' AND max_devices=2 AND max_accounts=3 AND group_id IS NULL AND code_cipher='' FROM login_codes WHERE id=$1`, code).Scan(&unchanged); err != nil || !unchanged {
+	if err = db.QueryRow(ctx, `SELECT code_hash='preserved-hash' AND deleted_at IS NULL AND group_id IS NULL AND code_cipher='' FROM login_codes WHERE id=$1`, code).Scan(&unchanged); err != nil || !unchanged {
 		t.Fatal("legacy code changed during upgrade", err)
 	}
 
@@ -89,12 +93,15 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 	if err = db.QueryRow(ctx, `SELECT max_accounts_per_platform=1 AND group_id IS NULL AND enabled FROM proxies WHERE id=$1`, blankProxy).Scan(&preserved); err != nil || !preserved {
 		t.Fatal("ungrouped defaults wrong", err)
 	}
+	if err = db.QueryRow(ctx, `SELECT host='old-host' AND max_accounts_per_platform=3 AND password_cipher='preserved' FROM proxies WHERE id=$1`, sameIPProxy).Scan(&preserved); err != nil || !preserved {
+		t.Fatal("existing duplicate IP did not share normalized limit", err)
+	}
 	var grants []string
 	if err = db.QueryRow(ctx, `SELECT allowed_platforms FROM login_codes LIMIT 1`).Scan(&grants); err != nil || len(grants) != 1 || grants[0] != "whatsapp" {
 		t.Fatal("legacy code lost WhatsApp permission", grants, err)
 	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 9 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 11 {
 		t.Fatal("migration not idempotent", err, versions)
 	}
 	if err = db.QueryRow(ctx, `SELECT expires_at='infinity'::timestamptz FROM client_sessions WHERE token_hash='live-token'`).Scan(&preserved); err != nil || !preserved {

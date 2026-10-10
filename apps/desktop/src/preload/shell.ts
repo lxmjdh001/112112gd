@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { ShellAPI } from "../shared/types.ts";
 const api: ShellAPI = {
   state: () => ipcRenderer.invoke("shell:state"),
-  login: (code, url) => ipcRenderer.invoke("shell:login", code, url),
+  login: (code) => ipcRenderer.invoke("shell:login", code),
   logout: () => ipcRenderer.invoke("shell:logout"),
   refresh: () => ipcRenderer.invoke("shell:refresh"),
   reload: () => ipcRenderer.invoke("shell:reload"),

@@ -58,7 +58,7 @@ const usageText = (row: ProxyItem) =>
       ([platform, count]) =>
         `${platform === "whatsapp" ? "WhatsApp" : platform} ${count}/${row.maxAccountsPerPlatform}`,
     )
-    .join("，") || "尚未关联账号";
+    .join("，") || "尚未占用";
 watch([query, groupFilter, statusFilter], () => table.value?.clearSelection());
 watch([() => form.lines, () => form.protocol], () => {
   errors.value = "";
@@ -183,7 +183,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>代理管理</h1>
-        <p class="subtitle">按分组管理代理，为每个平台设置账号额度，统一控制启用状态。</p>
+        <p class="subtitle">按分组管理代理 IP，限制单个 IP 在同一平台登录的账号数量。</p>
       </div>
       <ElButton type="primary" @click="openImport">＋ 添加 / 批量导入</ElButton>
     </div>
@@ -258,7 +258,7 @@ onMounted(load);
           ><template #default="{ row }">{{ row.group || "未分组" }}</template></ElTableColumn
         >
         <ElTableColumn prop="maxAccountsPerPlatform" label="每平台上限" width="110" />
-        <ElTableColumn label="已关联 / 上限" min-width="155" show-overflow-tooltip
+        <ElTableColumn label="已占用 / 上限" min-width="155" show-overflow-tooltip
           ><template #default="{ row }">{{ usageText(row) }}</template></ElTableColumn
         >
         <ElTableColumn label="状态" width="90"
@@ -283,7 +283,9 @@ onMounted(load);
         >
       </ElTable>
       <p class="subtitle">
-        每平台上限按同一代理已关联的账号计算，待扫码及离线账号也占用额度。连接是否可用以客户端实际检测为准。
+        上限设为 1 时，同一个 IP 可以登录 1 个 WhatsApp 和 1 个
+        LINE，不能登录第二个同平台账号。不同登录码、设备及同 IP
+        的代理记录共享计数，待扫码或离线账号仍占用名额。
       </p>
     </div>
     <ElDialog v-model="show" title="批量添加代理" width="620px" :close-on-click-modal="false">
@@ -314,11 +316,12 @@ onMounted(load);
         </div>
         <div class="settings-grid">
           <label class="field"
-            >每平台最多关联账号数<ElInputNumber
+            >每平台最多登录<ElInputNumber
               v-model="form.maxAccountsPerPlatform"
-              aria-label="每平台最多关联账号数"
+              aria-label="每平台最多登录"
               :min="1"
-              :max="10000" /></label
+              :max="10000"
+            /><small>个账号（单个 IP、单个平台）。同 IP 的代理记录共享上限。</small></label
           ><label class="field"
             >启用状态<ElSwitch
               v-model="form.enabled"
@@ -373,12 +376,15 @@ onMounted(load);
           </div>
         </div>
         <label class="field"
-          >每平台最多关联账号数<ElInputNumber
+          >每平台最多登录<ElInputNumber
             v-model="settings.maxAccountsPerPlatform"
             aria-label="调整每平台上限"
             :min="1"
             :max="10000"
-          /><small>{{ usageText(edit) }}；不能低于已有账号数。</small></label
+          /><small
+            >个账号（单个 IP、单个平台）。{{ usageText(edit) }}；同 IP
+            记录共享设置，不能低于已占用数量。</small
+          ></label
         >
         <label class="field"
           >启用状态<ElSwitch

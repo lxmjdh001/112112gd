@@ -15,9 +15,6 @@ func TestClientAccountCreationOwnershipAndRetry(t *testing.T) {
 	ctx := context.Background()
 	codeID, raw := h.code(t)
 	otherCode, _ := h.code(t)
-	if _, err := h.app.DB.Exec(ctx, `UPDATE login_codes SET max_devices=2 WHERE id=$1`, codeID); err != nil {
-		t.Fatal(err)
-	}
 	status, body := h.login(raw, "creator")
 	if status != 200 {
 		t.Fatal(body)
@@ -45,7 +42,7 @@ func TestClientAccountCreationOwnershipAndRetry(t *testing.T) {
 	}
 	options := body["data"].(map[string]any)
 	proxies := options["proxies"].([]any)
-	if len(proxies) != 1 || options["maxAccounts"] != float64(1) || options["usedAccounts"] != float64(0) {
+	if len(proxies) != 1 || options["maxAccounts"] != nil || options["usedAccounts"] != float64(0) {
 		t.Fatal("wrong options", options)
 	}
 	if strings.Contains(fmt.Sprint(proxies), "secret") || strings.Contains(fmt.Sprint(proxies), "password") {
@@ -111,7 +108,7 @@ func TestClientAccountCreationOwnershipAndRetry(t *testing.T) {
 	}
 }
 
-func TestConcurrentClientAccountQuota(t *testing.T) {
+func TestConcurrentClientAccountProxyQuota(t *testing.T) {
 	h := setup(t)
 	_, raw := h.code(t)
 	_, body := h.login(raw, "creator")

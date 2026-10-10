@@ -22,6 +22,9 @@ await build({
   bundle: true,
   external: ["electron"],
   sourcemap: true,
+  define: {
+    __GONGDAN_API_URL__: JSON.stringify(process.env.GONGDAN_API_URL || "http://127.0.0.1:18080"),
+  },
 });
 for (const name of ["shell", "whatsapp"])
   await build({

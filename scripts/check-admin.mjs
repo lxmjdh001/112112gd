@@ -44,6 +44,8 @@ try {
   assert.match(await page.getByRole("dialog", { name: "创建长期登录码" }).innerText(), /投放一组/);
   await page.getByPlaceholder("例如：客服小林、投手小王").fill("验收 · 使用者01");
   const createDialog = page.getByRole("dialog", { name: "创建长期登录码" });
+  assert.doesNotMatch(await createDialog.innerText(), /最多设备数|平台账号额度/);
+  assert.equal(await createDialog.getByRole("spinbutton").count(), 0);
   assert.equal(
     await createDialog.getByRole("button", { name: "生成登录码", exact: true }).isDisabled(),
     true,
@@ -229,6 +231,39 @@ try {
       .count(),
     2,
   );
+  // Deleting a selection is explicit, cancellable, durable, and distinct from group deletion.
+  const codeRows = page.locator(".business > .panel .el-table__body-wrapper tr");
+  const batchDelete = page.getByRole("button", { name: /批量删除/ });
+  assert.equal(await batchDelete.isDisabled(), true);
+  assert.doesNotMatch(
+    await page.locator(".business > .panel").innerText(),
+    /设备 \/ 额度|账号 \/ 额度/,
+  );
+  await page.locator(".business > .panel .el-table__header-wrapper .el-checkbox").click();
+  await page.getByRole("button", { name: /批量删除\s*（2）/ }).click();
+  const confirmDelete = page.locator(".el-message-box");
+  assert.match(await confirmDelete.innerText(), /平台账号和客户历史记录保留/);
+  await confirmDelete.getByRole("button", { name: "取消", exact: true }).click();
+  await confirmDelete.waitFor({ state: "hidden" });
+  assert.equal(await codeRows.count(), 2);
+  await page.getByRole("button", { name: /批量删除\s*（2）/ }).click();
+  await page.screenshot({ path: ".runtime/login-code-batch-delete.png", fullPage: true });
+  await confirmDelete.getByRole("button", { name: "确认删除", exact: true }).click();
+  await page.getByText("还没有登录码，点击“创建登录码”开始", { exact: true }).waitFor();
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByText("还没有登录码，点击“创建登录码”开始", { exact: true }).waitFor();
+  assert.equal(await batchDelete.isDisabled(), true);
+  await page.getByRole("button", { name: "＋ 创建登录码" }).click();
+  await page.getByPlaceholder("例如：客服小林、投手小王").fill("单条删除验收");
+  await createDialog.getByText("WhatsApp", { exact: true }).click();
+  await createDialog.getByRole("button", { name: "生成登录码", exact: true }).click();
+  await page.getByRole("button", { name: "已保存，关闭" }).click();
+  await codeRows
+    .filter({ hasText: "单条删除验收" })
+    .getByRole("button", { name: "删除", exact: true })
+    .click();
+  await confirmDelete.getByRole("button", { name: "确认删除", exact: true }).click();
+  await page.getByText("还没有登录码，点击“创建登录码”开始", { exact: true }).waitFor();
   await page.goto("http://127.0.0.1:5779/#/proxies");
   await page.getByRole("button", { name: "＋ 添加 / 批量导入" }).click();
   await page.getByPlaceholder(/127.0.0.1:1080/).fill("host:0\n127.0.0.1:1080");
@@ -241,9 +276,7 @@ try {
   await proxyGroups.getByRole("button", { name: "新建分组", exact: true }).click();
   await proxyGroups.waitFor({ state: "hidden" });
   assert.match(await proxyDialog.innerText(), /美国测试代理/);
-  await proxyDialog
-    .getByRole("spinbutton", { name: "每平台最多关联账号数", exact: true })
-    .fill("3");
+  await proxyDialog.getByRole("spinbutton", { name: "每平台最多登录", exact: true }).fill("3");
   await proxyDialog
     .getByRole("switch", { name: "启用代理", exact: true })
     .locator("xpath=ancestor::div[contains(@class, 'el-switch')]")
@@ -356,6 +389,7 @@ try {
         "repeat code copy after reload, clipboard denial fallback and legacy recovery",
         "explicit platform selection, editing, persistence and planned platforms disabled",
         "group create, filter, batch move, rename, reload and delete",
+        "login codes without device/account quotas; single and batch deletion, cancellation and persistence",
         "proxy validation, groups, limits, persistence, bulk move and enable/disable",
         "all 10 routes",
       ],

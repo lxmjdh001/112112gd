@@ -67,8 +67,6 @@ const code = await api("/login-codes", {
   allowedPlatforms: ["whatsapp"],
   label: "桌面验收",
   expiresAt: new Date(Date.now() + 86400000).toISOString(),
-  maxDevices: 1,
-  maxAccounts: 2,
 });
 await api("/proxies/import", {
   lines: `http://e2e:test-password@127.0.0.1:${port}`,
@@ -98,15 +96,20 @@ try {
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
     ),
     args: [path.resolve("apps/desktop")],
-    env: { ...process.env, GONGDAN_USER_DATA: userData },
+    env: {
+      ...process.env,
+      GONGDAN_USER_DATA: userData,
+      GONGDAN_API_URL: "http://127.0.0.1:18081",
+      GONGDAN_E2E: "1",
+    },
     timeout: 30000,
   });
   let page = await app.firstWindow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.locator("#login-code").fill(code.code);
-  await page.locator("summary").click();
-  await page.locator("#api-url").fill("http://127.0.0.1:18081");
+  assert.equal(await page.locator("#api-url").count(), 0);
+  assert.equal(await page.getByText("服务连接设置", { exact: true }).count(), 0);
   await page.getByRole("button", { name: "进入工作台" }).click();
   await page.getByRole("button", { name: "＋ 添加账号", exact: true }).waitFor();
   await page.screenshot({ path: ".runtime/desktop-shell.png" });
@@ -213,7 +216,10 @@ try {
     await page.getByRole("button", { name: "添加并登录", exact: true }).isDisabled(),
     true,
   );
-  assert.match(await page.getByRole("dialog", { name: "添加账号" }).innerText(), /账号额度已用完/);
+  assert.match(
+    await page.getByRole("dialog", { name: "添加账号" }).innerText(),
+    /当前平台的代理额度已用完/,
+  );
   await page.keyboard.press("Escape");
   await page.getByRole("dialog", { name: "添加账号" }).waitFor({ state: "hidden" });
   const fullOption = await page.evaluate(async (proxyId) => {
@@ -401,7 +407,12 @@ try {
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
     ),
     args: [path.resolve("apps/desktop")],
-    env: { ...process.env, GONGDAN_USER_DATA: userData },
+    env: {
+      ...process.env,
+      GONGDAN_USER_DATA: userData,
+      GONGDAN_API_URL: "http://127.0.0.1:18081",
+      GONGDAN_E2E: "1",
+    },
     timeout: 30000,
   });
   page = await app.firstWindow();
@@ -428,8 +439,7 @@ try {
   const policy = {
     label: "桌面验收",
     enabled: true,
-    maxDevices: 1,
-    maxAccounts: 2,
+
     expiresAt: new Date(Date.now() + 86400000).toISOString(),
   };
   await api("/login-codes/" + code.id, { ...policy, allowedPlatforms: [] }, "PATCH");
@@ -500,8 +510,7 @@ try {
     {
       label: "桌面验收",
       expiresAt: new Date(Date.now() + 86400000).toISOString(),
-      maxDevices: 1,
-      maxAccounts: 2,
+
       enabled: false,
     },
     "PATCH",
@@ -520,7 +529,7 @@ try {
         "desktop login code",
         "client account creation and admin synchronization",
         "native view preserved behind account form",
-        "account quota feedback",
+        "shared proxy IP quota feedback",
         "authenticated HTTP proxy",
         "official WhatsApp page",
         "translation overlay",

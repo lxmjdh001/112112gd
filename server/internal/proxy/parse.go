@@ -78,5 +78,13 @@ func Parse(line, protocol string) (Config, error) {
 	if (c.Username == "") != (c.Password == "") {
 		return c, errors.New("用户名和密码需要同时填写")
 	}
+	if ip := net.ParseIP(c.Host); ip != nil {
+		c.Host = ip.String()
+	} else {
+		c.Host = strings.ToLower(strings.TrimRight(c.Host, "."))
+	}
+	if c.Host == "" {
+		return c, bad
+	}
 	return c, nil
 }

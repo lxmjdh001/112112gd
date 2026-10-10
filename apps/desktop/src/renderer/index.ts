@@ -31,7 +31,7 @@ function render(state: ViewState) {
       error.textContent = state.message;
       return;
     }
-    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">007</span>工单007</div><h1>使用登录码开始工作</h1><p class="muted">输入管理员分配的长期登录码。平台账号将保存在这台设备的独立环境中。</p><label for="login-code">登录码</label><input id="login-code" type="password" autocomplete="off" placeholder="GD7-…" required/><button class="primary" type="submit">进入工作台</button><div class="error" role="alert">${escape(state.message)}</div><details><summary>服务连接设置</summary><input id="api-url" aria-label="服务地址" value="${escape(state.apiURL)}" required/></details><p class="muted">首次使用请联系管理员获取登录码。</p></form></main>`;
+    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">007</span>工单007</div><h1>使用登录码开始工作</h1><p class="muted">输入管理员分配的长期登录码。平台账号将保存在这台设备的独立环境中。</p><label for="login-code">登录码</label><input id="login-code" type="password" autocomplete="off" placeholder="GD7-…" required/><button class="primary" type="submit">进入工作台</button><div class="error" role="alert">${escape(state.message)}</div><p class="muted">首次使用请联系管理员获取登录码。</p></form></main>`;
     const form = container.querySelector("form")!;
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -41,10 +41,7 @@ function render(state: ViewState) {
       button.disabled = true;
       button.textContent = "正在验证…";
       try {
-        await window.gongdan.login(
-          (form.querySelector("#login-code") as HTMLInputElement).value,
-          (form.querySelector("#api-url") as HTMLInputElement).value,
-        );
+        await window.gongdan.login((form.querySelector("#login-code") as HTMLInputElement).value);
       } catch (err) {
         form.querySelector(".error")!.textContent = String((err as Error).message).replace(
           /^Error invoking remote method '[^']+': Error: /,

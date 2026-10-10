@@ -47,6 +47,30 @@ func (a *App) updateProxies(c *gin.Context) {
 			return
 		}
 	}
+	hostRows, err := tx.Query(ctx, `SELECT DISTINCT host FROM proxies WHERE tenant_id=$1 AND id::text=ANY($2::text[])`, id.Tenant, body.IDs)
+	if err != nil {
+		dbError(c, err)
+		return
+	}
+	hosts := []string{}
+	for hostRows.Next() {
+		var host string
+		if err = hostRows.Scan(&host); err != nil {
+			hostRows.Close()
+			dbError(c, err)
+			return
+		}
+		hosts = append(hosts, host)
+	}
+	err = hostRows.Err()
+	hostRows.Close()
+	if err == nil {
+		err = lockProxyHosts(ctx, tx, id.Tenant, hosts)
+	}
+	if err != nil {
+		dbError(c, err)
+		return
+	}
 	rows, err := tx.Query(ctx, `SELECT id FROM proxies WHERE tenant_id=$1 AND id::text=ANY($2::text[]) ORDER BY id FOR UPDATE`, id.Tenant, body.IDs)
 	if err != nil {
 		dbError(c, err)
@@ -68,13 +92,20 @@ func (a *App) updateProxies(c *gin.Context) {
 	}
 	if body.MaxAccountsPerPlatform != nil {
 		var largest int
-		err = tx.QueryRow(ctx, `SELECT COALESCE(MAX(used),0) FROM (SELECT proxy_id,platform,count(*) AS used FROM platform_accounts WHERE proxy_id::text=ANY($1::text[]) GROUP BY proxy_id,platform) usage`, body.IDs).Scan(&largest)
+		err = tx.QueryRow(ctx, `SELECT COALESCE(MAX(used),0) FROM (SELECT p.host,a.platform,count(*) AS used FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE p.tenant_id=$1 AND p.host=ANY($2::text[]) GROUP BY p.host,a.platform) usage`, id.Tenant, hosts).Scan(&largest)
 		if err != nil {
 			dbError(c, err)
 			return
 		}
 		if largest > *body.MaxAccountsPerPlatform {
-			fail(c, 409, "每平台额度不能低于该代理已关联的账号数量")
+			fail(c, 409, "每平台最多登录数不能低于该 IP 已占用的同平台账号数量")
+			return
+		}
+	}
+	if body.MaxAccountsPerPlatform != nil {
+		_, err = tx.Exec(ctx, `UPDATE proxies SET max_accounts_per_platform=$1 WHERE tenant_id=$2 AND host=ANY($3::text[])`, *body.MaxAccountsPerPlatform, id.Tenant, hosts)
+		if err != nil {
+			dbError(c, err)
 			return
 		}
 	}

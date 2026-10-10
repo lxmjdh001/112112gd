@@ -24,6 +24,10 @@ import type {
   ProxyConfig,
   ViewState,
 } from "../shared/types.ts";
+import { serviceAddress } from "./service-address.ts";
+
+declare const __GONGDAN_API_URL__: string;
+
 import { GoogleFreeTranslator } from "./translation.ts";
 import { chromiumUserAgent } from "./browser-identity.ts";
 import { socksBridge, type Bridge } from "./proxy.ts";
@@ -50,7 +54,10 @@ let accountFormOpen = false;
 let creatingAccount = false;
 let quitting = false;
 let readyToQuit = false;
-let apiURL = "http://127.0.0.1:18080";
+const apiURL = serviceAddress(
+  (!app.isPackaged && process.env.GONGDAN_API_URL) || __GONGDAN_API_URL__,
+);
+const backgroundTest = !app.isPackaged && process.env.GONGDAN_E2E === "1";
 const state: ViewState = {
   loggedIn: false,
   connection: "connecting",
@@ -284,26 +291,11 @@ async function reconnect() {
     void openAccount(id).catch(() => {});
   }
 }
-async function login(code: string, url: string) {
+async function login(code: string) {
   if (opening) throw new Error("正在处理连接，请稍后");
-  const target = new URL(url);
-  if (
-    target.username ||
-    target.password ||
-    target.search ||
-    target.hash ||
-    (target.pathname !== "/" && target.pathname !== "")
-  )
-    throw new Error("请输入服务地址，例如 https://admin.example.com");
-  if (
-    target.protocol !== "https:" &&
-    !(target.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(target.hostname))
-  )
-    throw new Error("服务地址必须使用 HTTPS");
   if (typeof code !== "string" || code.length < 10 || code.length > 100)
     throw new Error("请输入完整登录码");
   await terminate("");
-  apiURL = target.origin;
   const generation = epoch;
   const result = await request<ClientAuth>("/client/auth", {
     code: code.trim(),
@@ -491,7 +483,9 @@ app.whenReady().then(async () => {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: "工单007 客户端",
+    title: backgroundTest ? "工单007 · 自动测试" : "工单007 客户端",
+    show: !backgroundTest,
+    skipTaskbar: backgroundTest,
     backgroundColor: "#f5f7fb",
     webPreferences: {
       preload: path.join(baseDir, "shell-preload.cjs"),
@@ -512,9 +506,9 @@ app.whenReady().then(async () => {
     requireShell(event);
     return state;
   });
-  ipcMain.handle("shell:login", async (event, code, url) => {
+  ipcMain.handle("shell:login", async (event, code) => {
     requireShell(event);
-    await login(code, url);
+    await login(code);
   });
   ipcMain.handle("shell:logout", async (event) => {
     requireShell(event);
@@ -637,8 +631,7 @@ app.whenReady().then(async () => {
   try {
     if (safeStorage.isEncryptionAvailable()) {
       const saved = JSON.parse(safeStorage.decryptString(await readFile(credentialsFile())));
-      if (typeof saved.apiURL === "string" && saved.auth?.accessToken) {
-        apiURL = saved.apiURL;
+      if (saved.apiURL === apiURL && saved.auth?.accessToken) {
         auth = saved.auth;
         state.label = auth!.label;
         state.accounts = Array.isArray(saved.accounts) ? saved.accounts : [];
@@ -658,7 +651,7 @@ app.whenReady().then(async () => {
   powerMonitor.on("resume", () => void heartbeat());
 });
 app.on("second-instance", () => {
-  if (win) {
+  if (win && !backgroundTest) {
     win.show();
     win.focus();
   }

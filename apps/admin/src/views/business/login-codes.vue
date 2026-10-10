@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import {
   ElButton,
   ElInput,
-  ElInputNumber,
   ElTable,
   ElTableColumn,
   ElTag,
@@ -50,6 +49,7 @@ const moveOpen = ref(false);
 const moveIDs = ref<string[]>([]);
 const moveGroupID = ref("");
 const moving = ref(false);
+const deleting = ref(false);
 const visibleRows = computed(() =>
   rows.value.filter(
     (row) =>
@@ -63,8 +63,6 @@ const form = reactive({
   allowedPlatforms: [] as string[],
   label: "",
   groupId: "",
-  maxDevices: 1,
-  maxAccounts: 3,
   expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
 });
 interface Device {
@@ -104,8 +102,6 @@ function openCreate() {
   Object.assign(form, {
     label: "",
     allowedPlatforms: [],
-    maxDevices: 1,
-    maxAccounts: 3,
     expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
   });
   form.groupId = groupFilter.value === "all" ? "" : groupFilter.value;
@@ -117,8 +113,6 @@ function openEdit(row: LoginCode) {
     label: row.label,
     groupId: row.groupId,
     allowedPlatforms: [...row.allowedPlatforms],
-    maxDevices: row.maxDevices,
-    maxAccounts: row.maxAccounts,
     expiresAt: row.expiresAt,
   });
   show.value = true;
@@ -199,13 +193,44 @@ async function reset(row: LoginCode) {
   secret.value = result.code;
   await load();
 }
+async function removeCodes(codes: LoginCode[]) {
+  if (deleting.value) return;
+  const ids = codes.map((row) => row.id);
+  if (!ids.length || ids.length > 500) {
+    ElMessage.warning("每次请选择 1–500 个登录码");
+    return;
+  }
+  deleting.value = true;
+  try {
+    try {
+      await ElMessageBox.confirm(
+        `确定删除这 ${ids.length} 个登录码？删除后无法恢复，原码不能再登录，已登录客户端将在下次校验时退出。平台账号和客户历史记录保留，已有账号仍计入代理的每平台上限。`,
+        ids.length === 1 ? "删除登录码" : "批量删除登录码",
+        {
+          type: "warning",
+          confirmButtonText: "确认删除",
+          cancelButtonText: "取消",
+          closeOnClickModal: false,
+        },
+      );
+    } catch {
+      return;
+    }
+    if (ids.length === 1) await api.delete(`/login-codes/${ids[0]}`);
+    else await api.post("/login-codes/batch-delete", { ids });
+    ElMessage.success(`已删除 ${ids.length} 个登录码`);
+    await load();
+  } finally {
+    deleting.value = false;
+  }
+}
 async function deviceList() {
   devices.value = await api.get("/devices");
   devicesOpen.value = true;
 }
 async function unbind(row: Device) {
   await ElMessageBox.confirm(
-    "将收回该设备的访问权限并释放名额。新设备打开账号需要重新扫码。持有码的人仍可重新登录；如需禁止，请同时重置登录码。",
+    "将收回该设备的访问权限。新设备打开账号需要重新扫码。持有码的人仍可重新登录；如需禁止，请同时重置登录码。",
     "解绑设备",
     { type: "warning" },
   );
@@ -262,7 +287,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>登录码列表</h1>
-        <p class="subtitle">创建时勾选客户端可用平台，并设置有效期、设备数与账号额度。</p>
+        <p class="subtitle">创建时勾选客户端可用平台，按分组管理登录码和有效期。</p>
       </div>
       <ElButton type="primary" @click="openCreate">＋ 创建登录码</ElButton>
     </div>
@@ -289,6 +314,15 @@ onMounted(load);
         <ElButton :disabled="!selected.length || loading" @click="openMove(selected)"
           >移动分组<span v-if="selected.length">（{{ selected.length }}）</span></ElButton
         >
+        <ElButton
+          type="danger"
+          plain
+          :disabled="!selected.length || loading || deleting"
+          :loading="deleting"
+          @click="removeCodes(selected)"
+        >
+          批量删除<span v-if="selected.length">（{{ selected.length }}）</span>
+        </ElButton>
         <ElButton @click="deviceList">管理设备</ElButton><ElButton @click="load">刷新</ElButton>
       </div>
       <ElTable
@@ -337,24 +371,23 @@ onMounted(load);
               !row.enabled ? "已停用" : expired(row.expiresAt) ? "已到期" : "正常"
             }}</ElTag></template
           ></ElTableColumn
-        ><ElTableColumn label="设备 / 额度" width="110"
-          ><template #default="{ row }"
-            >{{ row.deviceCount }} / {{ row.maxDevices }}</template
-          ></ElTableColumn
-        ><ElTableColumn label="账号 / 额度" width="110"
-          ><template #default="{ row }"
-            >{{ row.accountCount }} / {{ row.maxAccounts }}</template
-          ></ElTableColumn
+        ><ElTableColumn label="已绑定设备" width="110"
+          ><template #default="{ row }">{{ row.deviceCount }}</template></ElTableColumn
+        ><ElTableColumn label="平台账号数" width="110"
+          ><template #default="{ row }">{{ row.accountCount }}</template></ElTableColumn
         ><ElTableColumn label="到期时间" min-width="170"
           ><template #default="{ row }">{{ date(row.expiresAt) }}</template></ElTableColumn
-        ><ElTableColumn label="操作" width="250" fixed="right"
+        ><ElTableColumn label="操作" width="300" fixed="right"
           ><template #default="{ row }"
             ><ElButton link type="primary" @click="openEdit(row)">编辑</ElButton
             ><ElButton link type="primary" @click="openMove([row])">分组</ElButton
             ><ElButton link type="primary" @click="reset(row)">重置</ElButton
             ><ElButton link :type="row.enabled ? 'danger' : 'primary'" @click="toggle(row)">{{
               row.enabled ? "停用" : "启用"
-            }}</ElButton></template
+            }}</ElButton
+            ><ElButton link type="danger" :disabled="deleting" @click="removeCodes([row])"
+              >删除</ElButton
+            ></template
           ></ElTableColumn
         ></ElTable
       >
@@ -432,10 +465,6 @@ onMounted(load);
             value-format="YYYY-MM-DDTHH:mm:ssZ"
             style="width: 100%"
             :clearable="false" /></label
-        ><label class="field"
-          >最多设备数<ElInputNumber v-model="form.maxDevices" :min="1" :max="100" /></label
-        ><label class="field"
-          >平台账号额度<ElInputNumber v-model="form.maxAccounts" :min="1" :max="500" /></label
         ><ElButton
           native-type="submit"
           type="primary"

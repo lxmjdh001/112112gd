@@ -33,6 +33,12 @@ var persistentClientSessions string
 //go:embed 009_copyable_login_codes.sql
 var copyableLoginCodes string
 
+//go:embed 010_login_code_deletion.sql
+var loginCodeDeletion string
+
+//go:embed 011_shared_proxy_ip_limits.sql
+var sharedProxyIPLimits string
+
 func Run(ctx context.Context, db *pgxpool.Pool) error {
 	tx, e := db.Begin(ctx)
 	if e != nil {
@@ -48,7 +54,7 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	for _, migration := range []struct {
 		version int
 		sql     string
-	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}, {5, accountPromotion}, {6, baseline}, {7, codePlatforms}, {8, persistentClientSessions}, {9, copyableLoginCodes}} {
+	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}, {5, accountPromotion}, {6, baseline}, {7, codePlatforms}, {8, persistentClientSessions}, {9, copyableLoginCodes}, {10, loginCodeDeletion}, {11, sharedProxyIPLimits}} {
 		var applied bool
 		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, migration.version).Scan(&applied); e != nil {
 			return e

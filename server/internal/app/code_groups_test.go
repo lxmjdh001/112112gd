@@ -55,7 +55,7 @@ func TestCodeGroupLifecyclePreservesLogin(t *testing.T) {
 	if s, _ := h.call("POST", "/login-code-groups", h.admin, gin.H{"name": "投放一组"}); s != 409 {
 		t.Fatal("duplicate allowed", s)
 	}
-	status, body = h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "投手", "groupId": group, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1})
+	status, body = h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "投手", "groupId": group, "expiresAt": time.Now().Add(time.Hour)})
 	if status != 200 {
 		t.Fatal(body)
 	}
@@ -109,7 +109,7 @@ func TestCodeGroupTenantBoundaryAndAtomicMove(t *testing.T) {
 	if err := h.app.DB.QueryRow(ctx, `INSERT INTO login_code_groups(tenant_id,name) VALUES($1,'我的分组') RETURNING id::text`, otherTenant).Scan(&otherGroup); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.app.DB.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts) VALUES($1,'other',$2,'suffix',now()+interval '1 day',1,1) RETURNING id::text`, otherTenant, security.Hash(security.Token())).Scan(&otherCode); err != nil {
+	if err := h.app.DB.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at) VALUES($1,'other',$2,'suffix',now()+interval '1 day') RETURNING id::text`, otherTenant, security.Hash(security.Token())).Scan(&otherCode); err != nil {
 		t.Fatal(err)
 	}
 	for _, method := range []string{"PATCH", "DELETE"} {
@@ -117,7 +117,7 @@ func TestCodeGroupTenantBoundaryAndAtomicMove(t *testing.T) {
 			t.Fatal("foreign group mutation allowed", method, s)
 		}
 	}
-	if s, _ := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "foreign", "groupId": otherGroup, "expiresAt": time.Now().Add(time.Hour), "maxDevices": 1, "maxAccounts": 1}); s != 404 {
+	if s, _ := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "foreign", "groupId": otherGroup, "expiresAt": time.Now().Add(time.Hour)}); s != 404 {
 		t.Fatal("foreign group create allowed", s)
 	}
 	for _, body := range []gin.H{

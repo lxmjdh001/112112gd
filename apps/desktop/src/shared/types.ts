@@ -15,7 +15,6 @@ export interface ProxyConfig {
   password: string;
 }
 export interface AccountOptions {
-  maxAccounts: number;
   usedAccounts: number;
   platforms: { id: string; name: string }[];
   proxies: {
@@ -56,7 +55,7 @@ export interface ViewState {
 }
 export interface ShellAPI {
   state(): Promise<ViewState>;
-  login(code: string, apiURL: string): Promise<void>;
+  login(code: string): Promise<void>;
   logout(): Promise<void>;
   refresh(): Promise<void>;
   reload(): Promise<void>;

@@ -83,10 +83,9 @@ func (a *App) clientLogin(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 	var code, tenant, label string
-	var max int
 	var enabled bool
 	var expires time.Time
-	e = tx.QueryRow(ctx, `SELECT id::text,tenant_id::text,label,max_devices,enabled,expires_at FROM login_codes WHERE code_hash=$1 FOR UPDATE`, security.Hash(b.Code)).Scan(&code, &tenant, &label, &max, &enabled, &expires)
+	e = tx.QueryRow(ctx, `SELECT id::text,tenant_id::text,label,enabled,expires_at FROM login_codes WHERE code_hash=$1 AND deleted_at IS NULL FOR UPDATE`, security.Hash(b.Code)).Scan(&code, &tenant, &label, &enabled, &expires)
 	if errors.Is(e, pgx.ErrNoRows) {
 		a.audit(c, "", "unknown", "client.login", false)
 		fail(c, 401, "登录码无效")
@@ -102,23 +101,6 @@ func (a *App) clientLogin(c *gin.Context) {
 		return
 	}
 	var device string
-	var active bool
-	e = tx.QueryRow(ctx, `SELECT id::text,active FROM devices WHERE code_id=$1 AND identity_hash=$2`, code, security.Hash(b.DeviceID)).Scan(&device, &active)
-	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
-		dbError(c, e)
-		return
-	}
-	if device == "" || !active {
-		var n int
-		if e = tx.QueryRow(ctx, `SELECT count(*) FROM devices WHERE code_id=$1 AND active`, code).Scan(&n); e != nil {
-			dbError(c, e)
-			return
-		}
-		if n >= max {
-			fail(c, 409, "设备数量已达上限，请联系管理员解绑设备")
-			return
-		}
-	}
 	e = tx.QueryRow(ctx, `INSERT INTO devices(tenant_id,code_id,identity_hash,name) VALUES($1,$2,$3,$4) ON CONFLICT(code_id,identity_hash) DO UPDATE SET active=true,last_seen=now(),name=EXCLUDED.name RETURNING id::text`, tenant, code, security.Hash(b.DeviceID), b.DeviceName).Scan(&device)
 	if e != nil {
 		dbError(c, e)

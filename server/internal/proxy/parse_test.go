@@ -7,6 +7,9 @@ func TestParse(t *testing.T) {
 		raw, protocol, host, user, password string
 		port                                int
 	}{
+		{"PROXY.EXAMPLE.:1080", "socks5", "proxy.example", "", "", 1080},
+		{"[::ffff:192.0.2.1]:1080", "socks5", "192.0.2.1", "", "", 1080},
+		{"[2001:0db8:0:0::1]:1080", "socks5", "2001:db8::1", "", "", 1080},
 		{"proxy.example:1080", "socks5", "proxy.example", "", "", 1080},
 		{"proxy.example:8080:user:pass:word", "http", "proxy.example", "user", "pass:word", 8080},
 		{"socks5://name:p%40ss%3Aword@proxy.example:1080", "http", "proxy.example", "name", "p@ss:word", 1080},

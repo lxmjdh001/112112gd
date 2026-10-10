@@ -9,7 +9,7 @@ import (
 )
 
 func (a *App) listProxies(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT p.id::text,p.label,p.protocol,p.host,p.port,p.username,COALESCE(g.name,''),p.enabled,p.created_at,COALESCE(p.group_id::text,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT platform,count(*) AS used FROM platform_accounts WHERE proxy_id=p.id GROUP BY platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 ORDER BY p.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT p.id::text,p.label,p.protocol,p.host,p.port,p.username,COALESCE(g.name,''),p.enabled,p.created_at,COALESCE(p.group_id::text,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT a.platform,count(*) AS used FROM platform_accounts a JOIN proxies shared ON shared.id=a.proxy_id WHERE shared.tenant_id=p.tenant_id AND shared.host=p.host GROUP BY a.platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 ORDER BY p.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -111,13 +111,27 @@ func (a *App) importProxies(c *gin.Context) {
 	if !lockProxyGroup(c, tx, id.Tenant, groupID) {
 		return
 	}
+	hosts := make([]string, 0, len(parsed))
 	for _, p := range parsed {
+		hosts = append(hosts, p.Host)
+	}
+	if e = lockProxyHosts(ctx, tx, id.Tenant, hosts); e != nil {
+		dbError(c, e)
+		return
+	}
+	for _, p := range parsed {
+		// Re-importing the same IP must not grant another independent allowance.
+		var effectiveMax int
+		if e = tx.QueryRow(ctx, `SELECT COALESCE(MIN(max_accounts_per_platform),$3) FROM proxies WHERE tenant_id=$1 AND host=$2`, id.Tenant, p.Host, max).Scan(&effectiveMax); e != nil {
+			dbError(c, e)
+			return
+		}
 		encrypted, e := security.Seal(a.Key, p.Password)
 		if e != nil {
 			dbError(c, e)
 			return
 		}
-		if _, e = tx.Exec(ctx, `INSERT INTO proxies(tenant_id,label,protocol,host,port,username,password_cipher,group_id,max_accounts_per_platform,enabled) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9,$10)`, id.Tenant, p.Host, p.Protocol, p.Host, p.Port, p.Username, encrypted, groupID, max, enabled); e != nil {
+		if _, e = tx.Exec(ctx, `INSERT INTO proxies(tenant_id,label,protocol,host,port,username,password_cipher,group_id,max_accounts_per_platform,enabled) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9,$10)`, id.Tenant, p.Host, p.Protocol, p.Host, p.Port, p.Username, encrypted, groupID, effectiveMax, enabled); e != nil {
 			dbError(c, e)
 			return
 		}

@@ -36,25 +36,33 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
       dialog = modal;
       modal.className = "account-dialog";
       modal.setAttribute("aria-labelledby", "account-dialog-title");
-      const limit = options.usedAccounts >= options.maxAccounts;
       modal.innerHTML = `<form>
         <div class="dialog-heading"><h2 id="account-dialog-title">添加账号</h2><button class="text-btn" type="button" data-cancel aria-label="关闭">✕</button></div>
         <p class="muted">在本机打开官方登录页面，扫码后开始聊天。</p>
-        <p class="quota">当前登录码账号额度：${options.usedAccounts} / ${options.maxAccounts}</p>
         <label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
         <label for="account-label">账号名称</label><input id="account-label" placeholder="例如：投放 WhatsApp 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required />
         <label for="account-proxy">选择代理</label><select id="account-proxy" required><option value="">请选择代理</option></select>
         ${!options.proxies.length ? '<p class="error">暂无可用代理，请联系管理员在网站“代理管理”中添加后重试。</p>' : ""}
         ${!options.platforms.length ? '<p class="error">当前登录码没有可用平台，请联系管理员在登录码设置中勾选。</p>' : ""}
-        ${limit ? '<p class="error">账号额度已用完，请联系管理员调整。</p>' : ""}
+        <p class="error" id="proxy-limit-error"></p>
         <p class="error" role="alert" id="account-error"></p>
-        <div class="dialog-actions"><button class="secondary" type="button" data-cancel>取消</button><button class="primary" type="submit" ${limit || !options.proxies.length || !options.platforms.length ? "disabled" : ""}>添加并登录</button></div>
+        <div class="dialog-actions"><button class="secondary" type="button" data-cancel>取消</button><button class="primary" type="submit" ${!options.proxies.length || !options.platforms.length ? "disabled" : ""}>添加并登录</button></div>
       </form>`;
       document.body.append(modal);
       const platformSelect = modal.querySelector<HTMLSelectElement>("#account-platform")!;
       const proxySelect = modal.querySelector<HTMLSelectElement>("#account-proxy")!;
       const renderProxies = () => {
         const previous = proxySelect.value;
+        const available = options.proxies.some(
+          (proxy) =>
+            (proxy.platformUsage[platformSelect.value] || 0) < proxy.maxAccountsPerPlatform,
+        );
+        modal.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled =
+          !options.platforms.length || !available;
+        modal.querySelector("#proxy-limit-error")!.textContent =
+          options.platforms.length && options.proxies.length && !available
+            ? "当前平台的代理额度已用完，请选择其他代理或联系管理员调整代理上限。"
+            : "";
         proxySelect.innerHTML =
           '<option value="">请选择代理</option>' +
           options.proxies

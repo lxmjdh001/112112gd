@@ -9,7 +9,7 @@ import (
 
 func TestCodePlatformAuthorization(t *testing.T) {
 	h := setup(t)
-	body := gin.H{"label": "平台权限", "maxDevices": 1, "maxAccounts": 3, "expiresAt": time.Now().Add(time.Hour)}
+	body := gin.H{"label": "平台权限", "expiresAt": time.Now().Add(time.Hour)}
 	for _, bad := range []any{nil, []string{}, []string{"line"}, []string{"telegram"}, []string{"whatsapp", "whatsapp"}} {
 		body["allowedPlatforms"] = bad
 		if s, _ := h.call("POST", "/login-codes", h.admin, body); s != 400 {

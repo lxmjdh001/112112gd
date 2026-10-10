@@ -15,8 +15,6 @@ export interface LoginCode {
   canCopy: boolean;
   enabled: boolean;
   expiresAt: string;
-  maxDevices: number;
-  maxAccounts: number;
   deviceCount: number;
   accountCount: number;
 }
@@ -63,6 +61,7 @@ export const statusNames: Record<string, string> = {
   stale: "状态已过期",
   closed: "客户端已关闭",
   proxy_disabled: "代理已禁用",
+  code_deleted: "登录码已删除",
   platform_not_allowed: "平台未授权",
 };
 export const date = (value: string | null) =>

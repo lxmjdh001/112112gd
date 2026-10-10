@@ -13,16 +13,14 @@ type codeInput struct {
 	Label            string    `json:"label"`
 	GroupID          string    `json:"groupId"`
 	ExpiresAt        time.Time `json:"expiresAt"`
-	MaxDevices       int       `json:"maxDevices"`
-	MaxAccounts      int       `json:"maxAccounts"`
 	Enabled          bool      `json:"enabled"`
 }
 
 func (b codeInput) valid() bool {
-	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now()) && b.MaxDevices > 0 && b.MaxDevices <= 100 && b.MaxAccounts > 0 && b.MaxAccounts <= 500
+	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now())
 }
 func (a *App) listCodes(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.max_devices,l.max_accounts,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms,l.code_cipher<>'' FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 ORDER BY l.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms,l.code_cipher<>'' FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -34,12 +32,12 @@ func (a *App) listCodes(c *gin.Context) {
 		var enabled, canCopy bool
 		var platforms []string
 		var expires, created time.Time
-		var maxD, maxA, devices, accounts int
-		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &maxD, &maxA, &created, &devices, &accounts, &groupID, &groupName, &platforms, &canCopy); e != nil {
+		var devices, accounts int
+		if e = rows.Scan(&id, &label, &suffix, &enabled, &expires, &created, &devices, &accounts, &groupID, &groupName, &platforms, &canCopy); e != nil {
 			dbError(c, e)
 			return
 		}
-		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "maxDevices": maxD, "maxAccounts": maxA, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName, "allowedPlatforms": platforms, "canCopy": canCopy})
+		out = append(out, gin.H{"id": id, "label": label, "maskedCode": "GD7-••••-" + suffix, "enabled": enabled, "expiresAt": expires, "deviceCount": devices, "accountCount": accounts, "createdAt": created, "groupId": groupID, "groupName": groupName, "allowedPlatforms": platforms, "canCopy": canCopy})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -50,7 +48,7 @@ func (a *App) listCodes(c *gin.Context) {
 func (a *App) createCode(c *gin.Context) {
 	var b codeInput
 	if c.ShouldBindJSON(&b) != nil || !b.valid() || b.AllowedPlatforms == nil || len(*b.AllowedPlatforms) == 0 || !validPlatformGrants(*b.AllowedPlatforms) {
-		fail(c, 400, "请检查名称、有效期和额度，并至少勾选一个已开放的平台")
+		fail(c, 400, "请检查名称和有效期，并至少勾选一个已开放的平台")
 		return
 	}
 	id := identity(c)
@@ -71,7 +69,7 @@ func (a *App) createCode(c *gin.Context) {
 		return
 	}
 	var codeID string
-	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts,group_id,allowed_platforms,code_cipher) VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,'')::uuid,$9,$10) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.MaxDevices, b.MaxAccounts, b.GroupID, *b.AllowedPlatforms, encrypted).Scan(&codeID)
+	e = tx.QueryRow(ctx, `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,group_id,allowed_platforms,code_cipher) VALUES($1,$2,$3,$4,$5,NULLIF($6,'')::uuid,$7,$8) RETURNING id::text`, id.Tenant, b.Label, security.Hash(raw), raw[len(raw)-6:], b.ExpiresAt, b.GroupID, *b.AllowedPlatforms, encrypted).Scan(&codeID)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -85,7 +83,7 @@ func (a *App) createCode(c *gin.Context) {
 }
 func (a *App) updateCode(c *gin.Context) {
 	var b codeInput
-	if c.ShouldBindJSON(&b) != nil || len(b.Label) == 0 || len(b.Label) > 100 || b.MaxDevices < 1 || b.MaxDevices > 100 || b.MaxAccounts < 1 || b.MaxAccounts > 500 || b.ExpiresAt.IsZero() || (b.AllowedPlatforms != nil && !validPlatformGrants(*b.AllowedPlatforms)) {
+	if c.ShouldBindJSON(&b) != nil || len(b.Label) == 0 || len(b.Label) > 100 || b.ExpiresAt.IsZero() || (b.AllowedPlatforms != nil && !validPlatformGrants(*b.AllowedPlatforms)) {
 		fail(c, 400, "参数不正确")
 		return
 	}
@@ -98,28 +96,18 @@ func (a *App) updateCode(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 	var code string
-	if e = tx.QueryRow(ctx, `SELECT id::text FROM login_codes WHERE id::text=$1 AND tenant_id=$2 FOR UPDATE`, c.Param("id"), id.Tenant).Scan(&code); errors.Is(e, pgx.ErrNoRows) {
+	if e = tx.QueryRow(ctx, `SELECT id::text FROM login_codes WHERE id::text=$1 AND tenant_id=$2 AND deleted_at IS NULL FOR UPDATE`, c.Param("id"), id.Tenant).Scan(&code); errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "登录码不存在")
 		return
 	} else if e != nil {
 		dbError(c, e)
 		return
 	}
-	var devices, accounts int
-	e = tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM devices WHERE code_id=$1 AND active),(SELECT count(*) FROM platform_accounts WHERE code_id=$1)`, code).Scan(&devices, &accounts)
-	if e != nil {
-		dbError(c, e)
-		return
-	}
-	if b.MaxDevices < devices || b.MaxAccounts < accounts {
-		fail(c, 409, "额度不能低于现有设备或账号数量，请先解绑")
-		return
-	}
 	var platforms any
 	if b.AllowedPlatforms != nil {
 		platforms = *b.AllowedPlatforms
 	}
-	_, e = tx.Exec(ctx, `UPDATE login_codes SET label=$1,enabled=$2,expires_at=$3,max_devices=$4,max_accounts=$5,allowed_platforms=COALESCE($7,allowed_platforms) WHERE id=$6`, b.Label, b.Enabled, b.ExpiresAt, b.MaxDevices, b.MaxAccounts, code, platforms)
+	_, e = tx.Exec(ctx, `UPDATE login_codes SET label=$1,enabled=$2,expires_at=$3,allowed_platforms=COALESCE($5,allowed_platforms) WHERE id=$4`, b.Label, b.Enabled, b.ExpiresAt, code, platforms)
 	if e == nil && !b.Enabled {
 		_, e = tx.Exec(ctx, `DELETE FROM client_sessions WHERE device_id IN(SELECT id FROM devices WHERE code_id=$1)`, code)
 	}
@@ -150,7 +138,7 @@ func (a *App) resetCode(c *gin.Context) {
 		return
 	}
 	var code string
-	e = tx.QueryRow(ctx, `UPDATE login_codes SET code_hash=$1,suffix=$2,code_cipher=$5 WHERE id::text=$3 AND tenant_id=$4 RETURNING id::text`, security.Hash(raw), raw[len(raw)-6:], c.Param("id"), id.Tenant, encrypted).Scan(&code)
+	e = tx.QueryRow(ctx, `UPDATE login_codes SET code_hash=$1,suffix=$2,code_cipher=$5 WHERE id::text=$3 AND tenant_id=$4 AND deleted_at IS NULL RETURNING id::text`, security.Hash(raw), raw[len(raw)-6:], c.Param("id"), id.Tenant, encrypted).Scan(&code)
 	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "登录码不存在")
 		return
@@ -171,7 +159,7 @@ func (a *App) resetCode(c *gin.Context) {
 	ok(c, gin.H{"code": raw})
 }
 func (a *App) listDevices(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT d.id::text,d.name,l.label,d.active,d.last_seen FROM devices d JOIN login_codes l ON l.id=d.code_id WHERE d.tenant_id=$1 ORDER BY last_seen DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT d.id::text,d.name,l.label,d.active,d.last_seen FROM devices d JOIN login_codes l ON l.id=d.code_id WHERE d.tenant_id=$1 AND l.deleted_at IS NULL ORDER BY last_seen DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -203,9 +191,9 @@ func (a *App) revokeDevice(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback(ctx)
-	// Serialize with login and quota updates by locking the code first.
+	// Serialize with login and authorization updates by locking the code first.
 	var code string
-	e = tx.QueryRow(ctx, `SELECT l.id::text FROM login_codes l JOIN devices d ON d.code_id=l.id WHERE d.id::text=$1 AND d.tenant_id=$2 FOR UPDATE OF l`, c.Param("id"), id.Tenant).Scan(&code)
+	e = tx.QueryRow(ctx, `SELECT l.id::text FROM login_codes l JOIN devices d ON d.code_id=l.id WHERE d.id::text=$1 AND d.tenant_id=$2 AND l.deleted_at IS NULL FOR UPDATE OF l`, c.Param("id"), id.Tenant).Scan(&code)
 	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "设备不存在")
 		return

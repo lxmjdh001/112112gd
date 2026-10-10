@@ -128,9 +128,6 @@ func TestProxyPerPlatformLimitAndDisable(t *testing.T) {
 	h := setup(t)
 	ctx := context.Background()
 	code, raw := h.code(t)
-	if _, err := h.app.DB.Exec(ctx, `UPDATE login_codes SET max_accounts=10 WHERE id=$1`, code); err != nil {
-		t.Fatal(err)
-	}
 	_, b := h.login(raw, "proxy-test")
 	client := b["data"].(map[string]any)["accessToken"].(string)
 	if s, d := h.call("POST", "/proxies/import", h.admin, gin.H{"lines": "socks5://user:secret@local:1080", "group": "legacy-group"}); s != 200 {

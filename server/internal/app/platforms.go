@@ -44,7 +44,7 @@ func (a *App) listPlatforms(c *gin.Context) { ok(c, platformCatalog) }
 func (a *App) clientPlatforms(c *gin.Context) {
 	id := identity(c)
 	var grants []string
-	if e := a.DB.QueryRow(c.Request.Context(), `SELECT allowed_platforms FROM login_codes WHERE id=$1 AND tenant_id=$2`, id.Code, id.Tenant).Scan(&grants); e != nil {
+	if e := a.DB.QueryRow(c.Request.Context(), `SELECT allowed_platforms FROM login_codes WHERE id=$1 AND tenant_id=$2 AND deleted_at IS NULL`, id.Code, id.Tenant).Scan(&grants); e != nil {
 		dbError(c, e)
 		return
 	}

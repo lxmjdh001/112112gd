@@ -78,7 +78,7 @@ func (h *harness) call(method, path, token string, body any) (int, map[string]an
 }
 func (h *harness) code(t *testing.T) (string, string) {
 	t.Helper()
-	status, data := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "test", "maxDevices": 1, "maxAccounts": 1, "expiresAt": time.Now().Add(time.Hour)})
+	status, data := h.call("POST", "/login-codes", h.admin, gin.H{"allowedPlatforms": []string{"whatsapp"}, "label": "test", "expiresAt": time.Now().Add(time.Hour)})
 	if status != 200 {
 		t.Fatal(data)
 	}
@@ -88,7 +88,7 @@ func (h *harness) code(t *testing.T) (string, string) {
 func (h *harness) login(code, device string) (int, map[string]any) {
 	return h.call("POST", "/client/auth", "", gin.H{"code": code, "deviceId": security.Hash(device), "deviceName": "test-device"})
 }
-func TestConcurrentDeviceQuota(t *testing.T) {
+func TestConcurrentDevicesWithoutCodeQuota(t *testing.T) {
 	h := setup(t)
 	_, code := h.code(t)
 	var wg sync.WaitGroup
@@ -110,8 +110,8 @@ func TestConcurrentDeviceQuota(t *testing.T) {
 			t.Fatalf("unexpected status %d", s)
 		}
 	}
-	if success != 1 || denied != 7 {
-		t.Fatalf("quota race: success=%d denied=%d", success, denied)
+	if success != 8 || denied != 0 {
+		t.Fatalf("unexpected device limit: success=%d denied=%d", success, denied)
 	}
 }
 func TestCodeReuseResetAndTenantBoundary(t *testing.T) {
@@ -139,7 +139,7 @@ func TestCodeReuseResetAndTenantBoundary(t *testing.T) {
 	var other string
 	h.app.DB.QueryRow(context.Background(), `INSERT INTO tenants(name) VALUES('other') RETURNING id::text`).Scan(&other)
 	var otherCode string
-	h.app.DB.QueryRow(context.Background(), `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at,max_devices,max_accounts) VALUES($1,'other',$2,'secret',now()+interval '1 day',1,1) RETURNING id::text`, other, security.Hash(security.Token())).Scan(&otherCode)
+	h.app.DB.QueryRow(context.Background(), `INSERT INTO login_codes(tenant_id,label,code_hash,suffix,expires_at) VALUES($1,'other',$2,'secret',now()+interval '1 day') RETURNING id::text`, other, security.Hash(security.Token())).Scan(&otherCode)
 	if s, _ = h.call("POST", "/login-codes/"+otherCode+"/reset", h.admin, gin.H{}); s != 404 {
 		t.Fatal("cross-tenant reset accepted")
 	}

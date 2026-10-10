@@ -119,6 +119,8 @@ func (a *App) Routes() *gin.Engine {
 	admin.GET("/login-codes", a.listCodes)
 	admin.POST("/login-codes", a.createCode)
 	admin.POST("/login-codes/move-group", a.moveCodesGroup)
+	admin.POST("/login-codes/batch-delete", a.batchDeleteCodes)
+	admin.DELETE("/login-codes/:id", a.deleteCode)
 	admin.PATCH("/login-codes/:id", a.updateCode)
 	admin.POST("/login-codes/:id/reset", a.resetCode)
 	admin.POST("/login-codes/:id/copy", a.copyCode)
@@ -164,7 +166,7 @@ func (a *App) auth(client bool) gin.HandlerFunc {
 		var id Identity
 		var e error
 		if client {
-			e = a.DB.QueryRow(c.Request.Context(), `SELECT d.tenant_id::text,d.id::text,d.code_id::text FROM client_sessions s JOIN devices d ON d.id=s.device_id JOIN login_codes l ON l.id=d.code_id WHERE s.token_hash=$1 AND s.expires_at>now() AND d.active AND l.enabled AND l.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Device, &id.Code)
+			e = a.DB.QueryRow(c.Request.Context(), `SELECT d.tenant_id::text,d.id::text,d.code_id::text FROM client_sessions s JOIN devices d ON d.id=s.device_id JOIN login_codes l ON l.id=d.code_id WHERE s.token_hash=$1 AND s.expires_at>now() AND d.active AND l.enabled AND l.deleted_at IS NULL AND l.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Device, &id.Code)
 			id.Actor = id.Device
 		} else {
 			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text,a.platform_operator FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor, &id.Operator)

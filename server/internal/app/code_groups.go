@@ -11,7 +11,7 @@ import (
 )
 
 func (a *App) listCodeGroups(c *gin.Context) {
-	rows, err := a.DB.Query(c.Request.Context(), `SELECT g.id::text,g.name,count(l.id) FROM login_code_groups g LEFT JOIN login_codes l ON l.group_id=g.id AND l.tenant_id=g.tenant_id WHERE g.tenant_id=$1 GROUP BY g.id ORDER BY g.name,g.id`, identity(c).Tenant)
+	rows, err := a.DB.Query(c.Request.Context(), `SELECT g.id::text,g.name,count(l.id) FROM login_code_groups g LEFT JOIN login_codes l ON l.group_id=g.id AND l.tenant_id=g.tenant_id AND l.deleted_at IS NULL WHERE g.tenant_id=$1 GROUP BY g.id ORDER BY g.name,g.id`, identity(c).Tenant)
 	if err != nil {
 		dbError(c, err)
 		return
@@ -156,7 +156,7 @@ func (a *App) moveCodesGroup(c *gin.Context) {
 	if !lockCodeGroup(c, tx, id.Tenant, *body.GroupID) {
 		return
 	}
-	rows, err := tx.Query(ctx, `SELECT id::text FROM login_codes WHERE tenant_id=$1 AND id::text=ANY($2::text[]) ORDER BY id FOR UPDATE`, id.Tenant, body.IDs)
+	rows, err := tx.Query(ctx, `SELECT id::text FROM login_codes WHERE tenant_id=$1 AND deleted_at IS NULL AND id::text=ANY($2::text[]) ORDER BY id FOR UPDATE`, id.Tenant, body.IDs)
 	if err != nil {
 		dbError(c, err)
 		return
