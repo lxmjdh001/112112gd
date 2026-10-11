@@ -28,6 +28,7 @@ import type {
   ViewState,
 } from "../shared/types.ts";
 import { serviceAddress } from "./service-address.ts";
+import { AccountCleanup } from "./account-cleanup.ts";
 
 declare const __GONGDAN_API_URL__: string;
 
@@ -55,6 +56,9 @@ let opening = false;
 let restoringAccount = "";
 let accountFormOpen = false;
 let creatingAccount = false;
+let changingAccount = false;
+let accountsRevision = 0;
+let cleanup: AccountCleanup;
 let quitting = false;
 let readyToQuit = false;
 const apiURL = serviceAddress(
@@ -218,6 +222,7 @@ function bounds() {
 }
 let refreshing: { epoch: number; promise: Promise<void> } | undefined;
 function refresh() {
+  if (changingAccount) return Promise.resolve();
   if (!refreshing || refreshing.epoch !== epoch) {
     const pending = { epoch, promise: Promise.resolve() };
     pending.promise = syncAccounts().finally(() => {
@@ -229,15 +234,18 @@ function refresh() {
 }
 async function syncAccounts() {
   const generation = epoch;
+  const revision = accountsRevision;
   const [accounts, platforms] = await Promise.all([
     request<Account[]>("/client/accounts"),
     request<ViewState["platforms"]>("/client/platforms"),
   ]);
-  if (!auth || generation !== epoch) return;
+  if (!auth || generation !== epoch || revision !== accountsRevision) return;
   state.accounts = accounts;
   state.platforms = platforms;
   const allowed = new Set(
-    accounts.filter((account) => account.available).map((account) => account.id),
+    accounts
+      .filter((account) => account.available && !account.paused && !account.hidden)
+      .map((account) => account.id),
   );
   if (state.activeId && !allowed.has(state.activeId)) state.activeId = "";
   if (restoringAccount && !allowed.has(restoringAccount)) restoringAccount = "";
@@ -256,6 +264,13 @@ async function syncAccounts() {
       state.statuses[account.id] = account.unavailableReason;
     else if (["proxy_disabled", "platform_not_allowed"].includes(state.statuses[account.id] || ""))
       delete state.statuses[account.id];
+  }
+  if (!changingAccount) {
+    try {
+      await cleanup.reconcile(auth.tenantId, auth.codeId, new Set(accounts.map((a) => a.id)));
+    } catch {
+      state.message = "已移除账号的本机数据清理未完成，将自动重试";
+    }
   }
   bounds();
   persistSession();
@@ -330,20 +345,32 @@ async function updateStatus(runtime: Runtime, status: string) {
   }
 }
 async function openAccount(id: string) {
-  if (opening) throw new Error("正在打开账号，请稍后");
+  if (opening || changingAccount) throw new Error("正在处理账号，请稍后");
   if (!auth) throw new Error("请先登录客户端");
   const account = state.accounts.find((x) => x.id === id);
   if (!account || !account.available) throw new Error("账号不可用或已被其他设备绑定");
   if (account.connectionType === "cloud") {
-    const generation = epoch;
-    await request(`/client/whatsapp-cloud/numbers/${id}/chats?offset=0`);
-    if (!auth || generation !== epoch) return;
-    state.activeId = id;
-    restoringAccount = "";
-    persistSession();
-    bounds();
-    emit();
-    return;
+    opening = true;
+    try {
+      const generation = epoch;
+      if (account.paused || account.hidden) await request(`/client/accounts/${id}/restore`, {});
+      await request(`/client/whatsapp-cloud/numbers/${id}/chats?offset=0`);
+      if (!auth || generation !== epoch) return;
+      accountsRevision++;
+      for (const row of state.accounts)
+        if (row.id === id) {
+          row.paused = false;
+          row.hidden = false;
+        }
+      state.activeId = id;
+      restoringAccount = "";
+      persistSession();
+      bounds();
+      emit();
+      return;
+    } finally {
+      opening = false;
+    }
   }
   if (runtimes.has(id)) {
     state.activeId = id;
@@ -366,6 +393,8 @@ async function openAccount(id: string) {
       proxy: ProxyConfig | null;
     }>(`/client/accounts/${id}/open`, {});
     if (generation !== epoch || !auth) return;
+    accountsRevision++;
+    for (const row of state.accounts) if (row.id === id) row.paused = false;
     const p = settings.proxy;
     const ses = session.fromPartition(`persist:gd7-${settings.tenantId}-${id}`);
     const browserUA = chromiumUserAgent(app.userAgentFallback, app.getName());
@@ -501,6 +530,20 @@ async function openAccount(id: string) {
 
 app.whenReady().then(async () => {
   await mkdir(app.getPath("userData"), { recursive: true });
+  cleanup = new AccountCleanup(
+    path.join(app.getPath("userData"), "pending-account-removals.json"),
+    async (tenant, id) => {
+      const runtime = runtimes.get(id);
+      if (runtime) await closeRuntime(runtime);
+      const ses = session.fromPartition(`persist:gd7-${tenant}-${id}`);
+      ses.webRequest.onBeforeRequest((_details, done) => done({ cancel: true }));
+      await ses.closeAllConnections();
+      await ses.clearStorageData();
+      await ses.clearCache();
+      await ses.clearAuthCache();
+    },
+  );
+  await cleanup.load();
   const devicePath = path.join(app.getPath("userData"), "installation-id");
   try {
     deviceIdentity = (await readFile(devicePath, "utf8")).trim();
@@ -542,7 +585,14 @@ app.whenReady().then(async () => {
       !auth ||
       typeof numberId !== "string" ||
       typeof route !== "string" ||
-      !state.accounts.some((a) => a.id === numberId && a.connectionType === "cloud" && a.available)
+      !state.accounts.some(
+        (a) =>
+          a.id === numberId &&
+          a.connectionType === "cloud" &&
+          a.available &&
+          !a.paused &&
+          !a.hidden,
+      )
     )
       throw Error("API 号码未授权");
     const parsed = new URL(route, "https://cloud.invalid");
@@ -576,6 +626,58 @@ app.whenReady().then(async () => {
     void request("/client/logout", {}).catch(() => {});
     await terminate("已退出客户端，平台登录资料保留在本机");
   });
+  const changeAccount = async (event: IpcMainInvokeEvent, id: string, remove: boolean) => {
+    requireShell(event);
+    if (!auth) throw Error("请先登录客户端");
+    if (opening || changingAccount || creatingAccount) throw Error("正在处理账号，请稍后重试");
+    let account = state.accounts.find((a) => a.id === id);
+    if (!account || account.hidden || account.unavailableReason === "other_device")
+      throw Error("账号不属于当前客户端");
+    if (remove && !account.paused) throw Error("请先退登账号，再确认移除");
+    const generation = epoch,
+      identity = { ...auth };
+    changingAccount = true;
+    try {
+      if (refreshing?.epoch === epoch) await refreshing.promise;
+      if (!auth || epoch !== generation) throw Error("登录状态已变化");
+      account = state.accounts.find((a) => a.id === id);
+      if (!account || account.hidden || account.unavailableReason === "other_device")
+        throw Error("账号不属于当前客户端");
+      if (remove && !account.paused) throw Error("账号状态已变化，请重新操作");
+      if (remove && account.connectionType !== "cloud")
+        await cleanup.remember({
+          tenantId: identity.tenantId,
+          codeId: identity.codeId,
+          accountId: id,
+        });
+      await request(`/client/accounts/${id}/${remove ? "remove" : "close"}`, {});
+      if (!auth || generation !== epoch) return;
+      accountsRevision++;
+      const runtime = runtimes.get(id);
+      if (runtime) await closeRuntime(runtime);
+      account.paused = true;
+      state.statuses[id] = "closed";
+      if (state.activeId === id) state.activeId = "";
+      if (restoringAccount === id) restoringAccount = "";
+      if (remove) {
+        if (account.connectionType === "cloud") account.hidden = true;
+        else {
+          await cleanup.finish(identity.tenantId, id);
+          state.accounts = state.accounts.filter((a) => a.id !== id);
+          delete state.statuses[id];
+        }
+      }
+      await saveAuth();
+      bounds();
+      emit();
+    } finally {
+      changingAccount = false;
+      bounds();
+      emit();
+    }
+  };
+  ipcMain.handle("shell:close-account", (event, id) => changeAccount(event, id, false));
+  ipcMain.handle("shell:remove-account", (event, id) => changeAccount(event, id, true));
   ipcMain.handle("shell:reload", async (event) => {
     requireShell(event);
     const runtime = runtimes.get(state.activeId);
@@ -613,7 +715,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("shell:create-account", async (event, input: NewAccount) => {
     requireShell(event);
     if (!auth) throw Error("请先登录客户端");
-    if (creatingAccount) throw Error("正在添加账号，请稍后");
+    if (creatingAccount || changingAccount) throw Error("正在处理账号，请稍后");
     if (
       !input ||
       typeof input.label !== "string" ||

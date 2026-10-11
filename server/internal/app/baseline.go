@@ -294,7 +294,7 @@ func (a *App) clientCustomer(c *gin.Context, record bool) {
 	ctx := c.Request.Context()
 	a.transaction(c, func(tx pgx.Tx) (any, error) {
 		// Platform and ownership are obtained from server records, never renderer input.
-		e := tx.QueryRow(ctx, `SELECT a.platform FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id JOIN login_codes l ON l.id=a.code_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND a.device_id=$4 AND a.connection_type='web' AND (a.proxy_id IS NULL OR p.enabled) AND l.deleted_at IS NULL AND l.enabled AND a.platform=ANY(l.allowed_platforms)`, b.AccountID, id.Tenant, id.Code, id.Device).Scan(&b.Platform)
+		e := tx.QueryRow(ctx, `SELECT a.platform FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id JOIN login_codes l ON l.id=a.code_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND a.device_id=$4 AND a.connection_type='web' AND a.removed_at IS NULL AND a.paused_at IS NULL AND (a.proxy_id IS NULL OR p.enabled) AND l.deleted_at IS NULL AND l.enabled AND a.platform=ANY(l.allowed_platforms)`, b.AccountID, id.Tenant, id.Code, id.Device).Scan(&b.Platform)
 		if e != nil {
 			return nil, e
 		}

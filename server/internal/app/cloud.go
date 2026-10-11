@@ -61,7 +61,7 @@ func (a *App) cloudNumber(ctx context.Context, tenant, id string) (cloudNumber, 
 func (a *App) cloudAuthorize(c *gin.Context) {
 	id := identity(c)
 	var available bool
-	e := a.DB.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM wa_cloud_numbers n WHERE n.id::text=$1 AND n.tenant_id=$2 AND ($3='' OR (n.enabled AND EXISTS(SELECT 1 FROM wa_cloud_assignments x JOIN login_codes l ON l.id=x.code_id WHERE x.number_id=n.id AND x.tenant_id=$2 AND x.code_id::text=$3 AND l.enabled AND l.deleted_at IS NULL AND l.expires_at>now() AND 'whatsapp_cloud'=ANY(l.allowed_platforms)))))`, c.Param("number"), id.Tenant, id.Code).Scan(&available)
+	e := a.DB.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM wa_cloud_numbers n WHERE n.id::text=$1 AND n.tenant_id=$2 AND ($3='' OR (n.enabled AND NOT EXISTS(SELECT 1 FROM client_account_preferences pref WHERE pref.account_id=n.id AND pref.device_id::text=$4 AND (pref.hidden OR pref.paused)) AND EXISTS(SELECT 1 FROM wa_cloud_assignments x JOIN login_codes l ON l.id=x.code_id WHERE x.number_id=n.id AND x.tenant_id=$2 AND x.code_id::text=$3 AND l.enabled AND l.deleted_at IS NULL AND l.expires_at>now() AND 'whatsapp_cloud'=ANY(l.allowed_platforms)))))`, c.Param("number"), id.Tenant, id.Code, id.Device).Scan(&available)
 	if e != nil {
 		dbError(c, e)
 		return

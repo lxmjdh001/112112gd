@@ -36,8 +36,8 @@ func (a *App) toolCustomerIdentity(c *gin.Context, account, identifier string) (
 	id := identity(c)
 	var platform string
 	err := a.DB.QueryRow(c.Request.Context(), `SELECT a.platform FROM platform_accounts a WHERE a.id::text=$1 AND a.tenant_id=$2 AND (
- (a.connection_type='web' AND a.code_id::text=$3 AND a.device_id::text=$4 AND (a.proxy_id IS NULL OR EXISTS(SELECT 1 FROM proxies p WHERE p.id=a.proxy_id AND p.enabled)) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=a.code_id AND a.platform=ANY(l.allowed_platforms))) OR
- (a.connection_type='cloud' AND EXISTS(SELECT 1 FROM wa_cloud_numbers n JOIN wa_cloud_assignments x ON x.number_id=n.id JOIN login_codes l ON l.id=x.code_id WHERE n.id=a.id AND n.enabled AND x.tenant_id=$2 AND x.code_id::text=$3 AND 'whatsapp_cloud'=ANY(l.allowed_platforms)))
+ (a.connection_type='web' AND a.removed_at IS NULL AND a.paused_at IS NULL AND a.code_id::text=$3 AND a.device_id::text=$4 AND (a.proxy_id IS NULL OR EXISTS(SELECT 1 FROM proxies p WHERE p.id=a.proxy_id AND p.enabled)) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=a.code_id AND a.platform=ANY(l.allowed_platforms))) OR
+ (a.connection_type='cloud' AND NOT EXISTS(SELECT 1 FROM client_account_preferences pref WHERE pref.account_id=a.id AND pref.device_id::text=$4 AND (pref.hidden OR pref.paused)) AND EXISTS(SELECT 1 FROM wa_cloud_numbers n JOIN wa_cloud_assignments x ON x.number_id=n.id JOIN login_codes l ON l.id=x.code_id WHERE n.id=a.id AND n.enabled AND x.tenant_id=$2 AND x.code_id::text=$3 AND 'whatsapp_cloud'=ANY(l.allowed_platforms)))
  )`, account, id.Tenant, id.Code, id.Device).Scan(&platform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		fail(c, 404, "账号不可用或未授权")

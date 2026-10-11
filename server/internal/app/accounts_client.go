@@ -17,12 +17,12 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 	ctx := c.Request.Context()
 	var used int
 	var grants []string
-	err := a.DB.QueryRow(ctx, `SELECT allowed_platforms,(SELECT count(*) FROM platform_accounts WHERE code_id=l.id) FROM login_codes l WHERE id=$1 AND tenant_id=$2 AND deleted_at IS NULL`, id.Code, id.Tenant).Scan(&grants, &used)
+	err := a.DB.QueryRow(ctx, `SELECT allowed_platforms,(SELECT count(*) FROM platform_accounts WHERE code_id=l.id AND removed_at IS NULL) FROM login_codes l WHERE id=$1 AND tenant_id=$2 AND deleted_at IS NULL`, id.Code, id.Tenant).Scan(&grants, &used)
 	if err != nil {
 		dbError(c, err)
 		return
 	}
-	rows, err := a.DB.Query(ctx, `SELECT p.id::text,p.label,p.protocol,p.host,p.port,COALESCE(g.name,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT a.platform,count(*) AS used FROM platform_accounts a JOIN proxies shared ON shared.id=a.proxy_id WHERE shared.tenant_id=p.tenant_id AND shared.host=p.host GROUP BY a.platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 AND p.enabled ORDER BY p.created_at,p.id`, id.Tenant)
+	rows, err := a.DB.Query(ctx, `SELECT p.id::text,p.label,p.protocol,p.host,p.port,COALESCE(g.name,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT a.platform,count(*) AS used FROM platform_accounts a JOIN proxies shared ON shared.id=a.proxy_id WHERE a.removed_at IS NULL AND shared.tenant_id=p.tenant_id AND shared.host=p.host GROUP BY a.platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 AND p.enabled ORDER BY p.created_at,p.id`, id.Tenant)
 	if err != nil {
 		dbError(c, err)
 		return
@@ -99,9 +99,10 @@ func (a *App) createClientAccount(c *gin.Context) {
 		return
 	}
 	var account, label, platform, proxy, creator string
-	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,COALESCE(proxy_id::text,''),created_by_device_id::text FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator)
+	var removed bool
+	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,COALESCE(proxy_id::text,''),created_by_device_id::text,removed_at IS NOT NULL FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator, &removed)
 	if err == nil {
-		if creator != id.Device || label != body.Label || platform != body.Platform || proxy != body.ProxyID {
+		if removed || creator != id.Device || label != body.Label || platform != body.Platform || proxy != body.ProxyID {
 			fail(c, 409, "添加请求已使用，请关闭弹窗后重新添加")
 			return
 		}
@@ -138,7 +139,7 @@ func (a *App) createClientAccount(c *gin.Context) {
 			return
 		}
 		var proxyUsed int
-		if err = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE p.tenant_id=$1 AND p.host=$2 AND a.platform=$3`, id.Tenant, proxyHost, body.Platform).Scan(&proxyUsed); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.removed_at IS NULL AND p.tenant_id=$1 AND p.host=$2 AND a.platform=$3`, id.Tenant, proxyHost, body.Platform).Scan(&proxyUsed); err != nil {
 			dbError(c, err)
 			return
 		}

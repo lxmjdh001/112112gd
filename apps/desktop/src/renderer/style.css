@@ -164,6 +164,88 @@ aside {
   background: #e8efff;
   color: #3d5fdd;
 }
+.account-item {
+  position: relative;
+}
+.account-close {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: #596678;
+  color: white;
+  font-size: 15px;
+  line-height: 1;
+  z-index: 1;
+}
+.account-close:hover {
+  background: #d72732;
+}
+.account.paused {
+  background: #f0f1f3;
+  color: #828997;
+}
+.account.paused .wa {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.removed-api {
+  color: #7e899b;
+  padding: 8px;
+  font-size: 11px;
+}
+.removed-api summary {
+  cursor: pointer;
+}
+.removed-api button {
+  display: block;
+  text-align: left;
+  margin-top: 8px;
+}
+.account-close-dialog {
+  width: 510px;
+}
+.account-close-name {
+  color: #8a94a6;
+  margin: 8px 0 20px;
+  overflow-wrap: anywhere;
+}
+.account-close-copy {
+  color: #758190;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.account-close-copy ul {
+  padding-left: 20px;
+}
+.account-close-copy li {
+  margin: 6px 0;
+}
+.account-close-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+.account-close-actions button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+}
+.account-danger {
+  background: #dc242b;
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+}
+.account-danger:hover {
+  background: #c41d23;
+}
 .wa {
   display: grid;
   place-items: center;

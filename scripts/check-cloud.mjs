@@ -327,13 +327,42 @@ try {
   }, fixture.numberId);
   assert(denied, "Desktop IPC exposed credential route");
   await client.screenshot({ path: ".runtime/cloud-desktop-chat.png" });
+  await client.locator(`[data-close-id="${fixture.numberId}"]`).click();
+  let closeDialog = client.getByRole("dialog", { name: "关闭 API 聊天", exact: true });
+  await closeDialog.getByRole("button", { name: "取消", exact: true }).click();
+  assert.equal(await client.locator(".wc-draft").inputValue(), "刷新后保留草稿");
+  await client.locator(`[data-close-id="${fixture.numberId}"]`).click();
+  await closeDialog.getByRole("button", { name: "确认关闭", exact: true }).click();
+  await closeDialog.waitFor({ state: "hidden" });
+  assert.equal(await client.locator(".wa-cloud-chat").count(), 0);
+  assert.match(
+    await client.locator(`.account[data-id="${fixture.numberId}"]`).getAttribute("class"),
+    /paused/,
+  );
+  await client.locator(`[data-close-id="${fixture.numberId}"]`).click();
+  closeDialog = client.getByRole("dialog", { name: "从客户端移除", exact: true });
+  await closeDialog.getByRole("button", { name: "确认移除", exact: true }).click();
+  await closeDialog.waitFor({ state: "hidden" });
+  assert.equal(await client.locator(`.account[data-id="${fixture.numberId}"]`).count(), 0);
+  await client.evaluate(() => window.gongdan.refresh());
+  assert.equal(await client.locator(`.account[data-id="${fixture.numberId}"]`).count(), 0);
+  const retainedNumber = (await api("/whatsapp-cloud/numbers")).find(
+    (n) => n.id === fixture.numberId,
+  );
+  assert(
+    retainedNumber.enabled && retainedNumber.codeIds.includes(fixture.codeId),
+    "client removal changed shared number",
+  );
+  await client.locator(".removed-api summary").click();
+  await client.locator(`[data-restore-id="${fixture.numberId}"]`).click();
+  await client.locator(".wa-cloud-chat").waitFor();
   await api(`/whatsapp-cloud/numbers/${fixture.numberId}/assignments`, { codeIds: [] }, "PUT");
   await client.locator("#refresh").click();
   await client.locator(`.account[data-id="${fixture.numberId}"]`).waitFor({ state: "hidden" });
   assert.equal(await client.locator(".wa-cloud-chat").count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    "Cloud browser and Electron checks passed: onboarding, assignment, callbacks, text, template, attachment, translation UI, drafts, revocation. Graph API was mocked.",
+    "Cloud browser and Electron checks passed: onboarding, assignment, callbacks, text, template, attachment, translation UI, drafts, client close/remove/restore, revocation. Graph API was mocked.",
   );
 } catch (error) {
   if (desktop) {

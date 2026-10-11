@@ -9,7 +9,7 @@ import (
 )
 
 func (a *App) listProxies(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT p.id::text,p.label,p.protocol,p.host,p.port,p.username,COALESCE(g.name,''),p.enabled,p.created_at,COALESCE(p.group_id::text,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT a.platform,count(*) AS used FROM platform_accounts a JOIN proxies shared ON shared.id=a.proxy_id WHERE shared.tenant_id=p.tenant_id AND shared.host=p.host GROUP BY a.platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 ORDER BY p.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT p.id::text,p.label,p.protocol,p.host,p.port,p.username,COALESCE(g.name,''),p.enabled,p.created_at,COALESCE(p.group_id::text,''),p.max_accounts_per_platform,COALESCE((SELECT jsonb_object_agg(platform,used) FROM (SELECT a.platform,count(*) AS used FROM platform_accounts a JOIN proxies shared ON shared.id=a.proxy_id WHERE a.removed_at IS NULL AND shared.tenant_id=p.tenant_id AND shared.host=p.host GROUP BY a.platform) usage),'{}'::jsonb) FROM proxies p LEFT JOIN proxy_groups g ON g.id=p.group_id AND g.tenant_id=p.tenant_id WHERE p.tenant_id=$1 ORDER BY p.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return

@@ -1,5 +1,7 @@
 import type { CustomerContext } from "./customer-tools.ts";
 export interface Account {
+  paused?: boolean;
+  hidden?: boolean;
   networkMode?: "system" | "proxy";
   connectionType?: "web" | "cloud";
   status?: string;
@@ -86,6 +88,8 @@ export interface ShellAPI {
   refresh(): Promise<void>;
   reload(): Promise<void>;
   open(id: string): Promise<void>;
+  closeAccount(id: string): Promise<void>;
+  removeAccount(id: string): Promise<void>;
   accountForm(open: boolean): Promise<AccountOptions | undefined>;
   createAccount(account: NewAccount): Promise<string>;
   onState(fn: (s: ViewState) => void): void;

@@ -7,7 +7,7 @@ import (
 
 func (a *App) dashboard(c *gin.Context) {
 	var codes, devices, accounts, proxies int
-	e := a.DB.QueryRow(c.Request.Context(), `SELECT (SELECT count(*) FROM login_codes WHERE tenant_id=$1 AND enabled AND deleted_at IS NULL AND expires_at>now()),(SELECT count(*) FROM devices WHERE tenant_id=$1 AND active AND last_seen>now()-interval '90 seconds'),(SELECT count(*) FROM platform_accounts WHERE tenant_id=$1),(SELECT count(*) FROM proxies WHERE tenant_id=$1 AND enabled)`, identity(c).Tenant).Scan(&codes, &devices, &accounts, &proxies)
+	e := a.DB.QueryRow(c.Request.Context(), `SELECT (SELECT count(*) FROM login_codes WHERE tenant_id=$1 AND enabled AND deleted_at IS NULL AND expires_at>now()),(SELECT count(*) FROM devices WHERE tenant_id=$1 AND active AND last_seen>now()-interval '90 seconds'),(SELECT count(*) FROM platform_accounts WHERE tenant_id=$1 AND removed_at IS NULL),(SELECT count(*) FROM proxies WHERE tenant_id=$1 AND enabled)`, identity(c).Tenant).Scan(&codes, &devices, &accounts, &proxies)
 	if e != nil {
 		dbError(c, e)
 		return

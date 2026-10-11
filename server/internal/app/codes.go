@@ -20,7 +20,7 @@ func (b codeInput) valid() bool {
 	return len(b.Label) > 0 && len(b.Label) <= 100 && b.ExpiresAt.After(time.Now())
 }
 func (a *App) listCodes(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id)+(SELECT count(*) FROM wa_cloud_assignments x WHERE x.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms,l.code_cipher<>'' FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT l.id::text,l.label,l.suffix,l.enabled,l.expires_at,l.created_at,(SELECT count(*) FROM devices d WHERE d.code_id=l.id AND d.active),(SELECT count(*) FROM platform_accounts p WHERE p.code_id=l.id AND p.removed_at IS NULL)+(SELECT count(*) FROM wa_cloud_assignments x WHERE x.code_id=l.id),COALESCE(l.group_id::text,''),COALESCE(g.name,''),l.allowed_platforms,l.code_cipher<>'' FROM login_codes l LEFT JOIN login_code_groups g ON g.id=l.group_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=$1 AND l.deleted_at IS NULL ORDER BY l.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return

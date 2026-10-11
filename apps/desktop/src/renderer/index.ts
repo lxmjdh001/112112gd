@@ -3,6 +3,7 @@ import type { CustomerContext } from "../shared/customer-tools.ts";
 import type { Account, ShellAPI, ViewState } from "../shared/types.ts";
 import { stateLabels } from "../shared/types.ts";
 import { createAccountForm } from "./account-form.ts";
+import { accountCloseDialog } from "./account-close.ts";
 import { mountCloudChat } from "../../../../packages/cloud-chat/index.ts";
 declare global {
   interface Window {
@@ -67,26 +68,35 @@ const escape = (s: string) =>
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
+const accountClose = accountCloseDialog(
+  () => current,
+  (message) => {
+    const notice = container.querySelector(".notice");
+    if (notice) notice.textContent = message;
+  },
+);
 const whatsappLogo =
   '<img class="platform-logo" src="assets/whatsapp.svg" alt="" aria-hidden="true" draggable="false" />';
 function accountMarkup(account: Account, state: ViewState) {
   const isAPI = account.connectionType === "cloud";
-  const status = isAPI
-    ? account.available
-      ? "点击打开聊天"
-      : account.unavailableReason === "api_disabled"
-        ? "API 已停用"
-        : "平台未授权"
-    : account.available
-      ? stateLabels[state.statuses[account.id] || ""] || "点击打开官方页面"
-      : account.unavailableReason === "proxy_disabled"
-        ? "代理已禁用"
-        : account.unavailableReason === "platform_not_allowed"
-          ? "平台未授权"
-          : "已绑定其他设备";
-  return `<button class="account ${account.id === state.activeId ? "active" : ""}" data-id="${escape(account.id)}" ${account.available ? "" : "disabled"}>
+  const status = account.paused
+    ? "已退出 · 点击重新打开"
+    : isAPI
+      ? account.available
+        ? "点击打开聊天"
+        : account.unavailableReason === "api_disabled"
+          ? "API 已停用"
+          : "平台未授权"
+      : account.available
+        ? stateLabels[state.statuses[account.id] || ""] || "点击打开官方页面"
+        : account.unavailableReason === "proxy_disabled"
+          ? "代理已禁用"
+          : account.unavailableReason === "platform_not_allowed"
+            ? "平台未授权"
+            : "已绑定其他设备";
+  return `<div class="account-item"><button class="account ${account.id === state.activeId ? "active" : ""} ${account.paused ? "paused" : ""}" data-id="${escape(account.id)}" ${account.available ? "" : "disabled"}>
     <span class="wa">${whatsappLogo}</span><span class="account-info"><b>${escape(account.label)}</b><small>${escape(status)}</small></span>
-  </button>`;
+  </button>${account.unavailableReason === "other_device" ? "" : `<button class="account-close" type="button" data-close-id="${escape(account.id)}" title="${account.paused ? "移除号位" : "退出账号"}" aria-label="${account.paused ? "移除" : "退出"} ${escape(account.label)}">×</button>`}</div>`;
 }
 function accountGroups(state: ViewState) {
   const groups = [
@@ -106,16 +116,18 @@ function accountGroups(state: ViewState) {
   return (
     groups
       .map((group) => {
-        const accounts = state.accounts.filter(
+        const all = state.accounts.filter(
           (account) =>
             (account.connectionType === "cloud" ? "whatsapp_cloud" : account.platform) === group.id,
         );
-        if (!accounts.length && !state.platforms.some((platform) => platform.id === group.id))
-          return "";
+        const accounts = all.filter((a) => !a.hidden),
+          hidden = all.filter((a) => a.hidden);
+        if (!all.length && !state.platforms.some((platform) => platform.id === group.id)) return "";
         return `<section class="account-group" data-platform="${group.id}" aria-labelledby="group-${group.id}">
       <div class="platform-heading">${whatsappLogo}<h2 id="group-${group.id}">${group.name}</h2><span class="platform-count">${accounts.length}</span></div>
       <p class="platform-description">${group.description}</p>
       ${accounts.map((account) => accountMarkup(account, state)).join("") || `<p class="group-empty">${group.empty}</p>`}
+      ${hidden.length ? `<details class="removed-api"><summary>已移除的 API 号码（${hidden.length}）</summary>${hidden.map((a) => `<button class="text-btn" data-restore-id="${escape(a.id)}" ${a.available ? "" : "disabled"}>重新添加 ${escape(a.label)}</button>`).join("")}</details>` : ""}
     </section>`;
       })
       .join("") || '<p class="group-empty">请联系管理员为登录码勾选可用平台。</p>'
@@ -125,7 +137,12 @@ function render(state: ViewState) {
   const wasLoggedIn = current?.loggedIn;
   current = state;
   const activeCloud = state.accounts.find(
-    (a) => a.id === state.activeId && a.connectionType === "cloud" && a.available,
+    (a) =>
+      a.id === state.activeId &&
+      a.connectionType === "cloud" &&
+      a.available &&
+      !a.paused &&
+      !a.hidden,
   );
   if (cloud && (!state.loggedIn || activeCloud?.id !== cloud.id)) {
     cloud.widget.dispose();
@@ -134,6 +151,7 @@ function render(state: ViewState) {
   if (!state.loggedIn) {
     tools?.widget.dispose();
     tools = undefined;
+    void accountClose.dismiss().catch(() => {});
     cloudCustomer = undefined;
     void accountForm.dismiss().catch(() => {});
     if (wasLoggedIn === false && container.querySelector("#login-code")) {
@@ -187,7 +205,7 @@ function render(state: ViewState) {
         : hasNativePlatforms
           ? "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"
           : "请管理员在 WhatsApp API 号码管理中，将号码分配给当前登录码。";
-  const shellMarkup = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasNativePlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${accountGroups(state)}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const shellMarkup = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.filter((a) => !a.hidden).length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasNativePlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${accountGroups(state)}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;
@@ -233,6 +251,19 @@ function render(state: ViewState) {
   }
   if (!activeCloud) cloudCustomer = undefined;
   updateTools(state);
+  container.querySelectorAll<HTMLButtonElement>("[data-close-id]").forEach((button) =>
+    button.addEventListener("click", () => {
+      const account = current.accounts.find((a) => a.id === button.dataset.closeId);
+      if (account) void accountClose.open(account);
+    }),
+  );
+  container
+    .querySelectorAll<HTMLButtonElement>("[data-restore-id]")
+    .forEach((button) =>
+      button.addEventListener("click", () =>
+        action(() => window.gongdan.open(button.dataset.restoreId!)),
+      ),
+    );
   container.querySelector("#add-account")!.addEventListener("click", () => void accountForm.open());
   container
     .querySelectorAll<HTMLButtonElement>("[data-id]")

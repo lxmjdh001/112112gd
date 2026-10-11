@@ -92,7 +92,7 @@ func (a *App) updateProxies(c *gin.Context) {
 	}
 	if body.MaxAccountsPerPlatform != nil {
 		var largest int
-		err = tx.QueryRow(ctx, `SELECT COALESCE(MAX(used),0) FROM (SELECT p.host,a.platform,count(*) AS used FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE p.tenant_id=$1 AND p.host=ANY($2::text[]) GROUP BY p.host,a.platform) usage`, id.Tenant, hosts).Scan(&largest)
+		err = tx.QueryRow(ctx, `SELECT COALESCE(MAX(used),0) FROM (SELECT p.host,a.platform,count(*) AS used FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.removed_at IS NULL AND p.tenant_id=$1 AND p.host=ANY($2::text[]) GROUP BY p.host,a.platform) usage`, id.Tenant, hosts).Scan(&largest)
 		if err != nil {
 			dbError(c, err)
 			return
