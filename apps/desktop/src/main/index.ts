@@ -159,6 +159,7 @@ function saveAuth() {
           platforms: state.platforms,
           activeId: state.activeId || restoringAccount,
           toolsCollapsed: state.toolsCollapsed,
+          sidebarCollapsed: state.sidebarCollapsed,
         }),
       );
       const temporary = credentialsFile() + ".tmp";
@@ -214,14 +215,15 @@ async function terminate(message: string) {
 function bounds() {
   if (!win || win.isDestroyed()) return;
   const [width, height] = win.getContentSize();
+  const sidebarWidth = state.sidebarCollapsed ? 76 : 280;
   for (const runtime of runtimes.values()) {
     const active = runtime.id === state.activeId && !accountFormOpen;
     runtime.view.setVisible(active);
     if (active)
       runtime.view.setBounds({
-        x: 224,
+        x: sidebarWidth,
         y: 58,
-        width: Math.max(0, width - 224 - (state.toolsCollapsed ? 42 : 330)),
+        width: Math.max(0, width - sidebarWidth - (state.toolsCollapsed ? 42 : 330)),
         height: Math.max(0, height - 58),
       });
   }
@@ -830,6 +832,14 @@ app.whenReady().then(async () => {
     persistSession();
     emit();
   });
+  ipcMain.handle("shell:sidebar-collapsed", (event, collapsed) => {
+    requireShell(event);
+    if (typeof collapsed !== "boolean") throw Error("参数无效");
+    state.sidebarCollapsed = collapsed;
+    bounds();
+    persistSession();
+    emit();
+  });
   ipcMain.handle("shell:tools-request", async (event, method, route, body) => {
     requireShell(event);
     if (
@@ -1022,6 +1032,7 @@ app.whenReady().then(async () => {
         state.accounts = Array.isArray(saved.accounts) ? saved.accounts : [];
         state.platforms = Array.isArray(saved.platforms) ? saved.platforms : [];
         state.toolsCollapsed = saved.toolsCollapsed === true;
+        state.sidebarCollapsed = saved.sidebarCollapsed === true;
         restoringAccount = typeof saved.activeId === "string" ? saved.activeId : "";
         state.message = "登录已保留，正在恢复连接…";
       }

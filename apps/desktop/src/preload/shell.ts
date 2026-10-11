@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ShellAPI } from "../shared/types.ts";
 const api: ShellAPI = {
+  setSidebarCollapsed: (collapsed) => ipcRenderer.invoke("shell:sidebar-collapsed", collapsed),
   toolsModal: (open) => ipcRenderer.invoke("shell:tools-modal", open),
   toolsRequest: (method, path, body) =>
     ipcRenderer.invoke("shell:tools-request", method, path, body),

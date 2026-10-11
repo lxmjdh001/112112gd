@@ -57,6 +57,7 @@ export interface ClientAuth {
   leaseSeconds: number;
 }
 export interface ViewState {
+  sidebarCollapsed?: boolean;
   customer?: CustomerContext;
   toolsCollapsed?: boolean;
   loggedIn: boolean;
@@ -70,6 +71,7 @@ export interface ViewState {
   apiURL: string;
 }
 export interface ShellAPI {
+  setSidebarCollapsed(collapsed: boolean): Promise<void>;
   toolsModal(open: boolean): Promise<void>;
   toolsRequest<T>(method: string, path: string, body?: unknown): Promise<T>;
   setToolsCollapsed(collapsed: boolean): Promise<void>;

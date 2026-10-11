@@ -1,0 +1,532 @@
+.account-sidebar {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #e1e8e5;
+  color: #293b34;
+  background:
+    radial-gradient(ellipse at 0 65%, #e5f7f080, transparent 42%),
+    radial-gradient(ellipse at 30% 100%, #edf1ff80, transparent 35%), #fff;
+}
+.account-sidebar [hidden] {
+  display: none !important;
+}
+.account-sidebar button {
+  font: inherit;
+}
+.account-sidebar button:focus-visible {
+  outline: 2px solid #0ca76d;
+  outline-offset: -2px;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 11px;
+  min-height: 94px;
+  padding: 19px 14px;
+  border-bottom: 1px solid #e5ebe7;
+  background: linear-gradient(110deg, #ffebdfb0, #fffaf6a0 60%, #fff);
+}
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #75847e;
+}
+.icon-button svg {
+  width: 19px;
+  height: 19px;
+}
+.icon-button:hover {
+  background: #eef4f0;
+  color: #15865c;
+}
+.sidebar-collapse {
+  background: #ffffffb3;
+  border-color: #dfe3e0;
+  color: #43564b;
+  box-shadow: 0 2px 4px #22332b08;
+}
+.sidebar-mark {
+  width: 39px;
+  height: 39px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  background: #4d6cf5;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  box-shadow: 0 3px 8px #4d6cf51a;
+}
+.sidebar-brand-info {
+  min-width: 0;
+}
+.sidebar-brand-info strong {
+  display: block;
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+.sidebar-status {
+  display: flex;
+  gap: 11px;
+  margin-top: 6px;
+  color: #8b938d;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.sidebar-status > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sidebar-status i,
+.account-status-dot,
+.connection-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #b7bfba;
+}
+.sidebar-status .is-ready,
+.account-status-dot.is-ready,
+.connection-dot.is-ready {
+  background: #1ab477;
+}
+.account-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #cfdbd4 transparent;
+}
+.account-group {
+  border-bottom: 1px solid #e5ebe7;
+}
+.platform-heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 52px;
+  padding: 0 10px;
+  background: #f3f9f5;
+}
+.account-group.is-active .platform-heading {
+  background: #dff6e9;
+}
+.platform-toggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  color: #253e30;
+  padding: 8px 0;
+  text-align: left;
+}
+.platform-toggle h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.platform-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+.platform-icon .platform-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 7px;
+}
+.api-icon-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #277357;
+  color: white;
+  border: 1px solid white;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 10px;
+}
+.platform-count {
+  color: #80a08c;
+  font-size: 10px;
+  margin-left: auto;
+  padding: 1px 4px;
+}
+.platform-add,
+.platform-fold {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6a8b78;
+  border-radius: 7px;
+}
+.account-sidebar .platform-add {
+  font-size: 23px;
+  font-weight: 400;
+}
+.platform-add:hover:not(:disabled),
+.platform-fold:hover {
+  background: #c5e9d6;
+  color: #138754;
+}
+.sidebar-chevron {
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: translateY(2px) rotate(45deg);
+}
+.platform-fold[aria-expanded="false"] .sidebar-chevron {
+  transform: translateY(-2px) rotate(225deg);
+}
+.group-accounts {
+  padding: 7px;
+}
+.account-item {
+  position: relative;
+  margin: 2px 0 6px;
+}
+.account-item:last-child {
+  margin-bottom: 0;
+}
+.account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 77px;
+  padding: 13px 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #f5f7f6;
+  color: #30493b;
+  text-align: left;
+}
+.account:hover:not(:disabled) {
+  background: #edf4f0;
+}
+.account.active {
+  background: #e6eeea;
+  border-color: #c9ddcf;
+}
+.account.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 25px;
+  bottom: 25px;
+  width: 3px;
+  border-radius: 3px;
+  background: #14ac6c;
+}
+.account-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #e1e9e5, #c6d7cd);
+  color: #547b65;
+  font-size: 16px;
+  font-weight: 650;
+}
+.account-platform-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  padding: 2px;
+  border: 1px solid #e8f0eb;
+  border-radius: 8px;
+  background: white;
+}
+.account-platform-badge .platform-icon {
+  width: 17px;
+  height: 17px;
+}
+.account-platform-badge .platform-logo {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+}
+.account-platform-badge .api-icon-badge {
+  display: none;
+}
+.account-info {
+  min-width: 0;
+}
+.account b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+}
+.account small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8a9990;
+  font-size: 10px;
+  margin-top: 7px;
+}
+.account-status-dot {
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.account-close {
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #f5f7f6;
+  border-radius: 50%;
+  padding: 0;
+  background: #81928a;
+  color: white;
+  font-size: 13px;
+  line-height: 1;
+}
+.account-close:hover {
+  background: #da4b4b;
+}
+.account.paused {
+  background: #f0f1f2;
+  color: #909791;
+}
+.account.paused .account-avatar {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+.removed-api {
+  margin: 8px 0 0;
+  padding: 4px;
+  color: #8a9990;
+  font-size: 11px;
+}
+.removed-api summary {
+  cursor: pointer;
+}
+.removed-api button {
+  display: block;
+  margin-top: 5px;
+  width: 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unused-platforms {
+  padding: 15px 10px 14px;
+}
+.unused-heading {
+  margin: 0 4px 13px;
+  color: #99a29c;
+  font-size: 12px;
+}
+.unused-platform {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 47px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #66786c;
+  text-align: left;
+}
+.unused-platform:hover:not(:disabled) {
+  background: #eef8f1;
+  color: #158b58;
+}
+.account-sidebar .unused-platform:disabled {
+  opacity: 1;
+  color: #909894;
+}
+.unused-platform:disabled .platform-icon {
+  opacity: 0.48;
+  filter: saturate(0.75);
+}
+.unused-name {
+  font-size: 15px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.platform-availability {
+  font-size: 9px;
+  color: #b0b8b2;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.unused-plus {
+  margin-left: auto;
+  padding: 0 8px;
+  color: #9ba9a0;
+  font-size: 22px;
+}
+.platform-availability + .unused-plus {
+  margin-left: 0;
+  padding-left: 0;
+}
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 12px 14px 9px;
+  border-top: 1px solid #e5ebe7;
+  background: #ffffff80;
+}
+.add-account {
+  flex: 1;
+  padding: 8px;
+  border: 1px dashed #c7d8cd;
+  border-radius: 9px;
+  background: #f3faf6;
+  color: #438668;
+  font-size: 12px;
+}
+.add-account:hover:not(:disabled) {
+  border-color: #58aa80;
+  background: #e9f7ef;
+}
+.side-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px 10px;
+}
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  color: #8a9990;
+}
+.sidebar-user > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-sidebar.is-compact {
+  width: 76px;
+}
+.is-compact .sidebar-brand {
+  min-height: 72px;
+  justify-content: center;
+  padding: 18px 0;
+}
+.is-compact .sidebar-collapse svg {
+  transform: rotate(180deg);
+}
+.is-compact .sidebar-mark,
+.is-compact .sidebar-brand-info,
+.is-compact .platform-toggle h2,
+.is-compact .platform-count,
+.is-compact .platform-add,
+.is-compact .platform-fold,
+.is-compact .account-info,
+.is-compact .unused-heading,
+.is-compact .unused-name,
+.is-compact .platform-availability,
+.is-compact .unused-plus,
+.is-compact .sidebar-button-label,
+.is-compact .sidebar-user {
+  display: none;
+}
+.is-compact .platform-heading {
+  padding: 0;
+  justify-content: center;
+}
+.is-compact .platform-toggle {
+  justify-content: center;
+}
+.is-compact .group-accounts {
+  padding: 5px;
+}
+.is-compact .account {
+  justify-content: center;
+  min-height: 64px;
+  padding: 11px 6px;
+  border-radius: 11px;
+}
+.is-compact .account-avatar {
+  width: 37px;
+  height: 37px;
+  font-size: 13px;
+  border-radius: 12px;
+}
+.is-compact .account-close {
+  left: 2px;
+  top: 4px;
+}
+.is-compact .unused-platforms {
+  padding: 12px 8px;
+}
+.is-compact .unused-platform {
+  justify-content: center;
+}
+.is-compact .sidebar-actions {
+  flex-direction: column;
+  padding: 10px;
+  gap: 5px;
+}
+.is-compact .add-account {
+  width: 36px;
+  padding: 6px;
+}
+.is-compact .side-bottom {
+  justify-content: center;
+  padding: 0 0 10px;
+}
+.is-compact .removed-api {
+  padding: 0;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}

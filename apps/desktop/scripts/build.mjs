@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { mkdir, copyFile } from "node:fs/promises";
+import { mkdir, copyFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
@@ -46,6 +46,10 @@ await build({
 });
 await copyFile("src/renderer/index.html", "dist/index.html");
 await copyFile("src/renderer/style.css", "dist/style.css");
+await copyFile("src/renderer/account-sidebar.css", "dist/account-sidebar.css");
 await copyFile("../../packages/cloud-chat/style.css", "dist/cloud-chat.css");
 await mkdir("dist/assets", { recursive: true });
-await copyFile("src/renderer/assets/whatsapp.svg", "dist/assets/whatsapp.svg");
+for (const file of await readdir("src/renderer/assets")) {
+  if (!file.startsWith("._") && /\.(svg|ico|png|webp)$/.test(file))
+    await copyFile(`src/renderer/assets/${file}`, `dist/assets/${file}`);
+}

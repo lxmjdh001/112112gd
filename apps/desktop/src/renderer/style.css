@@ -124,23 +124,6 @@ details input {
   display: flex;
   height: calc(100vh - 58px);
 }
-aside {
-  width: 224px;
-  flex: none;
-  background: #fafbfe;
-  border-right: 1px solid #e8edf5;
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-}
-.side-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 6px 16px;
-  font-size: 12px;
-  color: #8a94a6;
-}
 .text-btn {
   background: transparent;
   border: 0;
@@ -148,66 +131,7 @@ aside {
   font-size: 12px;
   padding: 5px;
 }
-.account {
-  border: 0;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  width: 100%;
-  border-radius: 10px;
-  text-align: left;
-  margin-bottom: 6px;
-}
-.account.active {
-  background: #e8efff;
-  color: #3d5fdd;
-}
-.account-item {
-  position: relative;
-}
-.account-close {
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  display: grid;
-  place-items: center;
-  width: 19px;
-  height: 19px;
-  padding: 0;
-  border: 1px solid #fff;
-  border-radius: 50%;
-  background: #596678;
-  color: white;
-  font-size: 15px;
-  line-height: 1;
-  z-index: 1;
-}
-.account-close:hover {
-  background: #d72732;
-}
-.account.paused {
-  background: #f0f1f3;
-  color: #828997;
-}
-.account.paused .wa {
-  filter: grayscale(1);
-  opacity: 0.6;
-}
-.removed-api {
-  color: #7e899b;
-  padding: 8px;
-  font-size: 11px;
-}
-.removed-api summary {
-  cursor: pointer;
-}
-.removed-api button {
-  display: block;
-  text-align: left;
-  margin-top: 8px;
-}
+
 .account-close-dialog {
   width: 510px;
 }
@@ -262,34 +186,6 @@ aside {
   flex: none;
   object-fit: contain;
 }
-.account-info {
-  min-width: 0;
-}
-.account b {
-  font-size: 13px;
-  font-weight: 550;
-  display: block;
-  max-width: 138px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.account small {
-  display: block;
-  color: #8a94a6;
-  font-size: 11px;
-  margin-top: 5px;
-}
-.side-bottom {
-  margin-top: auto;
-  border-top: 1px solid #e8edf5;
-  padding: 16px 6px 0;
-}
-.side-bottom span {
-  display: block;
-  font-size: 12px;
-  margin-bottom: 6px;
-}
 .empty {
   flex: 1;
   display: grid;
@@ -334,61 +230,6 @@ aside {
   text-overflow: ellipsis;
 }
 
-.add-account {
-  border: 1px solid #d8e2ff;
-  color: #3d5fdd;
-  background: #eef3ff;
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 14px;
-}
-.account-list {
-  overflow-y: auto;
-  min-height: 0;
-  flex: 1;
-}
-.account-group + .account-group {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid #e8edf5;
-}
-.platform-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-}
-.platform-heading .platform-logo {
-  width: 22px;
-  height: 22px;
-}
-.platform-heading h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-.platform-count {
-  margin-left: auto;
-  min-width: 22px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: #edf0f5;
-  color: #7d889b;
-  font-size: 11px;
-  text-align: center;
-}
-.platform-description {
-  margin: 5px 6px 10px 36px;
-  color: #8a94a6;
-  font-size: 11px;
-}
-.group-empty {
-  margin: 10px 8px;
-  color: #8a94a6;
-  font-size: 12px;
-  line-height: 1.7;
-}
 .account-dialog {
   width: 460px;
   max-width: calc(100vw - 40px);

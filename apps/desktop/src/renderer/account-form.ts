@@ -23,7 +23,7 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
     await window.gongdan.accountForm(false);
   }
 
-  async function open() {
+  async function open(preferredPlatform?: string) {
     if (dialog || opening) return;
     opening = true;
     try {
@@ -75,6 +75,11 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
       let saving = false;
       const choice = modal.querySelector<HTMLElement>("#network-choice")!;
       const platformSelect = modal.querySelector<HTMLSelectElement>("#account-platform")!;
+      if (options.platforms.some((p) => p.id === preferredPlatform)) {
+        platformSelect.value = preferredPlatform!;
+        modal.querySelector<HTMLInputElement>("#account-label")!.value =
+          `${options.platforms.find((p) => p.id === preferredPlatform)!.name} ${getState().accounts.length + 1}`;
+      }
       const proxySelect = modal.querySelector<HTMLSelectElement>("#account-proxy")!;
       const renderProxies = () => {
         const previous = proxySelect.value;

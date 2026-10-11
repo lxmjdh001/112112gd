@@ -1,8 +1,8 @@
 import { detectSource } from "../../../../packages/translation/source.ts";
 import { mountCustomerTools } from "./customer-tools.ts";
 import type { CustomerContext } from "../shared/customer-tools.ts";
-import type { Account, ShellAPI, ViewState } from "../shared/types.ts";
-import { stateLabels } from "../shared/types.ts";
+import type { ShellAPI, ViewState } from "../shared/types.ts";
+import { createAccountSidebar } from "./account-sidebar.ts";
 import { createAccountForm } from "./account-form.ts";
 import { accountCloseDialog } from "./account-close.ts";
 import { mountCloudChat } from "../../../../packages/cloud-chat/index.ts";
@@ -79,62 +79,11 @@ const accountClose = accountCloseDialog(
 );
 const whatsappLogo =
   '<img class="platform-logo" src="assets/whatsapp.svg" alt="" aria-hidden="true" draggable="false" />';
-function accountMarkup(account: Account, state: ViewState) {
-  const isAPI = account.connectionType === "cloud";
-  const status = account.paused
-    ? "已退出 · 点击重新打开"
-    : isAPI
-      ? account.available
-        ? "点击打开聊天"
-        : account.unavailableReason === "api_disabled"
-          ? "API 已停用"
-          : "平台未授权"
-      : account.available
-        ? stateLabels[state.statuses[account.id] || ""] || "点击打开官方页面"
-        : account.unavailableReason === "proxy_disabled"
-          ? "代理已禁用"
-          : account.unavailableReason === "platform_not_allowed"
-            ? "平台未授权"
-            : "已绑定其他设备";
-  return `<div class="account-item"><button class="account ${account.id === state.activeId ? "active" : ""} ${account.paused ? "paused" : ""}" data-id="${escape(account.id)}" ${account.available ? "" : "disabled"}>
-    <span class="wa">${whatsappLogo}</span><span class="account-info"><b>${escape(account.label)}</b><small>${escape(status)}</small></span>
-  </button>${account.unavailableReason === "other_device" ? "" : `<button class="account-close" type="button" data-close-id="${escape(account.id)}" title="${account.paused ? "移除号位" : "退出账号"}" aria-label="${account.paused ? "移除" : "退出"} ${escape(account.label)}">×</button>`}</div>`;
-}
-function accountGroups(state: ViewState) {
-  const groups = [
-    {
-      id: "whatsapp",
-      name: "WhatsApp",
-      description: "扫码登录",
-      empty: "添加账号后，在官方页面扫码登录。",
-    },
-    {
-      id: "whatsapp_cloud",
-      name: "WhatsApp API",
-      description: "业务号码",
-      empty: "后台分配的 API 号码会显示在这里。",
-    },
-  ];
-  return (
-    groups
-      .map((group) => {
-        const all = state.accounts.filter(
-          (account) =>
-            (account.connectionType === "cloud" ? "whatsapp_cloud" : account.platform) === group.id,
-        );
-        const accounts = all.filter((a) => !a.hidden),
-          hidden = all.filter((a) => a.hidden);
-        if (!all.length && !state.platforms.some((platform) => platform.id === group.id)) return "";
-        return `<section class="account-group" data-platform="${group.id}" aria-labelledby="group-${group.id}">
-      <div class="platform-heading">${whatsappLogo}<h2 id="group-${group.id}">${group.name}</h2><span class="platform-count">${accounts.length}</span></div>
-      <p class="platform-description">${group.description}</p>
-      ${accounts.map((account) => accountMarkup(account, state)).join("") || `<p class="group-empty">${group.empty}</p>`}
-      ${hidden.length ? `<details class="removed-api"><summary>已移除的 API 号码（${hidden.length}）</summary>${hidden.map((a) => `<button class="text-btn" data-restore-id="${escape(a.id)}" ${a.available ? "" : "disabled"}>重新添加 ${escape(a.label)}</button>`).join("")}</details>` : ""}
-    </section>`;
-      })
-      .join("") || '<p class="group-empty">请联系管理员为登录码勾选可用平台。</p>'
-  );
-}
+const sidebar = createAccountSidebar(
+  () => current,
+  (platform) => void accountForm.open(platform),
+  action,
+);
 function render(state: ViewState) {
   const wasLoggedIn = current?.loggedIn;
   current = state;
@@ -151,6 +100,7 @@ function render(state: ViewState) {
     cloud = undefined;
   }
   if (!state.loggedIn) {
+    void sidebar.dismiss().catch(() => {});
     tools?.widget.dispose();
     tools = undefined;
     void accountClose.dismiss().catch(() => {});
@@ -185,7 +135,6 @@ function render(state: ViewState) {
     });
     return;
   }
-  const allowedNames = state.platforms.map((p) => p.name).join("、");
   const hasPlatforms = state.platforms.length > 0;
   const hasNativePlatforms = state.platforms.some((p) => p.id !== "whatsapp_cloud");
   const reconnecting = state.connection !== "online";
@@ -207,7 +156,7 @@ function render(state: ViewState) {
         : hasNativePlatforms
           ? "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"
           : "请管理员在 WhatsApp API 号码管理中，将号码分配给当前登录码。";
-  const shellMarkup = `<header class="topbar"><div class="brand"><span class="mark">007</span>工单007 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace"><aside><div class="side-title"><span>工作账号 · ${state.accounts.filter((a) => !a.hidden).length}</span><button class="text-btn" id="refresh">刷新</button></div><p class="platform-grants">可用平台：${escape(allowedNames || "未分配")}</p><button class="add-account" id="add-account" ${hasNativePlatforms && !reconnecting ? "" : "disabled"}>＋ 添加账号</button><div class="account-list">${accountGroups(state)}</div><div class="side-bottom"><span>${escape(state.label)}</span><button class="text-btn" id="logout">退出客户端</button></div></aside><main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const shellMarkup = `<header class="topbar"><div class="brand">工作台 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span><span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace">${sidebar.markup(state)}<main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;
@@ -215,9 +164,23 @@ function render(state: ViewState) {
     const updated = document.createElement("div");
     updated.innerHTML = shellMarkup;
     container.querySelector(".topbar")!.replaceWith(updated.querySelector(".topbar")!);
-    container
-      .querySelector(".workspace > aside")!
-      .replaceWith(updated.querySelector(".workspace > aside")!);
+    const oldSidebar = container.querySelector<HTMLElement>(".account-sidebar")!;
+    const scrollTop = oldSidebar.querySelector(".account-list")!.scrollTop;
+    const focused = document.activeElement as HTMLElement | null;
+    const focusAttribute =
+      focused && oldSidebar.contains(focused)
+        ? ["id", "data-id", "data-close-id", "data-add-platform", "data-fold"].find((name) =>
+            focused.hasAttribute(name),
+          )
+        : undefined;
+    const focusSelector = focusAttribute
+      ? `[${focusAttribute}="${CSS.escape(focused!.getAttribute(focusAttribute)!)}"]`
+      : undefined;
+    const nextSidebar = updated.querySelector<HTMLElement>(".account-sidebar")!;
+    oldSidebar.replaceWith(nextSidebar);
+    nextSidebar.querySelector(".account-list")!.scrollTop = scrollTop;
+    if (focusSelector)
+      nextSidebar.querySelector<HTMLElement>(focusSelector)?.focus({ preventScroll: true });
     if (!keepCloud)
       container.querySelector(".workspace > main")!.replaceWith(updated.querySelector("main")!);
   } else container.innerHTML = shellMarkup;
@@ -253,6 +216,7 @@ function render(state: ViewState) {
   }
   if (!activeCloud) cloudCustomer = undefined;
   updateTools(state);
+  sidebar.bind(container.querySelector<HTMLElement>(".account-sidebar")!);
   container.querySelectorAll<HTMLButtonElement>("[data-close-id]").forEach((button) =>
     button.addEventListener("click", () => {
       const account = current.accounts.find((a) => a.id === button.dataset.closeId);
