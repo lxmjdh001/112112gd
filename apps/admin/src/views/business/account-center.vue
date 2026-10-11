@@ -136,7 +136,7 @@ onMounted(refresh);
       <div class="stat">
         <span>翻译字符</span
         ><strong>{{ summary?.translationChars?.toLocaleString() ?? "—" }}</strong
-        ><span>Google / MyMemory 免费翻译，不扣余额</span>
+        ><span>免费翻译，不扣余额</span>
       </div>
     </div>
     <div class="panel">

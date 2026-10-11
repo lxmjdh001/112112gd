@@ -60,7 +60,7 @@ test("handles rate limits and does not include source text in network errors", a
     (e) => !(e as Error).message.includes("private message"),
   );
 });
-test("rate-limited automatic requests pause without contacting Google again", async () => {
+test("rate-limited automatic requests pause all three providers", async () => {
   let calls = 0;
   const translator = new FreeTranslator(async () => {
     calls++;
@@ -68,7 +68,7 @@ test("rate-limited automatic requests pause without contacting Google again", as
   });
   await assert.rejects(translator.translate("first sample", "zh-CN"), /限流/);
   await assert.rejects(translator.translate("second sample", "zh-CN"), /限流/);
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
 });
 
 test("Google 429 falls back to MyMemory and keeps provider usage accurate", async () => {
@@ -129,5 +129,81 @@ test("a quota error returned as HTTP 200 must never become a chat message", asyn
   });
   await assert.rejects(t.translate("你好", "en"), /额度/);
   await assert.rejects(t.translate("谢谢", "en"), /额度/);
+  assert.equal(calls, 3);
+});
+
+test("both earlier providers failing reaches LibreTranslate via a private JSON POST", async () => {
+  const calls: string[] = [],
+    usage: { provider: string }[] = [];
+  const t = new FreeTranslator(
+    async (url, init) => {
+      const host = new URL(url).hostname;
+      calls.push(host);
+      if (host === "translate.googleapis.com") return new Response("", { status: 503 });
+      if (host === "api.mymemory.translated.net")
+        return Response.json({ responseStatus: 429, quotaFinished: true });
+      assert.equal(url, "https://translate.adminforge.de/translate");
+      assert.equal(init?.method, "POST");
+      assert.equal(init?.credentials, "omit");
+      assert.equal(init?.redirect, "error");
+      assert.equal(new Headers(init?.headers).get("Content-Type"), "application/json");
+      assert.deepEqual(JSON.parse(init?.body as string), {
+        q: "你好 & 世界",
+        source: "zh-Hans",
+        target: "pt",
+        format: "text",
+      });
+      return Response.json({ translatedText: "Olá, mundo" });
+    },
+    (event) => usage.push(event),
+  );
+  const [a, b] = await Promise.all([
+    t.translate("你好 & 世界", "pt"),
+    t.translate("你好 & 世界", "pt"),
+  ]);
+  assert.equal(a.provider, "libretranslate");
+  assert.equal(a.text, "Olá, mundo");
+  assert.deepEqual(a, b);
+  await t.translate("你好 & 世界", "pt");
+  assert.deepEqual(calls, [
+    "translate.googleapis.com",
+    "api.mymemory.translated.net",
+    "translate.adminforge.de",
+  ]);
+  assert.deepEqual(
+    usage.map((u) => u.provider),
+    ["libretranslate"],
+  );
+});
+
+test("LibreTranslate respects its character limit and maps traditional Chinese", async () => {
+  const text = "請報價🌍，謝謝。\n".repeat(160).trim();
+  const inputs: string[] = [];
+  const t = new FreeTranslator(async (url, init) => {
+    if (new URL(url).hostname !== "translate.adminforge.de")
+      return new Response("", { status: 429 });
+    const body = JSON.parse(init?.body as string);
+    assert.equal(body.source, "zh-Hant");
+    assert.ok([...body.q].length <= 1000);
+    inputs.push(body.q);
+    return Response.json({ translatedText: body.q });
+  });
+  const result = await t.translate(text, "en", "zh-TW");
+  assert.equal(result.text, text);
+  assert.ok(inputs.length > 1);
+});
+
+test("LibreTranslate application errors and partial translations are never returned as success", async () => {
+  let calls = 0;
+  const t = new FreeTranslator(async (url) => {
+    if (new URL(url).hostname !== "translate.adminforge.de")
+      return new Response("", { status: 429 });
+    calls++;
+    return calls === 1
+      ? Response.json({ translatedText: "first chunk only" })
+      : Response.json({ error: "private upstream error", translatedText: "do not send" });
+  });
+  await assert.rejects(t.translate("你好。".repeat(500), "en"), /翻译未完成/);
+  await assert.rejects(t.translate("谢谢", "en"), /翻译未完成/);
   assert.equal(calls, 2);
 });

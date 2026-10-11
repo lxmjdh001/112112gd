@@ -20,7 +20,7 @@ export interface Translation {
   text: string;
   sourceLanguage: string;
   targetLanguage: string;
-  provider: "google-free" | "mymemory" | "original";
+  provider: "google-free" | "mymemory" | "libretranslate" | "original";
 }
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 export function parseGoogle(body: unknown): { text: string; sourceLanguage: string } {
@@ -81,16 +81,13 @@ export class FreeTranslator {
     return work;
   }
   private async request(text: string, target: string, source: string): Promise<Translation> {
-    const failures: string[] = [];
-    for (const provider of ["google-free", "mymemory"] as const) {
+    // At most 25 seconds across all providers, below the client request timeout.
+    for (const provider of ["google-free", "mymemory", "libretranslate"] as const) {
       if (Date.now() < (this.paused.get(provider) || 0)) {
-        failures.push(
-          provider === "google-free" ? "Google 暂时限流或连接失败" : "MyMemory 额度用完或连接失败",
-        );
         continue;
       }
       try {
-        const signal = AbortSignal.timeout(provider === "google-free" ? 5000 : 20000);
+        const signal = AbortSignal.timeout(provider === "google-free" ? 5000 : 10000);
         let result: Translation;
         if (provider === "google-free") {
           const q = new URLSearchParams({
@@ -107,7 +104,7 @@ export class FreeTranslator {
             targetLanguage: target,
             provider,
           };
-        } else {
+        } else if (provider === "mymemory") {
           if (!source) throw Error("请设置当前客户语言后重试");
           if (source === target)
             return { text, sourceLanguage: source, targetLanguage: target, provider: "original" };
@@ -140,6 +137,40 @@ export class FreeTranslator {
             targetLanguage: target,
             provider,
           };
+        } else {
+          const output: string[] = [];
+          let detected = source;
+          // Keep chunks below the public instance's 10,000-character request limit.
+          for (const chunk of splitTranslation(text, Infinity, 1000)) {
+            const body = (await this.json("https://translate.adminforge.de/translate", signal, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                q: chunk.text,
+                source: libreLanguage(source || "auto"),
+                target: libreLanguage(target),
+                format: "text",
+              }),
+            })) as {
+              translatedText?: unknown;
+              error?: unknown;
+              detectedLanguage?: { language?: string };
+            };
+            if (
+              body.error ||
+              typeof body.translatedText !== "string" ||
+              !body.translatedText.trim()
+            )
+              throw Error("未获得有效译文");
+            output.push(body.translatedText.trim() + chunk.separator);
+            detected ||= appLanguage(body.detectedLanguage?.language || "auto");
+          }
+          result = {
+            text: output.join(""),
+            sourceLanguage: detected,
+            targetLanguage: target,
+            provider,
+          };
         }
         if ([...result.text].length > 32000) throw Error("翻译结果过长");
         this.onUsage?.({
@@ -151,15 +182,13 @@ export class FreeTranslator {
         return result;
       } catch {
         this.paused.set(provider, Math.max(this.paused.get(provider) || 0, Date.now() + 60000));
-        failures.push(
-          provider === "google-free" ? "Google 暂时限流或连接失败" : "MyMemory 额度用完或连接失败",
-        );
       }
     }
-    throw Error(failures.join("；") + "。翻译未完成，请稍后重试");
+    throw Error("翻译服务暂时限流、额度用完或连接失败。翻译未完成，请稍后重试");
   }
-  private async json(url: string, signal: AbortSignal): Promise<unknown> {
+  private async json(url: string, signal: AbortSignal, init: RequestInit = {}): Promise<unknown> {
     const response = await this.fetcher(url, {
+      ...init,
       signal,
       credentials: "omit",
       cache: "no-store",
@@ -177,21 +206,34 @@ export class FreeTranslator {
 // Retained for the standalone desktop verification script.
 export { FreeTranslator as GoogleFreeTranslator };
 
+function libreLanguage(language: string): string {
+  return language === "zh-CN" ? "zh-Hans" : language === "zh-TW" ? "zh-Hant" : language;
+}
+function appLanguage(language: string): string {
+  return language === "zh-Hans" ? "zh-CN" : language === "zh-Hant" ? "zh-TW" : language;
+}
+
 // MyMemory accepts 500 UTF-8 bytes per request. Preserve all input, split at
 // word/sentence boundaries when possible, and preserve paragraph whitespace.
-export function splitTranslation(text: string): { text: string; separator: string }[] {
+export function splitTranslation(
+  text: string,
+  maxBytes = 500,
+  maxChars = Infinity,
+): { text: string; separator: string }[] {
   const result: { text: string; separator: string }[] = [];
   const encoder = new TextEncoder();
   let rest = text.trim();
   while (rest) {
     let end = 0,
       bytes = 0,
+      chars = 0,
       boundary = 0;
     for (const char of rest) {
       const size = encoder.encode(char).length;
-      if (bytes + size > 500) break;
+      if (bytes + size > maxBytes || chars >= maxChars) break;
       end += char.length;
       bytes += size;
+      chars++;
       if (/[\s。！？.!?]/u.test(char)) boundary = end;
     }
     if (end < rest.length && boundary > end / 2) end = boundary;

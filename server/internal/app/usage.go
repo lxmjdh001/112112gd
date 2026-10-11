@@ -14,7 +14,7 @@ func (a *App) recordUsage(c *gin.Context) {
 		OutputChars    int    `json:"outputChars"`
 		TargetLanguage string `json:"targetLanguage"`
 	}
-	if c.ShouldBindJSON(&b) != nil || b.InputChars < 1 || b.InputChars > 4000 || b.OutputChars < 1 || b.OutputChars > 32000 || (b.Provider != "google-free" && b.Provider != "mymemory") || len(b.TargetLanguage) < 2 || len(b.TargetLanguage) > 16 {
+	if c.ShouldBindJSON(&b) != nil || b.InputChars < 1 || b.InputChars > 4000 || b.OutputChars < 1 || b.OutputChars > 32000 || (b.Provider != "google-free" && b.Provider != "mymemory" && b.Provider != "libretranslate") || len(b.TargetLanguage) < 2 || len(b.TargetLanguage) > 16 {
 		fail(c, 400, "用量参数无效")
 		return
 	}

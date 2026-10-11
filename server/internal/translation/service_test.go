@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type transport func(*http.Request) (*http.Response, error)
@@ -79,8 +80,75 @@ func TestSplitUnicodeAndQuotaFailure(t *testing.T) {
 			t.Fatal(result, e)
 		}
 	}
-	if calls != 2 {
+	if calls != 3 {
 		t.Fatal("provider hammered during cooldown", calls)
+	}
+}
+
+func TestLibreTranslateFailoverAndChunks(t *testing.T) {
+	var s Service
+	var hosts []string
+	var inputs []string
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		hosts = append(hosts, r.URL.Host)
+		if r.URL.Host != "translate.adminforge.de" {
+			res := response(nil)
+			res.StatusCode = 429
+			return res, nil
+		}
+		deadline, ok := r.Context().Deadline()
+		if !ok || time.Until(deadline) > 10*time.Second {
+			t.Fatal("unbounded fallback request")
+		}
+		if r.Method != "POST" || r.URL.Path != "/translate" || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("Authorization") != "" {
+			t.Fatal("invalid or credential-bearing POST")
+		}
+		var payload map[string]string
+		if e := json.NewDecoder(r.Body).Decode(&payload); e != nil {
+			t.Fatal(e)
+		}
+		if payload["source"] != "zh-Hant" || payload["target"] != "zh-Hans" || payload["format"] != "text" || utf8.RuneCountInString(payload["q"]) > 1000 {
+			t.Fatal("invalid language or chunk size")
+		}
+		inputs = append(inputs, payload["q"])
+		return response(map[string]string{"translatedText": payload["q"]}), nil
+	})}
+	text := strings.TrimSpace(strings.Repeat("請報價🌍，謝謝。\n", 160))
+	for i := range 2 {
+		result, e := s.Translate(context.Background(), client, "account", text, "zh-CN", "zh-TW")
+		if e != nil || result.Text != text || result.Provider != "libretranslate" || result.Cached != (i == 1) {
+			t.Fatal(result, e)
+		}
+	}
+	if len(inputs) < 2 || len(hosts) != len(inputs)+2 || hosts[0] != "translate.googleapis.com" || hosts[1] != "api.mymemory.translated.net" {
+		t.Fatal("unexpected chain or cache failure", hosts)
+	}
+}
+
+func TestLibreTranslateAutoSourceAndPartialFailure(t *testing.T) {
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		var payload map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if payload["source"] != "auto" {
+			t.Fatal("missing source should use auto detection")
+		}
+		return response(map[string]any{"translatedText": "你好", "detectedLanguage": map[string]string{"language": "zh-Hans"}}), nil
+	})}
+	result, e := libreTranslate(context.Background(), client, "123", "zh-CN", "")
+	if e != nil || result.Source != "zh-CN" {
+		t.Fatal(result, e)
+	}
+	calls := 0
+	client.Transport = transport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			return response(map[string]string{"translatedText": "first chunk only"}), nil
+		}
+		return response(map[string]string{"error": "private upstream error", "translatedText": "do not send"}), nil
+	})
+	result, e = libreTranslate(context.Background(), client, strings.Repeat("你好。", 500), "en", "zh-CN")
+	if e == nil || result.Text != "" || strings.Contains(e.Error(), "private") {
+		t.Fatal("partial or error response escaped", result, e)
 	}
 }
 func TestCoalescingAndTenantSeparation(t *testing.T) {

@@ -304,7 +304,15 @@ func TestCloudTranslationCountsAndFailure(t *testing.T) {
 	calls := 0
 	h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.URL.Scheme != "https" || (r.URL.Host != "translate.googleapis.com" && r.URL.Host != "api.mymemory.translated.net") || r.Header.Get("Authorization") != "" || r.URL.Query().Get("q") != "你好 & 世界" {
+		text := r.URL.Query().Get("q")
+		if r.URL.Host == "translate.adminforge.de" {
+			var payload map[string]string
+			if e := json.NewDecoder(r.Body).Decode(&payload); e != nil {
+				t.Fatal(e)
+			}
+			text = payload["q"]
+		}
+		if r.URL.Scheme != "https" || (r.URL.Host != "translate.googleapis.com" && r.URL.Host != "api.mymemory.translated.net" && r.URL.Host != "translate.adminforge.de") || r.Header.Get("Authorization") != "" || text != "你好 & 世界" {
 			t.Error("unexpected translation request")
 		}
 		status := 200
@@ -330,7 +338,7 @@ func TestCloudTranslationCountsAndFailure(t *testing.T) {
 	if e := h.app.DB.QueryRow(context.Background(), `SELECT count(*),sum(input_chars),sum(output_chars) FROM usage_records WHERE account_id=$1`, n).Scan(&count, &input, &output); e != nil || count != 1 || input != 7 || output != 12 {
 		t.Fatal(count, input, output, e)
 	}
-	if calls != 3 {
+	if calls != 4 {
 		t.Fatal("validation contacted Google")
 	}
 }
@@ -393,26 +401,33 @@ func TestCloudTranslatedReplyPersistsOriginalWithoutSendingIt(t *testing.T) {
 }
 
 func TestCloudTranslationFallbackUsage(t *testing.T) {
-	h := setupCloud(t)
-	n := h.number(t, "200001")
-	h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
-		status := 200
-		body := `{"responseStatus":200,"responseData":{"translatedText":"Olá"}}`
-		if r.URL.Host == "translate.googleapis.com" {
-			status = 429
-			body = ""
-		}
-		return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
-	})}
-	route := "/whatsapp-cloud/numbers/" + n + "/translate"
-	for range 2 {
-		out := h.commerceCall(t, "POST", route, h.admin, gin.H{"text": "你好", "target": "pt", "source": "zh-CN"})
-		if out["text"] != "Olá" || out["provider"] != "mymemory" {
-			t.Fatal(out)
-		}
-	}
-	var count int
-	if e := h.app.DB.QueryRow(context.Background(), `SELECT count(*) FROM usage_records WHERE account_id=$1 AND provider='mymemory'`, n).Scan(&count); e != nil || count != 1 {
-		t.Fatal(count, e)
+	for _, provider := range []string{"mymemory", "libretranslate"} {
+		t.Run(provider, func(t *testing.T) {
+			h := setupCloud(t)
+			n := h.number(t, "200001")
+			h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
+				status := 200
+				body := `{"responseStatus":200,"responseData":{"translatedText":"Olá"}}`
+				if r.URL.Host == "translate.adminforge.de" {
+					body = `{"translatedText":"Olá"}`
+				}
+				if r.URL.Host == "translate.googleapis.com" || (provider == "libretranslate" && r.URL.Host == "api.mymemory.translated.net") {
+					status = 429
+					body = ""
+				}
+				return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})}
+			route := "/whatsapp-cloud/numbers/" + n + "/translate"
+			for range 2 {
+				out := h.commerceCall(t, "POST", route, h.admin, gin.H{"text": "你好", "target": "pt", "source": "zh-CN"})
+				if out["text"] != "Olá" || out["provider"] != provider {
+					t.Fatal(out)
+				}
+			}
+			var count int
+			if e := h.app.DB.QueryRow(context.Background(), `SELECT count(*) FROM usage_records WHERE account_id=$1 AND provider=$2`, n, provider).Scan(&count); e != nil || count != 1 {
+				t.Fatal(count, e)
+			}
+		})
 	}
 }

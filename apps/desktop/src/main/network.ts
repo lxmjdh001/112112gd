@@ -10,12 +10,17 @@ export function throughSession(ses: Session, auth?: ProxyAuth) {
     new Promise<Response>((resolve, reject) => {
       const request = net.request({
         url,
+        method: init?.method || "GET",
         session: ses,
         redirect: "error",
         useSessionCookies: false,
       });
       request.setHeader("Cache-Control", "no-store");
       request.setHeader("Pragma", "no-cache");
+      // Only forward the content type needed by JSON translation requests.
+      // Never copy renderer cookies or application authorization to providers.
+      const contentType = new Headers(init?.headers).get("Content-Type");
+      if (contentType) request.setHeader("Content-Type", contentType);
       let attempts = 0;
       let done = false;
       const finish = (e?: Error, response?: Response) => {
@@ -62,6 +67,7 @@ export function throughSession(ses: Session, auth?: ProxyAuth) {
           finish(undefined, new Response(Buffer.concat(chunks), { status: response.statusCode })),
         );
       });
+      if (typeof init?.body === "string") request.write(init.body);
       request.end();
     });
 }
