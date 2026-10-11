@@ -10,7 +10,7 @@ import (
 func TestCodePlatformAuthorization(t *testing.T) {
 	h := setup(t)
 	body := gin.H{"label": "平台权限", "expiresAt": time.Now().Add(time.Hour)}
-	for _, bad := range []any{nil, []string{}, []string{"line"}, []string{"telegram"}, []string{"whatsapp", "whatsapp"}} {
+	for _, bad := range []any{nil, []string{}, []string{"facebook"}, []string{"tiktok"}, []string{"whatsapp", "whatsapp"}} {
 		body["allowedPlatforms"] = bad
 		if s, _ := h.call("POST", "/login-codes", h.admin, body); s != 400 {
 			t.Fatalf("invalid grant accepted: %v %d", bad, s)
@@ -77,7 +77,7 @@ func TestCodePlatformAuthorization(t *testing.T) {
 	if len(d["data"].([]any)) != 0 {
 		t.Fatal("code reset restored grant")
 	}
-	body["allowedPlatforms"] = []string{"line"}
+	body["allowedPlatforms"] = []string{"facebook"}
 	if s, _ := h.call("PATCH", "/login-codes/"+code, h.admin, body); s != 400 {
 		t.Fatal("unimplemented platform granted")
 	}

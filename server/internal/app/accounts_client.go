@@ -61,8 +61,8 @@ func (a *App) createClientAccount(c *gin.Context) {
 	}
 	body.Label = strings.TrimSpace(body.Label)
 	var requestID pgtype.UUID
-	if body.Label == "" || utf8.RuneCountInString(body.Label) > 100 || body.Platform != "whatsapp" || len(body.RequestID) != 36 || requestID.Scan(body.RequestID) != nil {
-		fail(c, 400, "请填写 1–100 字的账号名称，选择 WhatsApp")
+	if body.Label == "" || utf8.RuneCountInString(body.Label) > 100 || !nativePlatform(body.Platform) || len(body.RequestID) != 36 || requestID.Scan(body.RequestID) != nil {
+		fail(c, 400, "请填写 1–100 字的账号名称，并选择已开放的平台")
 		return
 	}
 	id := identity(c)

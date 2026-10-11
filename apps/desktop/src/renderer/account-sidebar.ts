@@ -14,8 +14,8 @@ const platforms = [
   { id: "meta_business", name: "Meta Business", icon: "meta.svg" },
   { id: "instagram", name: "Instagram", icon: "instagram.webp" },
   { id: "tiktok", name: "TikTok", icon: "tiktok.ico" },
-  { id: "line", name: "LINE", icon: "line.png" },
-  { id: "telegram", name: "Telegram", icon: "telegram.svg" },
+  { id: "line", name: "LINE", icon: "line.png", supported: true },
+  { id: "telegram", name: "Telegram", icon: "telegram.svg", supported: true },
   { id: "x", name: "X", icon: "x.ico" },
 ];
 type Platform = (typeof platforms)[number];
@@ -118,7 +118,7 @@ export function createAccountSidebar(
           })
           .join("")}</div>
       </div>
-      <div class="sidebar-actions"><button class="add-account" id="add-account" type="button" title="添加账号" ${state.platforms.some((p) => p.id === "whatsapp") && state.connection === "online" ? "" : "disabled"}><span aria-hidden="true">＋</span><span class="sidebar-button-label"> 添加账号</span></button><button class="icon-button" id="refresh" type="button" title="刷新账号" aria-label="刷新">${refreshIcon}</button></div>
+      <div class="sidebar-actions"><button class="add-account" id="add-account" type="button" title="添加账号" ${state.platforms.some((p) => ["whatsapp", "telegram", "line"].includes(p.id)) && state.connection === "online" ? "" : "disabled"}><span aria-hidden="true">＋</span><span class="sidebar-button-label"> 添加账号</span></button><button class="icon-button" id="refresh" type="button" title="刷新账号" aria-label="刷新">${refreshIcon}</button></div>
       <div class="side-bottom"><span class="sidebar-user" title="${escape(state.label)}"><i class="connection-dot ${state.connection === "online" ? "is-ready" : ""}"></i><span>${escape(state.label)}</span></span><button class="icon-button" id="logout" type="button" title="退出客户端" aria-label="退出客户端">${logoutIcon}</button></div>
     </aside>`;
   }

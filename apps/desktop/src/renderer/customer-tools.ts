@@ -690,7 +690,7 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
   renderTags();
   void action(loadLibrary);
   return {
-    update(next: CustomerContext | undefined, isCollapsed: boolean) {
+    update(next: CustomerContext | undefined, isCollapsed: boolean, nativeOnly?: string) {
       collapsed = isCollapsed;
       host.classList.toggle("is-collapsed", collapsed);
       const changed =
@@ -706,6 +706,13 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
       q(".ct-customer strong").textContent = next?.name || next?.identifier || "尚未选择客户";
       q(".ct-customer small").textContent =
         next?.identifier || "打开客户聊天后可管理标签、语言与备注";
+      q(".ct-tabs").hidden = !!nativeOnly;
+      q(".ct-scroll").hidden = !!nativeOnly;
+      if (nativeOnly) {
+        q(".ct-customer strong").textContent = `${nativeOnly} 聊天`;
+        q(".ct-customer small").textContent =
+          "选中文字后右键选择“翻译选中文字”。收发自动翻译、客户标签和快捷发送暂未开放。";
+      }
       if (changed) {
         notify("");
         void action(loadCustomer);

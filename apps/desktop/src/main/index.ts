@@ -12,6 +12,7 @@ import {
   nativeImage,
   safeStorage,
   powerMonitor,
+  net,
   type IpcMainInvokeEvent,
   type Session,
 } from "electron";
@@ -38,7 +39,13 @@ import { FreeTranslator } from "./translation.ts";
 import { chromiumUserAgent } from "./browser-identity.ts";
 import { socksBridge, type Bridge } from "./proxy.ts";
 import { throughSession, type ProxyAuth } from "./network.ts";
-import { getPlatform } from "../../../../packages/platform/registry.ts";
+import {
+  getPlatform,
+  isPlatformURL,
+  validAccountIdentity,
+} from "../../../../packages/platform/registry.ts";
+import { LINE_EXTENSION_ID } from "../../../../packages/platform/line/index.ts";
+import { ensureLineComponent, LineComponentError } from "./line-component.ts";
 
 // Keep the existing profile when the display name changes, including saved logins.
 app.setPath(
@@ -86,6 +93,7 @@ const state: ViewState = {
   toolsCollapsed: false,
 };
 interface Runtime {
+  platform: string;
   customer?: CustomerContext;
   id: string;
   view: WebContentsView;
@@ -118,7 +126,7 @@ function requireRuntime(event: {
   if (
     !runtime ||
     event.senderFrame !== event.sender.mainFrame ||
-    event.senderFrame?.url.startsWith("https://web.whatsapp.com/") !== true ||
+    !isPlatformURL(runtime.platform, event.senderFrame?.url || "") ||
     !auth
   )
     throw new Error("账号授权不可用");
@@ -355,7 +363,7 @@ async function login(code: string) {
 }
 async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
   if (!runtimes.has(runtime.id) || !auth) return;
-  if (status === "ready" && (!identifier || !/^[1-9][0-9]{6,14}$/.test(identifier))) {
+  if (status === "ready" && !validAccountIdentity(runtime.platform, identifier)) {
     runtime.status = "identity_pending";
     state.statuses[runtime.id] = "identity_pending";
     bounds();
@@ -422,6 +430,16 @@ async function openAccount(id: string) {
   let bridge: Bridge | undefined;
   let runtime: Runtime | undefined;
   try {
+    let lineDirectory: string | undefined;
+    if (account.platform === "line") {
+      state.message = "正在准备 LINE 登录组件，首次打开可能需要下载…";
+      emit();
+      lineDirectory = await ensureLineComponent(app.getPath("userData"), (url) =>
+        net.fetch(url, { signal: AbortSignal.timeout(90000) }),
+      );
+      if (generation !== epoch || !auth) return;
+      state.message = "";
+    }
     const settings = await request<{
       id: string;
       tenantId: string;
@@ -433,6 +451,11 @@ async function openAccount(id: string) {
     for (const row of state.accounts) if (row.id === id) row.paused = false;
     const p = settings.proxy;
     const ses = session.fromPartition(`persist:gd7-${settings.tenantId}-${id}`);
+    if (lineDirectory && !ses.extensions.getExtension(LINE_EXTENSION_ID)) {
+      const extension = await ses.extensions.loadExtension(lineDirectory);
+      if (extension.id !== LINE_EXTENSION_ID)
+        throw new LineComponentError("LINE 登录组件身份校验失败");
+    }
     const browserUA = chromiumUserAgent(app.userAgentFallback, app.getName());
     ses.setUserAgent(browserUA);
     ses.webRequest.onBeforeRequest((_details, callback) =>
@@ -476,6 +499,7 @@ async function openAccount(id: string) {
       },
     });
     runtime = {
+      platform: account.platform,
       id,
       view,
       ses,
@@ -532,12 +556,18 @@ async function openAccount(id: string) {
       else callback();
     });
     wc.setWindowOpenHandler(() => ({ action: "deny" }));
-    wc.on("will-navigate", (event, url) => {
-      if (!adapter.allowedOrigins.includes(new URL(url).origin)) event.preventDefault();
-    });
-    wc.on("will-redirect", (event, url) => {
-      if (!adapter.allowedOrigins.includes(new URL(url).origin)) event.preventDefault();
-    });
+    const guardNavigation = (event: Electron.Event, url: string) => {
+      if (isPlatformURL(account.platform, url)) return;
+      event.preventDefault();
+      if (account.platform === "telegram" && new URL(url).origin === "https://web.telegram.org") {
+        state.message = "每个号位只登录一个 Telegram 账号，请从 D1 Scrm 左侧添加其他账号。";
+        emit();
+        // Web K goes offline before switching owners; restore this slot's page.
+        void wc.loadURL(adapter.homeURL).catch(() => {});
+      }
+    };
+    wc.on("will-navigate", guardNavigation);
+    wc.on("will-redirect", guardNavigation);
     wc.on("did-fail-load", (_event, code, _desc, _url, isMain) => {
       if (isMain && code !== -3) void updateStatus(current, "network_error");
     });
@@ -548,14 +578,14 @@ async function openAccount(id: string) {
       const items: Electron.MenuItemConstructorOptions[] = [{ role: "copy" }, { role: "paste" }];
       if (params.selectionText.trim())
         items.unshift({
-          label: "使用 Google 翻译选中文字",
+          label: "翻译选中文字",
           click: () => wc.send("wa:selection", params.selectionText.slice(0, 4000)),
         });
       Menu.buildFromTemplate(items).popup({ window: win });
     });
     await updateStatus(current, "loading");
     await wc.loadURL(adapter.homeURL);
-  } catch {
+  } catch (error) {
     if (runtime && runtimes.get(id) === runtime) {
       await updateStatus(runtime, "network_error");
       await closeRuntime(runtime);
@@ -563,7 +593,10 @@ async function openAccount(id: string) {
     if (generation !== epoch || !auth) return;
     state.activeId = "";
     bounds();
-    state.message = "账号打开失败，请检查代理地址、认证信息和网络连接后重试";
+    state.message =
+      error instanceof LineComponentError
+        ? error.message
+        : "账号打开失败，请检查代理地址、认证信息和网络连接后重试";
     emit();
     throw new Error(state.message);
   } finally {
@@ -728,7 +761,7 @@ app.whenReady().then(async () => {
     if (!runtime || !auth) throw Error("没有可重新加载的账号");
     await updateStatus(runtime, "loading");
     try {
-      await runtime.view.webContents.loadURL(getPlatform("whatsapp").homeURL);
+      await runtime.view.webContents.loadURL(getPlatform(runtime.platform).homeURL);
     } catch {
       await updateStatus(runtime, "network_error");
     }
@@ -1041,15 +1074,22 @@ app.whenReady().then(async () => {
     if (typeof text !== "string" || text.length > 20000) throw Error("文本无效");
     clipboard.writeText(text);
   });
-  ipcMain.on("wa:status", (event, status, identifier) => {
-    try {
-      const runtime = requireRuntime(event);
-      if (["ready", "qr_required", "loading", "unknown", "network_error"].includes(status))
-        void updateStatus(runtime, status, typeof identifier === "string" ? identifier : null);
-    } catch {
-      /* Ignore untrusted/expired observations. */
-    }
+  ipcMain.handle("line:remove-login-cookie", async (event) => {
+    const runtime = requireRuntime(event);
+    if (runtime.platform !== "line") throw Error("请求来源无效");
+    await runtime.ses.cookies.remove("https://line-chrome-gw.line-apps.com/", "lct");
+    return { name: "lct" };
   });
+  for (const channel of ["wa:status", "platform:status"])
+    ipcMain.on(channel, (event, status, identifier) => {
+      try {
+        const runtime = requireRuntime(event);
+        if (["ready", "qr_required", "loading", "unknown", "network_error"].includes(status))
+          void updateStatus(runtime, status, typeof identifier === "string" ? identifier : null);
+      } catch {
+        /* Ignore untrusted/expired observations. */
+      }
+    });
   await win.loadFile(shellFile);
   try {
     if (safeStorage.isEncryptionAvailable()) {

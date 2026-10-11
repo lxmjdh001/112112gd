@@ -45,10 +45,10 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
           <button class="text-btn network-custom" type="button" id="use-proxy-network">设置独立 IP</button>
         </div>
         <form id="account-form" hidden>
-          <p class="muted">在本机打开官方登录页面，扫码后开始聊天。</p>
+          <p class="muted">在本机打开官方登录页面，扫码或按平台提示登录后开始聊天。</p>
           <div class="network-summary"><span id="network-summary"></span><button class="text-btn" type="button" id="change-network">更改</button></div>
           <label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
-          <label for="account-label">账号名称</label><input id="account-label" placeholder="例如：投放 WhatsApp 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required />
+          <label for="account-label">账号名称</label><input id="account-label" placeholder="例如：客服账号 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required />
           <div id="proxy-settings" hidden>
             <div class="proxy-picker-heading"><label for="account-proxy">选择独立 IP</label><button class="text-btn" type="button" id="add-proxy">＋ 添加代理 IP</button></div><select id="account-proxy"><option value="">请选择代理 IP</option></select>
             <p class="muted" id="proxy-empty"></p>

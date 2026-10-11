@@ -16,7 +16,12 @@ type platformOption struct {
 var platformCatalog = []platformOption{
 	{ID: "whatsapp", Name: "WhatsApp", Available: true},
 	{ID: "whatsapp_cloud", Name: "WhatsApp API", Available: true},
-	{ID: "line", Name: "LINE", Available: false},
+	{ID: "line", Name: "LINE", Available: true},
+	{ID: "telegram", Name: "Telegram", Available: true},
+}
+
+func nativePlatform(id string) bool {
+	return id == "whatsapp" || id == "line" || id == "telegram"
 }
 
 func enabledPlatforms(grants []string) []platformOption {

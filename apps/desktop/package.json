@@ -12,6 +12,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
+    "fflate": "0.8.2",
     "socks": "2.8.7"
   },
   "devDependencies": {

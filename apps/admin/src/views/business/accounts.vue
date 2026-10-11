@@ -5,6 +5,11 @@ import { api, date, statusNames, type Account } from "#/api/business";
 import "./common.css";
 const rows = ref<Account[]>([]);
 const query = ref("");
+const platformNames: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  line: "LINE",
+  telegram: "Telegram",
+};
 async function load() {
   rows.value = await api.get("/platform-accounts");
 }
@@ -22,7 +27,7 @@ onMounted(load);
     </div>
     <div class="panel">
       <div class="toolbar">
-        <ElTag>WhatsApp</ElTag
+        <ElTag>全部平台</ElTag
         ><ElInput
           v-model="query"
           placeholder="搜索账号名称 / 登录码名称"
@@ -34,14 +39,16 @@ onMounted(load);
       </div>
       <ElTable
         :data="rows.filter((r) => `${r.label}${r.codeLabel}`.includes(query))"
-        empty-text="暂无账号，请在客户端点击“添加账号”并登录 WhatsApp"
+        empty-text="暂无账号，请在客户端点击“添加账号”并登录平台"
         ><ElTableColumn prop="label" label="账号名称" min-width="140" /><ElTableColumn
           prop="codeLabel"
           label="所属登录码"
           min-width="130"
         /><ElTableColumn label="平台" width="120"
           ><template #default="{ row }">{{
-            row.connectionType === "cloud" ? "WhatsApp API" : "WhatsApp"
+            row.connectionType === "cloud"
+              ? "WhatsApp API"
+              : platformNames[row.platform] || row.platform
           }}</template></ElTableColumn
         ><ElTableColumn label="账号状态" min-width="160"
           ><template #default="{ row }"

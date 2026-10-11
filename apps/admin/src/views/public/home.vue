@@ -91,7 +91,7 @@ const faqs = [
   ],
   [
     "现在支持哪些平台？",
-    "目前已接通 WhatsApp 扫码登录和 WhatsApp API。其他平台接入后沿用同样的账号按日计费规则，客户端中未开放的平台会明确标注。",
+    "支持 WhatsApp、LINE 和 Telegram 的客户端登录，以及 WhatsApp API。各平台账号沿用相同的按日计费规则。WhatsApp 支持消息自动翻译；LINE 和 Telegram 目前支持选中文字翻译。",
   ],
 ];
 function go(id: string) {

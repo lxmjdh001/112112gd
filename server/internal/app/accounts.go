@@ -179,7 +179,7 @@ func (a *App) accountStatus(c *gin.Context) {
 		return
 	}
 	if b.Status == "ready" {
-		if !billingPhone.MatchString(b.Identifier) {
+		if !validBillingIdentity(platform, b.Identifier) {
 			fail(c, 409, "尚未识别当前登录账号，请等待同步或重新加载账号")
 			return
 		}
