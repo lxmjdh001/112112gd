@@ -45,7 +45,12 @@ export async function checkCustomerTools(app, page, wa, accountId) {
   await d.locator("input").fill("重点跟进");
   await d.getByRole("button", { name: "创建标签" }).click();
   await d.waitFor({ state: "hidden" });
-  await page.locator(".ct-tag-select").selectOption({ label: "重点跟进" });
+  if (await page.locator(".ct-tag-menu").isHidden())
+    await page.getByRole("button", { name: "选择客户标签", exact: true }).click();
+  await page
+    .locator(".ct-tag-options")
+    .getByRole("button", { name: "重点跟进", exact: true })
+    .click();
   await page.getByRole("button", { name: "重点跟进 ×" }).waitFor();
   await page.getByRole("button", { name: "客户资料 / 备注", exact: true }).click();
   await page.locator("[data-field=name]").fill("ERIC 重点客户");

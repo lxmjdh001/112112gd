@@ -28,7 +28,7 @@ interface Options {
 }
 export function mountCustomerTools(host: HTMLElement, options: Options) {
   host.className = "customer-sidebar";
-  host.innerHTML = `<button class="ct-expand" title="展开客户工具" aria-label="展开客户工具">‹<span>客户工具</span></button><div class="ct-panel"><header class="ct-header"><b>客户工具</b><button class="ct-collapse" title="折叠客户工具" aria-label="折叠客户工具">›</button></header><div class="ct-tabs"><button data-tab="tools" class="active">聊天工具</button><button data-tab="profile">客户资料 / 备注</button></div><div class="ct-customer"><strong></strong><small></small></div><p class="ct-notice" role="status"></p><div class="ct-scroll"><div class="ct-tools-page"><section class="ct-card"><div class="ct-card-head"><h3>快捷图片</h3><button data-new="image">新增图片</button></div><div class="ct-image-library"></div></section><section class="ct-card"><div class="ct-card-head"><h3>话术</h3><button data-new="text">新增话术</button></div><div class="ct-text-library"></div></section><section class="ct-card"><div class="ct-card-head"><h3>客户标签</h3><button class="ct-new-tag">新建标签</button></div><select class="ct-tag-select" aria-label="给当前客户添加标签"><option value="">选择标签…</option></select><div class="ct-tags"></div></section><section class="ct-card"><h3>翻译语言</h3><label>当前客户语言<select class="ct-language" aria-label="当前客户翻译语言">${cloudLanguages.map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}</select></label><p class="ct-help">为这位客户单独保存，快捷话术和聊天翻译沿用此语言。</p></section></div><div class="ct-profile-page" hidden><section class="ct-card"><h3>客户资料</h3><div class="ct-profile-fields"></div></section><section class="ct-card"><h3>销售信息</h3><div class="ct-sales-fields"></div></section><section class="ct-card"><h3>备注</h3><textarea class="ct-notes" maxlength="6000" rows="7" placeholder="记录这位客户的情况…"></textarea></section><div class="ct-profile-actions"><button class="ct-primary ct-save-profile">保存资料</button><button class="ct-reset-profile">取消修改</button></div></div><button class="ct-refresh">刷新工具资料</button></div></div>`;
+  host.innerHTML = `<button class="ct-expand" title="展开客户工具" aria-label="展开客户工具">‹<span>客户工具</span></button><div class="ct-panel"><header class="ct-header"><b>客户工具</b><button class="ct-collapse" title="折叠客户工具" aria-label="折叠客户工具">›</button></header><div class="ct-tabs"><button data-tab="tools" class="active">聊天工具</button><button data-tab="profile">客户资料 / 备注</button></div><div class="ct-customer"><strong></strong><small></small></div><p class="ct-notice" role="status"></p><div class="ct-scroll"><div class="ct-tools-page"><section class="ct-card"><div class="ct-card-head"><h3>快捷图片</h3><button data-new="image">新增图片</button></div><div class="ct-image-library"></div></section><section class="ct-card"><div class="ct-card-head"><h3>话术</h3><button data-new="text">新增话术</button></div><div class="ct-text-library"></div></section><section class="ct-card"><div class="ct-card-head"><h3>客户标签</h3><button class="ct-new-tag">新建标签</button></div><div class="ct-tag-picker"><button type="button" class="ct-tag-select" aria-label="选择客户标签" aria-expanded="false" aria-controls="ct-tag-menu"><span>选择标签…</span><span class="ct-tag-chevron" aria-hidden="true"></span></button><div class="ct-tag-menu" id="ct-tag-menu" hidden><input class="ct-tag-search" type="search" placeholder="搜索标签…" aria-label="搜索客户标签" /><p class="ct-tag-hint ct-help" role="status"></p><div class="ct-tag-options"></div></div></div><p class="ct-tag-status ct-help" role="status"></p><div class="ct-tags"></div></section><section class="ct-card"><h3>翻译语言</h3><label>当前客户语言<select class="ct-language" aria-label="当前客户翻译语言">${cloudLanguages.map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}</select></label><p class="ct-help">为这位客户单独保存，快捷话术和聊天翻译沿用此语言。</p></section></div><div class="ct-profile-page" hidden><section class="ct-card"><h3>客户资料</h3><div class="ct-profile-fields"></div></section><section class="ct-card"><h3>销售信息</h3><div class="ct-sales-fields"></div></section><section class="ct-card"><h3>备注</h3><textarea class="ct-notes" maxlength="6000" rows="7" placeholder="记录这位客户的情况…"></textarea></section><div class="ct-profile-actions"><button class="ct-primary ct-save-profile">保存资料</button><button class="ct-reset-profile">取消修改</button></div></div><button class="ct-refresh">刷新工具资料</button></div></div>`;
   const q = <T extends HTMLElement = HTMLElement>(s: string) => host.querySelector<T>(s)!;
   let context: CustomerContext | undefined,
     profile: CustomerProfile | undefined,
@@ -39,6 +39,12 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
   let assets: QuickAsset[] = [],
     tags: { id: string; name: string }[] = [],
     saving = false;
+  let tagsLoading = false,
+    tagsError = "",
+    tagsRequest = 0,
+    customerError = "",
+    tagSaving = false,
+    tagStatus = "";
   let modal: HTMLDialogElement | undefined;
   const filters = {
     image: { scope: "personal", category: "全部", page: 0 },
@@ -103,49 +109,142 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
     d.showModal();
     return d;
   }
-  async function loadLibrary() {
-    const [nextAssets, nextTags] = await Promise.all([
-      api<QuickAsset[]>("GET", "/assets"),
-      api<{ id: string; name: string }[]>("GET", "/tags"),
-    ]);
-    if (disposed) return;
-    assets = nextAssets;
-    tags = nextTags;
-    renderLibraries();
+  async function loadTags() {
+    const ticket = ++tagsRequest;
+    tagsLoading = true;
+    tagsError = "";
     renderTags();
+    try {
+      const next = await api<{ id: string; name: string }[]>("GET", "/tags");
+      if (disposed || ticket !== tagsRequest) return;
+      tags = next;
+    } catch (e) {
+      if (disposed || ticket !== tagsRequest) return;
+      tagsError = "标签加载失败：" + errorText(e);
+      throw e;
+    } finally {
+      if (!disposed && ticket === tagsRequest) {
+        tagsLoading = false;
+        renderTags();
+      }
+    }
   }
-  function renderTags() {
-    const select = q<HTMLSelectElement>(".ct-tag-select");
-    select.replaceChildren(new Option("选择标签…", ""));
-    for (const tag of tags.filter((t) => !profile?.tags.includes(t.id)))
-      select.add(new Option(tag.name, tag.id));
-    select.disabled = !profile || !context;
-    const assigned = q(".ct-tags");
-    assigned.replaceChildren();
-    if (!context) {
-      assigned.textContent = "打开客户聊天后可快速打标签。";
+  async function loadLibrary() {
+    // A failed asset request must not prevent the tag list from loading.
+    await Promise.all([
+      (async () => {
+        const next = await api<QuickAsset[]>("GET", "/assets");
+        if (disposed) return;
+        assets = next;
+        renderLibraries();
+      })(),
+      loadTags(),
+    ]);
+  }
+  function showTagPicker(open: boolean, focus = false) {
+    q(".ct-tag-menu").hidden = !open;
+    q(".ct-tag-select").setAttribute("aria-expanded", String(open));
+    q(".ct-tag-status").textContent = tagStatus || (open ? "" : customerTagHint());
+    if (open) {
+      q<HTMLInputElement>(".ct-tag-search").value = "";
+      renderTagOptions();
+      q<HTMLInputElement>(".ct-tag-search").focus();
+    } else if (focus) q(".ct-tag-select").focus();
+  }
+  function customerTagHint() {
+    if (!context) return "尚未识别到当前客户。请先打开客户单聊，再添加标签。";
+    if (customerError) return "客户资料加载失败：" + customerError;
+    if (!profile) return "正在加载客户资料…";
+    return "";
+  }
+  function renderTagOptions() {
+    const root = q(".ct-tag-options");
+    root.replaceChildren();
+    q(".ct-tag-hint").textContent = customerTagHint();
+    const message = (text: string) => {
+      const p = document.createElement("p");
+      p.className = "ct-tag-empty";
+      p.textContent = text;
+      root.append(p);
+    };
+    if (customerError)
+      root.append(button("重新加载客户", () => void action(loadCustomer), "ct-tag-retry"));
+    if (tagsLoading) {
+      message("正在加载标签…");
       return;
     }
-    if (!profile?.tags.length) {
+    if (tagsError) {
+      message(tagsError);
+      root.append(button("重新加载标签", () => void action(loadTags), "ct-tag-retry"));
+      return;
+    }
+    if (!tags.length) {
+      message("暂无标签，先创建一个吧");
+      root.append(button("＋ 新建标签", () => q(".ct-new-tag").click(), "ct-tag-retry"));
+      return;
+    }
+    const available = tags.filter((t) => !profile?.tags.includes(t.id));
+    const search = q<HTMLInputElement>(".ct-tag-search").value.trim().toLocaleLowerCase();
+    const matches = available.filter((t) => t.name.toLocaleLowerCase().includes(search));
+    if (!matches.length) {
+      message(available.length ? "没有匹配的标签" : "已添加全部标签");
+      return;
+    }
+    const c = context ? { ...context } : undefined;
+    const ticket = generation;
+    for (const tag of matches) {
+      const item = button(
+        tag.name,
+        () => {
+          if (c && same(c) && ticket === generation) void setTag(tag.id, true);
+        },
+        "ct-tag-option",
+      );
+      item.disabled = !context || !profile || tagSaving;
+      root.append(item);
+    }
+  }
+  function renderTags() {
+    q(".ct-tag-status").textContent =
+      tagStatus || (q(".ct-tag-menu").hidden ? customerTagHint() : "");
+    renderTagOptions();
+    const assigned = q(".ct-tags");
+    assigned.replaceChildren();
+    if (!profile || !context) return;
+    if (!profile.tags.length) {
       assigned.textContent = "这位客户还没有标签。";
       return;
     }
     for (const id of profile.tags) {
       const tag = tags.find((t) => t.id === id);
-      if (tag)
-        assigned.append(
-          button(tag.name + " ×", () => void action(() => setTag(id, false)), "ct-tag"),
-        );
+      if (tag) {
+        const item = button(tag.name + " ×", () => void setTag(id, false), "ct-tag");
+        item.disabled = tagSaving;
+        assigned.append(item);
+      }
     }
   }
   async function setTag(tagId: string, assigned: boolean) {
-    const c = current();
-    await api("PUT", "/customer/tag", { ...c, tagId, assigned });
-    if (!same(c) || !profile) return;
-    profile!.tags = assigned
-      ? [...new Set([...profile!.tags, tagId])]
-      : profile!.tags.filter((t) => t !== tagId);
+    if (!context || !profile || tagSaving) return;
+    const c = current(),
+      ticket = generation;
+    tagSaving = true;
+    tagStatus = assigned ? "正在添加标签…" : "正在移除标签…";
     renderTags();
+    try {
+      await api("PUT", "/customer/tag", { ...c, tagId, assigned });
+      if (!same(c) || !profile || ticket !== generation) return;
+      profile.tags = assigned
+        ? [...new Set([...profile.tags, tagId])]
+        : profile.tags.filter((t) => t !== tagId);
+      tagStatus = assigned ? "标签已添加" : "标签已移除";
+      if (assigned) showTagPicker(false, true);
+    } catch (e) {
+      if (same(c) && ticket === generation) tagStatus = "标签保存失败：" + errorText(e);
+    } finally {
+      tagSaving = false;
+      if (!disposed) renderTags();
+    }
   }
   function renderLibrary(kind: "text" | "image") {
     const root = q(`.ct-${kind}-library`),
@@ -419,6 +518,8 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
     const c = context ? { ...context } : undefined;
     const ticket = ++generation;
     profile = undefined;
+    customerError = "";
+    tagStatus = "";
     draftDetails = {};
     renderProfile();
     renderTags();
@@ -427,7 +528,11 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
     try {
       next = await api<CustomerProfile>("POST", "/customer", c);
     } catch (e) {
-      if (ticket === generation && same(c)) throw e;
+      if (ticket === generation && same(c)) {
+        customerError = errorText(e);
+        renderTags();
+        throw e;
+      }
       return;
     }
     if (ticket !== generation || !same(c)) return;
@@ -512,18 +617,26 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
         }
       }),
   );
-  q<HTMLSelectElement>(".ct-tag-select").addEventListener(
-    "change",
-    () =>
-      void action(async () => {
-        const select = q<HTMLSelectElement>(".ct-tag-select");
-        if (select.value) await setTag(select.value, true);
-      }),
+  q(".ct-tag-select").addEventListener("click", () =>
+    showTagPicker(q(".ct-tag-menu").hidden === true),
   );
+  q(".ct-tag-search").addEventListener("input", renderTagOptions);
+  q(".ct-tag-picker").addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !q(".ct-tag-menu").hidden) {
+      event.preventDefault();
+      showTagPicker(false, true);
+    }
+  });
+  const closeTagPickerOutside = (event: PointerEvent) => {
+    if (event.target instanceof Node && !q(".ct-tag-picker").contains(event.target))
+      showTagPicker(false);
+  };
+  document.addEventListener("pointerdown", closeTagPickerOutside);
   q(".ct-new-tag").addEventListener(
     "click",
     () =>
       void action(async () => {
+        showTagPicker(false);
         const d = await dialog(
           "新建客户标签",
           '<form><label>标签名称<input name="name" maxlength="30" required /></label><footer><button class="ct-primary" type="submit">创建标签</button></footer></form>',
@@ -536,7 +649,8 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
           try {
             await api("POST", "/tags", { name: d.querySelector<HTMLInputElement>("input")!.value });
             d.close();
-            await loadLibrary();
+            showTagPicker(true);
+            await action(loadTags);
           } catch (e) {
             d.querySelector(".ct-dialog-error")!.textContent = errorText(e);
           } finally {
@@ -547,6 +661,7 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
   );
   host.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) =>
     b.addEventListener("click", () => {
+      showTagPicker(false);
       host.querySelectorAll("[data-tab]").forEach((el) => el.classList.toggle("active", el === b));
       q(".ct-tools-page").hidden = b.dataset.tab !== "tools";
       q(".ct-profile-page").hidden = b.dataset.tab !== "profile";
@@ -585,6 +700,7 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
       if (changed && context && profile && dirty()) {
         drafts.set(customerKey(context), { details: { ...draftDetails }, version: draftVersion });
       }
+      if (changed || collapsed) showTagPicker(false);
       if (changed && modal?.dataset.customerBound) modal.close();
       context = next;
       q(".ct-customer strong").textContent = next?.name || next?.identifier || "尚未选择客户";
@@ -598,6 +714,7 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
     dispose() {
       disposed = true;
       generation++;
+      document.removeEventListener("pointerdown", closeTagPickerOutside);
       modal?.close();
       previews.clear();
       drafts.clear();
