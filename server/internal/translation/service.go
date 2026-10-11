@@ -157,13 +157,22 @@ func fetch(ctx context.Context, client *http.Client, address string, out any, pa
 	req.Header.Set("Cache-Control", "no-store")
 	res, e := client.Do(req)
 	if e != nil {
-		return errors.New("翻译连接失败")
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return errNetwork
 	}
 	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		return errors.New("翻译服务暂不可用")
+	if res.StatusCode == http.StatusTooManyRequests {
+		return errRateLimited
 	}
-	return json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(out)
+	if res.StatusCode != 200 {
+		return errUnavailable
+	}
+	if e := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(out); e != nil {
+		return errFormat
+	}
+	return nil
 }
 func google(ctx context.Context, client *http.Client, text, target string) (Result, error) {
 	q := url.Values{"client": {"gtx"}, "sl": {"auto"}, "tl": {target}, "dt": {"t"}, "q": {text}}

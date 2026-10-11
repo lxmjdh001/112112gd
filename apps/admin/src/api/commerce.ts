@@ -42,6 +42,7 @@ export interface FinanceColumn {
   label: string;
   width?: number;
   format?: "date" | "status" | "event" | "rate";
+  formatter?: (value: any) => string;
 }
 export const states: Record<string, string> = {
   pending: "待审核",
@@ -66,6 +67,7 @@ export const events: Record<string, string> = {
 };
 export function financeCell(row: FinanceRow, col: FinanceColumn) {
   const v = row[col.key];
+  if (col.formatter) return col.formatter(v);
   if (col.format === "date") return date(v);
   if (col.format === "status") return states[v] || v;
   if (col.format === "event") return events[v] || v;

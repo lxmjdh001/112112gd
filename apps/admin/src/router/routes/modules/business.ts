@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "账户中心", icon: "lucide:circle-user-round", order: 5, authority: ["admin"] },
   },
   {
+    name: "TranslationServices",
+    path: "/translation-services",
+    component: () => import("#/views/business/translation-services.vue"),
+    meta: { title: "翻译接口", icon: "lucide:languages", order: 5.5, authority: ["admin"] },
+  },
+  {
     name: "Baseline",
     path: "/baseline",
     component: () => import("#/views/business/baseline.vue"),

@@ -19,8 +19,9 @@ const props = withDefaults(
     statuses?: string[];
     emptyText?: string;
     actionWidth?: number;
+    searchPlaceholder?: string;
   }>(),
-  { emptyText: "暂无记录", actionWidth: 170 },
+  { emptyText: "暂无记录", actionWidth: 170, searchPlaceholder: "搜索名称或单号" },
 );
 const rows = ref<FinanceRow[]>([]),
   total = ref(0),
@@ -69,7 +70,7 @@ defineExpose({ reload: load });
       <ElInput
         v-model="search"
         aria-label="搜索记录"
-        placeholder="搜索名称或单号"
+        :placeholder="searchPlaceholder"
         clearable
         style="width: 260px"
         @keyup.enter="filter"
