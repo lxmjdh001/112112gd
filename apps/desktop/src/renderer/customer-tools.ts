@@ -1,4 +1,5 @@
 import { cloudLanguages } from "../../../../packages/cloud-chat/index.ts";
+import { mountImageUpload } from "./image-upload.ts";
 import type {
   CustomerContext,
   CustomerProfile,
@@ -14,13 +15,6 @@ const errorText = (e: unknown) =>
   String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': Error: /, "");
 const api = <T>(method: string, path: string, body?: unknown) =>
   window.gongdan.toolsRequest<T>(method, path, body);
-const imageData = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1]!);
-    reader.onerror = () => reject(Error("图片读取失败"));
-    reader.readAsDataURL(file);
-  });
 interface Options {
   toggle(collapsed: boolean): Promise<void>;
   prepare(
@@ -273,31 +267,27 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
       asset?.kind === "image" ? await api<AssetContent>("GET", "/assets/" + asset.id) : undefined;
     const d = await dialog(
       asset ? "编辑素材" : kind === "image" ? "新增快捷图片" : "新增话术",
-      `<form><label>名称<input name="title" maxlength="80" required value="${esc(asset?.title || "")}" /></label><label>范围<select name="scope" ${asset ? "disabled" : ""}><option value="personal">个人使用</option><option value="team" ${asset?.scope === "team" ? "selected" : ""}>团队共享</option></select></label><label>分类<input name="category" maxlength="40" value="${esc(asset?.category || "默认")}" /></label>${kind === "text" ? `<label>话术内容<textarea name="body" rows="6" maxlength="4000" required>${esc(asset?.body || "")}</textarea></label>` : `<label>图片（PNG / JPG，最多 5 MB）<input name="image" type="file" accept="image/png,image/jpeg" ${asset ? "" : "required"} /></label>${existing ? `<img class="ct-preview-image" src="data:${existing.mime};base64,${existing.data}" alt="图片预览" />` : ""}`}<footer><button class="ct-primary" type="submit">保存</button></footer></form>`,
+      `<form><label>名称<input name="title" maxlength="80" required value="${esc(asset?.title || "")}" /></label><label>范围<select name="scope" ${asset ? "disabled" : ""}><option value="personal">个人使用</option><option value="team" ${asset?.scope === "team" ? "selected" : ""}>团队共享</option></select></label><label>分类<input name="category" maxlength="40" value="${esc(asset?.category || "默认")}" /></label>${kind === "text" ? `<label>话术内容<textarea name="body" rows="6" maxlength="4000" required>${esc(asset?.body || "")}</textarea></label>` : `<div class="ct-upload-label">图片</div><div class="ct-image-upload"></div>`}<footer><button class="ct-primary" type="submit">保存</button></footer></form>`,
     );
+    const uploader =
+      kind === "image"
+        ? mountImageUpload(d.querySelector(".ct-image-upload")!, existing, (text) => {
+            d.querySelector(".ct-dialog-error")!.textContent = text;
+          })
+        : undefined;
+    d.addEventListener("close", () => uploader?.dispose(), { once: true });
     d.querySelector("form")!.addEventListener("submit", async (e) => {
       e.preventDefault();
       const submit = d.querySelector<HTMLButtonElement>("[type=submit]")!;
       if (submit.disabled) return;
       submit.disabled = true;
+      uploader?.setDisabled(true);
       try {
         const input = (name: string) =>
           d.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
             `[name="${name}"]`,
           )!;
-        let content = existing;
-        const file = d.querySelector<HTMLInputElement>("[name=image]")?.files?.[0];
-        if (file) {
-          if (file.size > 5 * 1024 * 1024 || !["image/png", "image/jpeg"].includes(file.type))
-            throw Error("请选择 5 MB 以内的 PNG 或 JPG 图片");
-          content = {
-            kind: "image",
-            mime: file.type,
-            filename: file.name,
-            data: await imageData(file),
-            body: "",
-          };
-        }
+        const content = await uploader?.content();
         await api(asset ? "PATCH" : "POST", asset ? "/assets/" + asset.id : "/assets", {
           kind,
           title: input("title").value,
@@ -317,6 +307,7 @@ export function mountCustomerTools(host: HTMLElement, options: Options) {
         d.querySelector(".ct-dialog-error")!.textContent = errorText(e);
       } finally {
         submit.disabled = false;
+        uploader?.setDisabled(false);
       }
     });
   }

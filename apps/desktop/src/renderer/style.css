@@ -855,6 +855,139 @@ aside {
   line-height: 1.6;
   font-size: 12px;
 }
+.ct-upload-label {
+  color: #678474;
+  margin: 16px 0 9px;
+}
+.ct-upload {
+  border: 1.5px dashed #c4dcd0;
+  border-radius: 12px;
+  background: #f8fbf9;
+  overflow: hidden;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    box-shadow 150ms;
+}
+.ct-upload [hidden] {
+  display: none !important;
+}
+.ct-upload:hover,
+.ct-upload:focus-within,
+.ct-upload.is-dragging {
+  border-color: #119d68;
+  background: #f0faf5;
+}
+.ct-upload:focus-within,
+.ct-upload.is-dragging {
+  box-shadow: 0 0 0 3px #119d6812;
+}
+.ct-dialog .ct-upload-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 174px;
+  padding: 24px 16px;
+  border: 0;
+  background: transparent;
+  color: #16835c;
+  font: inherit;
+}
+.ct-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  color: #119d68;
+  background: #e4f3eb;
+}
+.ct-upload-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.ct-upload-pick strong {
+  font-weight: 600;
+}
+.ct-upload-pick strong span {
+  color: #7c9286;
+  font-weight: 400;
+}
+.ct-upload-pick small {
+  color: #91a398;
+  font-size: 11px;
+}
+.ct-upload.has-image {
+  border-style: solid;
+  background: white;
+}
+.ct-upload-preview {
+  padding: 16px;
+  background: #f4f8f5;
+}
+.ct-upload-preview img {
+  display: block;
+  max-width: 100%;
+  height: 156px;
+  margin: auto;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.ct-upload-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid #e7efe9;
+}
+.ct-upload-info {
+  flex: 1;
+  min-width: 0;
+}
+.ct-upload-info strong,
+.ct-upload-info small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ct-upload-info strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.ct-upload-info small {
+  color: #8a9b90;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.ct-upload-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ct-dialog .ct-upload-actions button {
+  font: inherit;
+  padding: 5px 9px;
+  border: 1px solid #dce9e1;
+  background: white;
+  color: #17875f;
+}
+.ct-dialog .ct-upload-actions [data-remove] {
+  border-color: transparent;
+  color: #8b9991;
+}
+.ct-upload-status {
+  margin: 0;
+  color: #678474;
+  font-size: 12px;
+  text-align: center;
+}
+.ct-upload-status:not(:empty) {
+  padding: 0 12px 12px;
+}
 .ct-preview-image {
   max-width: 100%;
   max-height: 360px;
