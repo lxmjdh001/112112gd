@@ -220,7 +220,7 @@ onMounted(load);
         <ElAlert
           :title="
             dialog === 'transfer'
-              ? '转入后计入账户余额，此操作不产生新的推广佣金。'
+              ? '仅支持整元转入，1 元兑换 1 点，此操作不产生新的推广佣金。'
               : '提交后冻结相应佣金，审核通过后由运营人工打款。'
           "
           :closable="false"
@@ -230,8 +230,8 @@ onMounted(load);
           >金额<ElInput
             v-model="form.amount"
             aria-label="佣金操作金额"
-            inputmode="decimal"
-            placeholder="0.00"
+            :inputmode="dialog === 'transfer' ? 'numeric' : 'decimal'"
+            :placeholder="dialog === 'transfer' ? '请输入整元金额' : '0.00'"
             required /></label
         ><label v-if="dialog === 'withdraw'" class="field"
           >收款信息 · {{ info?.settings.payoutChannel

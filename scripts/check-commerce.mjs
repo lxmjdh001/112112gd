@@ -30,7 +30,7 @@ async function operate(root, kind, rowText, button, title, reference) {
   await dialog.waitFor({ state: "hidden" });
 }
 try {
-  await root.goto(base);
+  await root.goto(base + "#/auth/login");
   await root.locator("#username").fill(env.BOOTSTRAP_USERNAME);
   await root.locator("#password").fill(env.BOOTSTRAP_PASSWORD);
   await root.getByRole("button", { name: "登录", exact: true }).click();
@@ -40,24 +40,21 @@ try {
     await root.getByRole("button", { name: "申请充值", exact: true }).isDisabled(),
     true,
   );
+  await tab(root, "个人资料");
   await root.getByLabel("显示名称", { exact: true }).fill("验收运营");
   await root.getByLabel("团队名称", { exact: true }).fill("验收运营团队");
   await root.getByLabel("联系方式", { exact: true }).fill("example@example.test");
   await root.getByRole("button", { name: "保存资料", exact: true }).click();
   await root.getByText("个人资料已保存", { exact: true }).waitFor();
   await root.reload({ waitUntil: "networkidle" });
+  await tab(root, "个人资料");
   assert.equal(await root.getByLabel("显示名称", { exact: true }).inputValue(), "验收运营");
   await tab(root, "运营管理");
   await tab(root, "结算规则");
-  await root
-    .getByRole("combobox", { name: "结算币种", exact: true })
-    .locator("xpath=ancestor::div[contains(@class,'el-select__wrapper')]")
-    .click();
-  await root.getByRole("option", { name: "美元 USD", exact: true }).click();
   await root.getByRole("spinbutton", { name: "推广佣金比例", exact: true }).fill("10");
   await root.getByLabel("充值收款说明", { exact: true }).fill("验收专用模拟收款，不接受实际资金。");
   await root.getByLabel("提现渠道名称", { exact: true }).fill("验收模拟渠道");
-  for (const name of ["开放充值", "开放提现", "开放注册"])
+  for (const name of ["开放充值", "开放提现"])
     await root
       .getByRole("switch", { name, exact: true })
       .locator("xpath=ancestor::div[contains(@class,'el-switch')]")
@@ -76,6 +73,7 @@ try {
   await member.getByRole("button", { name: "创建账户并登录", exact: true }).click();
   await member.getByRole("heading", { name: "工作台", exact: true }).waitFor();
   await goto(member, "account-center", "账户中心");
+  await tab(member, "个人资料");
   await member.getByLabel("团队名称", { exact: true }).waitFor();
   assert.equal(await member.getByRole("tab", { name: "运营管理", exact: true }).count(), 0);
   await member.getByRole("button", { name: "申请充值", exact: true }).click();
@@ -98,8 +96,8 @@ try {
     "commerce-receipt-100",
   );
   await member.reload({ waitUntil: "networkidle" });
-  await member.locator(".stats .stat").first().getByText("100.00", { exact: true }).waitFor();
-  await tab(member, "钱包日志");
+  await member.locator(".stats .stat").first().getByText("200", { exact: true }).waitFor();
+  await tab(member, "点数流水");
   await member.locator(".el-table__body-wrapper tr").filter({ hasText: "充值入账" }).waitFor();
   await tab(member, "个人资料");
   await member.getByLabel("当前密码", { exact: true }).fill("commerce-test-password-123");
@@ -138,8 +136,8 @@ try {
   await root.waitForTimeout(400);
   await root.screenshot({ path: ".runtime/promotion-center.png", fullPage: true });
   await goto(root, "account-center", "账户中心");
-  await root.locator(".stats .stat").first().getByText("3.00", { exact: true }).waitFor();
-  await tab(root, "钱包日志");
+  await root.locator(".stats .stat").first().getByText("3", { exact: true }).waitFor();
+  await tab(root, "点数流水");
   await root.locator(".el-table__body-wrapper tr").filter({ hasText: "佣金转入" }).waitFor();
   await root.waitForTimeout(400);
   await root.screenshot({ path: ".runtime/account-center.png", fullPage: true });

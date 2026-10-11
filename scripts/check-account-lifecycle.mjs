@@ -52,7 +52,7 @@ async function mockNative(account) {
       "https",
       () =>
         new Response(
-          '<!doctype html><body><div id="pane-side"></div><div id="main"><header>本机合成聊天</header><div data-id="false_447410419512@s.whatsapp.net_TEST">测试消息</div><footer><div contenteditable="true" role="textbox"></div></footer></div></body>',
+          '<!doctype html><body><script>localStorage.setItem("last-wid-md", "15550000001@c.us")</script><div id="pane-side"></div><div id="main"><header>本机合成聊天</header><div data-id="false_447410419512@s.whatsapp.net_TEST">测试消息</div><footer><div contenteditable="true" role="textbox"></div></footer></div></body>',
           { headers: { "Content-Type": "text/html" } },
         ),
     );

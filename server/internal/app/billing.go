@@ -50,7 +50,7 @@ func (a *App) createRecharge(c *gin.Context) {
 		fail(c, 400, "充值参数无效")
 		return
 	}
-	amount, e := parseMoney(b.Amount)
+	amount, e := parsePointAmount(b.Amount)
 	if e != nil {
 		commerceFail(c, e)
 		return

@@ -139,6 +139,8 @@ async function request<T>(
   if (res.status === 401 && auth && auth === requestAuth)
     await terminate("登录权限已失效，请联系管理员或重新输入登录码");
   const result = (await res.json()) as { code: number; data: T; message?: string };
+  if (res.status === 402 && auth && auth === requestAuth)
+    await terminate(result.message || "点数不足且缓冲已到期，请联系平台充值后重新登录");
   if (!res.ok) {
     throw new Error(result.message || "请求未完成");
   }
@@ -205,6 +207,7 @@ async function terminate(message: string) {
   state.platforms = [];
   state.activeId = "";
   state.statuses = {};
+  state.billing = undefined;
   state.message = message;
   await Promise.allSettled([...runtimes.values()].map(closeRuntime));
   // Serialize removal after pending writes so logout cannot resurrect saved credentials.
@@ -217,7 +220,8 @@ function bounds() {
   const [width, height] = win.getContentSize();
   const sidebarWidth = state.sidebarCollapsed ? 76 : 280;
   for (const runtime of runtimes.values()) {
-    const active = runtime.id === state.activeId && !accountFormOpen;
+    const active =
+      runtime.id === state.activeId && !accountFormOpen && runtime.status !== "identity_pending";
     runtime.view.setVisible(active);
     if (active)
       runtime.view.setBounds({
@@ -302,6 +306,8 @@ async function reconnect() {
     if (auth && epoch === generation) {
       await refresh();
       if (!auth || epoch !== generation) return;
+      state.billing = await request<ViewState["billing"]>("/client/billing");
+      if (!auth || epoch !== generation) return;
       state.connection = "online";
       state.message = "";
       emit();
@@ -341,14 +347,30 @@ async function login(code: string) {
   emit();
   await heartbeat();
 }
-async function updateStatus(runtime: Runtime, status: string) {
+async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
   if (!runtimes.has(runtime.id) || !auth) return;
+  if (status === "ready" && (!identifier || !/^[1-9][0-9]{6,14}$/.test(identifier))) {
+    runtime.status = "identity_pending";
+    state.statuses[runtime.id] = "identity_pending";
+    bounds();
+    emit();
+    return;
+  }
   runtime.status = status;
   state.statuses[runtime.id] = status;
+  bounds();
   emit();
   try {
-    await request(`/client/accounts/${runtime.id}/status`, { status });
-  } catch {
+    await request(`/client/accounts/${runtime.id}/status`, { status, identifier });
+  } catch (error) {
+    if (auth && status === "ready" && String(error).includes("公司累计 3 天缓冲已用完")) {
+      await request(`/client/accounts/${runtime.id}/close`, {}).catch(() => {});
+      await closeRuntime(runtime);
+      if (state.activeId === runtime.id) state.activeId = "";
+      state.message = (error as Error).message;
+      await refresh();
+      emit();
+    }
     /* Heartbeat controls authorization; failed observations never erase platform login. */
   }
 }
@@ -1013,11 +1035,11 @@ app.whenReady().then(async () => {
     if (typeof text !== "string" || text.length > 20000) throw Error("文本无效");
     clipboard.writeText(text);
   });
-  ipcMain.on("wa:status", (event, status) => {
+  ipcMain.on("wa:status", (event, status, identifier) => {
     try {
       const runtime = requireRuntime(event);
       if (["ready", "qr_required", "loading", "unknown", "network_error"].includes(status))
-        void updateStatus(runtime, status);
+        void updateStatus(runtime, status, typeof identifier === "string" ? identifier : null);
     } catch {
       /* Ignore untrusted/expired observations. */
     }

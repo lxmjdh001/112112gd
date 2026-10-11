@@ -54,7 +54,7 @@ async function choose(scope, label, name) {
   await page.getByRole("option", { name, exact: true }).click();
 }
 try {
-  await page.goto("http://127.0.0.1:5779/");
+  await page.goto("http://127.0.0.1:5779/#/auth/login");
   await page.locator("#username").fill(env.BOOTSTRAP_USERNAME);
   await page.locator("#password").fill(env.BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();

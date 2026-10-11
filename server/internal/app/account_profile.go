@@ -150,6 +150,9 @@ func (a *App) registerAdmin(c *gin.Context) {
 		if e = tx.QueryRow(ctx, `INSERT INTO admins(tenant_id,username,password_hash) VALUES($1,$2,$3) RETURNING id::text`, tenant, b.Username, string(hash)).Scan(&actor); e != nil {
 			return nil, e
 		}
+		if e = grantRegistrationPoints(ctx, tx, tenant, actor); e != nil {
+			return nil, e
+		}
 		if referrer != "" {
 			if _, e = tx.Exec(ctx, `INSERT INTO referrals(referred_tenant_id,referrer_tenant_id,code) VALUES($1,$2,$3)`, tenant, referrer, b.ReferralCode); e != nil {
 				return nil, e

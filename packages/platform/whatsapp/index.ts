@@ -8,7 +8,7 @@ export const whatsapp: PlatformAdapter = {
   capabilities: {
     nativeChat: true,
     selectionTranslation: true,
-    accountIdentity: false,
+    accountIdentity: true,
     messageArchive: false,
   },
 };

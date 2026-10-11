@@ -66,7 +66,7 @@ func (a *App) transferCommission(c *gin.Context) {
 		fail(c, 400, "转入金额无效")
 		return
 	}
-	amount, e := parseMoney(b.Amount)
+	amount, e := parsePointAmount(b.Amount)
 	if e != nil {
 		commerceFail(c, e)
 		return

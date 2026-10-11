@@ -3,10 +3,21 @@ const coreRoutes: RouteRecordRaw[] = [
   {
     name: "Root",
     path: "/",
-    redirect: "/dashboard",
+    redirect: "/home",
     component: () => import("#/layouts/basic.vue"),
     meta: { hideInBreadcrumb: true, title: "Root" },
     children: [],
+  },
+  {
+    name: "PublicHome",
+    path: "/home",
+    component: () => import("#/views/public/home.vue"),
+    meta: {
+      title: "工单007 · 跨境沟通工作台",
+      hideInMenu: true,
+      hideInTab: true,
+      ignoreAccess: true,
+    },
   },
   {
     name: "Authentication",

@@ -57,6 +57,7 @@ export interface ClientAuth {
   leaseSeconds: number;
 }
 export interface ViewState {
+  billing?: { points: string; graceDaysRemaining: number; status: string };
   sidebarCollapsed?: boolean;
   customer?: CustomerContext;
   toolsCollapsed?: boolean;
@@ -101,6 +102,7 @@ export interface ShellAPI {
   onState(fn: (s: ViewState) => void): void;
 }
 export const stateLabels: Record<string, string> = {
+  identity_pending: "正在识别登录账号",
   loading: "加载中",
   qr_required: "等待扫码",
   ready: "网页已就绪",

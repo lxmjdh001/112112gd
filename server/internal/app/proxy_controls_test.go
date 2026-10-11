@@ -163,7 +163,7 @@ func TestProxyPerPlatformLimitAndDisable(t *testing.T) {
 	if s, _ = h.call("PATCH", "/proxies/"+proxy, h.admin, gin.H{"maxAccountsPerPlatform": 1}); s != 409 {
 		t.Fatal("limit below existing usage accepted", s)
 	}
-	if s, _ = h.call("POST", "/client/accounts/"+account+"/status", client, gin.H{"status": "ready"}); s != 200 {
+	if s, _ = h.call("POST", "/client/accounts/"+account+"/status", client, gin.H{"status": "ready", "identifier": "15550000001"}); s != 200 {
 		t.Fatal(s)
 	}
 	if s, b = h.call("PATCH", "/proxies/"+proxy, h.admin, gin.H{"enabled": false}); s != 200 {
@@ -197,7 +197,7 @@ func TestProxyPerPlatformLimitAndDisable(t *testing.T) {
 	if s, _ = h.call("POST", "/client/accounts/"+account+"/open", client, gin.H{}); s != 404 {
 		t.Fatal("disabled account opened", s)
 	}
-	if s, _ = h.call("POST", "/client/accounts/"+account+"/status", client, gin.H{"status": "ready"}); s != 404 {
+	if s, _ = h.call("POST", "/client/accounts/"+account+"/status", client, gin.H{"status": "ready", "identifier": "15550000001"}); s != 404 {
 		t.Fatal("disabled account reports ready", s)
 	}
 	request["requestId"] = "00000000-0000-4000-8000-000000000013"

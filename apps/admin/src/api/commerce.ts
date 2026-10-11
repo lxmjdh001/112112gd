@@ -25,6 +25,17 @@ export interface AccountSummary {
   translationChars: number;
   settings: CommerceSettings;
 }
+export interface AccountBilling {
+  points: string;
+  spentPoints: number;
+  todayAccounts: number;
+  accountDays: number;
+  graceDaysUsed: number;
+  graceDaysRemaining: number;
+  todayGrace: boolean;
+  status: "normal" | "low" | "grace" | "blocked";
+  billingDay: string;
+}
 export interface PromotionSummary {
   code: string;
   enabled: boolean;
@@ -52,9 +63,12 @@ export const states: Record<string, string> = {
   refunded: "已退款",
   approved: "待打款",
   paid: "已支付",
+  grace: "缓冲使用",
   reversed: "已冲回",
 };
 export const events: Record<string, string> = {
+  registration_gift: "注册赠送",
+  account_day: "账号按日扣点",
   recharge: "充值入账",
   refund: "充值退款",
   commission: "推广返佣",

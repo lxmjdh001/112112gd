@@ -46,6 +46,8 @@ func (a *App) commerceRoutes(r *gin.RouterGroup) {
 	r.PATCH("/account/profile", a.saveProfile)
 	r.POST("/account/password", a.rate, a.changePassword)
 	r.GET("/account/summary", a.accountSummary)
+	r.GET("/account/billing", a.billingSummary)
+	r.GET("/account/billing/days", a.billingHistory)
 	r.GET("/account/ledger", a.walletHistory)
 	r.GET("/account/recharges", a.rechargeHistory)
 	r.POST("/account/recharges", a.createRecharge)
@@ -129,6 +131,9 @@ func lockWallets(ctx context.Context, tx pgx.Tx, keys ...walletKey) error {
 	return nil
 }
 func entry(ctx context.Context, tx pgx.Tx, c *gin.Context, key walletKey, event, source string, available, held int64, note string) error {
+	if key.kind == "balance" && (available%100 != 0 || held%100 != 0) {
+		return commerceError{400, "点数只支持整数，1 元 = 1 点，请使用整元金额"}
+	}
 	var balance, frozen int64
 	err := tx.QueryRow(ctx, `UPDATE wallets SET available_cents=available_cents+$3,held_cents=held_cents+$4 WHERE tenant_id=$1 AND kind=$2 AND available_cents+$3>=0 AND held_cents+$4>=0 RETURNING available_cents,held_cents`, key.tenant, key.kind, available, held).Scan(&balance, &frozen)
 	if errors.Is(err, pgx.ErrNoRows) {

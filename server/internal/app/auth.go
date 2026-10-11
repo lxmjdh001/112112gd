@@ -100,6 +100,27 @@ func (a *App) clientLogin(c *gin.Context) {
 		fail(c, 401, "登录码已停用或到期")
 		return
 	}
+	if e = lockBilling(ctx, tx, tenant); e != nil {
+		dbError(c, e)
+		return
+	}
+	expired, e := billingExpired(ctx, tx, tenant, billingDay(a.billingTime()))
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	if expired {
+		if e = revokeForBilling(ctx, tx, tenant); e != nil {
+			dbError(c, e)
+			return
+		}
+		if e = tx.Commit(ctx); e != nil {
+			dbError(c, e)
+			return
+		}
+		fail(c, 402, "点数不足且公司累计 3 天缓冲已用完，请联系平台充值后重新登录")
+		return
+	}
 	var device string
 	e = tx.QueryRow(ctx, `INSERT INTO devices(tenant_id,code_id,identity_hash,name) VALUES($1,$2,$3,$4) ON CONFLICT(code_id,identity_hash) DO UPDATE SET active=true,last_seen=now(),name=EXCLUDED.name RETURNING id::text`, tenant, code, security.Hash(b.DeviceID), b.DeviceName).Scan(&device)
 	if e != nil {
@@ -109,7 +130,7 @@ func (a *App) clientLogin(c *gin.Context) {
 	token := security.Token()
 	if _, e = tx.Exec(ctx, `DELETE FROM client_sessions WHERE device_id=$1`, device); e == nil {
 		// The device session lasts until logout/revocation. Code expiry is checked on every request.
-		_, e = tx.Exec(ctx, `INSERT INTO client_sessions VALUES($1,$2,'infinity')`, security.Hash(token), device)
+		_, e = tx.Exec(ctx, `INSERT INTO client_sessions(token_hash,device_id,expires_at) VALUES($1,$2,'infinity')`, security.Hash(token), device)
 	}
 	if e != nil {
 		dbError(c, e)

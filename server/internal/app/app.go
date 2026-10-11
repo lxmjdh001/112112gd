@@ -19,6 +19,7 @@ import (
 )
 
 type App struct {
+	BillingNow      func() time.Time
 	DB              *pgxpool.Pool
 	Key             []byte
 	mu              sync.Mutex
@@ -168,6 +169,7 @@ func (a *App) Routes() *gin.Engine {
 	client := v.Group("/client")
 	client.Use(a.auth(true))
 	client.GET("/platforms", a.clientPlatforms)
+	client.GET("/billing", a.billingSummary)
 	client.GET("/accounts", a.clientAccounts)
 	client.GET("/account-options", a.clientAccountOptions)
 	client.POST("/proxies", a.createClientProxy)
@@ -202,6 +204,17 @@ func (a *App) auth(client bool) gin.HandlerFunc {
 			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text,a.platform_operator FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor, &id.Operator)
 		}
 		if errors.Is(e, pgx.ErrNoRows) {
+			if client {
+				var revoked bool
+				if err := a.DB.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM client_sessions WHERE token_hash=$1 AND revoked_reason='billing')`, security.Hash(raw)).Scan(&revoked); err != nil {
+					dbError(c, err)
+					return
+				}
+				if revoked {
+					fail(c, 402, "公司点数缓冲已到期，全部账号已退登，请联系平台充值后重新登录")
+					return
+				}
+			}
 			fail(c, 401, "登录已失效，登录码可能已停用或到期")
 			return
 		}
@@ -210,6 +223,9 @@ func (a *App) auth(client bool) gin.HandlerFunc {
 			return
 		}
 		c.Set("identity", id)
+		if client && !a.checkBillingAccess(c, id.Tenant) {
+			return
+		}
 		c.Next()
 	}
 }

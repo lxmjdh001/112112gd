@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -68,6 +69,42 @@ func (a *App) cloudAuthorize(c *gin.Context) {
 	}
 	if !available {
 		fail(c, 404, "API 号码不可用或未分配给当前登录码")
+		return
+	}
+	if !a.checkBillingAccess(c, id.Tenant) {
+		return
+	}
+	ctx := c.Request.Context()
+	tx, e := a.DB.Begin(ctx)
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	defer tx.Rollback(ctx)
+	var phone, authStatus string
+	var enabled bool
+	if e = tx.QueryRow(ctx, `SELECT display_phone,enabled,auth_status FROM wa_cloud_numbers WHERE id::text=$1 AND tenant_id=$2`, c.Param("number"), id.Tenant).Scan(&phone, &enabled, &authStatus); e != nil {
+		dbError(c, e)
+		return
+	}
+	// Disabled or invalid numbers may still expose history to administrators.
+	// Reading that history is not an online account day.
+	if !enabled || authStatus != "valid" {
+		_ = tx.Rollback(ctx)
+		c.Next()
+		return
+	}
+	phone = regexp.MustCompile(`[^0-9]`).ReplaceAllString(phone, "")
+	if !billingPhone.MatchString(phone) {
+		fail(c, 409, "API 号码尚未同步有效手机号，请先验证号码")
+		return
+	}
+	if e = chargeAccountDay(ctx, tx, id.Tenant, c.Param("number"), "whatsapp", phone, a.billingTime()); e != nil {
+		commerceFail(c, e)
+		return
+	}
+	if e = tx.Commit(ctx); e != nil {
+		dbError(c, e)
 		return
 	}
 	c.Next()

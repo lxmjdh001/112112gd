@@ -4,6 +4,7 @@ import { currentWhatsAppCustomer } from "../../../../packages/platform/whatsapp/
 import { installCustomerPanel } from "./customer.ts";
 import { ipcRenderer } from "electron";
 import { observeWhatsApp } from "../../../../packages/platform/whatsapp/index.ts";
+import { currentWhatsAppAccount } from "../../../../packages/platform/whatsapp/self.ts";
 
 // This preload runs in an isolated world. No privileged API is exposed to WhatsApp.
 window.addEventListener("DOMContentLoaded", () => {
@@ -122,7 +123,12 @@ window.addEventListener("DOMContentLoaded", () => {
   document.body.append(host);
   // Conservative DOM observations; missing selectors never mean an invalid session.
   function report() {
-    ipcRenderer.send("wa:status", observeWhatsApp(document, navigator.onLine));
+    const status = observeWhatsApp(document, navigator.onLine);
+    ipcRenderer.send(
+      "wa:status",
+      status,
+      status === "ready" ? currentWhatsAppAccount(localStorage) : null,
+    );
   }
   report();
   setInterval(report, 20000);

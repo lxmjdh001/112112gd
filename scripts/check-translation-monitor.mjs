@@ -82,7 +82,7 @@ try {
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(base);
+  await page.goto(base + "/#/auth/login");
   await page.locator("#username").fill(fixture.username);
   await page.locator("#password").fill(fixture.password);
   await page.getByRole("button", { name: "登录", exact: true }).click();

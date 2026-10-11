@@ -290,7 +290,7 @@ try {
   await app.evaluate(async ({ webContents }, id) => {
     const w = webContents.fromId(id);
     await w.executeJavaScript(
-      `(() => {const pane=document.createElement('div');pane.id='pane-side';pane.dataset.gd7Fixture='true';const main=document.createElement('div');main.id='main';main.dataset.gd7Fixture='true';const message=document.createElement('div');message.dataset.id='false_447410419512@s.whatsapp.net_FIXTURE';main.append(message);document.body.append(pane,main)})()`,
+      `(() => {localStorage.setItem("last-wid-md","15550000001@c.us");const pane=document.createElement('div');pane.id='pane-side';pane.dataset.gd7Fixture='true';const main=document.createElement('div');main.id='main';main.dataset.gd7Fixture='true';const message=document.createElement('div');message.dataset.id='false_447410419512@s.whatsapp.net_FIXTURE';main.append(message);document.body.append(pane,main)})()`,
     );
   }, wa);
   await new Promise((r) => setTimeout(r, 2500));

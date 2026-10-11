@@ -143,7 +143,8 @@ func (a *App) openAccount(c *gin.Context) {
 }
 func (a *App) accountStatus(c *gin.Context) {
 	var b struct {
-		Status string `json:"status"`
+		Status     string `json:"status"`
+		Identifier string `json:"identifier"`
 	}
 	if c.ShouldBindJSON(&b) != nil {
 		fail(c, 400, "状态无效")
@@ -156,13 +157,44 @@ func (a *App) accountStatus(c *gin.Context) {
 		return
 	}
 	id := identity(c)
-	r, e := a.DB.Exec(c.Request.Context(), `UPDATE platform_accounts SET observed_status=$1,observed_at=now() WHERE id::text=$2 AND tenant_id=$3 AND code_id=$4 AND device_id=$5 AND connection_type='web' AND removed_at IS NULL AND paused_at IS NULL AND (proxy_id IS NULL OR EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled)) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=platform_accounts.code_id AND l.deleted_at IS NULL AND l.enabled AND platform_accounts.platform=ANY(l.allowed_platforms))`, b.Status, c.Param("id"), id.Tenant, id.Code, id.Device)
+	ctx := c.Request.Context()
+	tx, e := a.DB.Begin(ctx)
 	if e != nil {
 		dbError(c, e)
 		return
 	}
-	if r.RowsAffected() == 0 {
+	defer tx.Rollback(ctx)
+	if e = lockBilling(ctx, tx, id.Tenant); e != nil {
+		dbError(c, e)
+		return
+	}
+	var platform, identifier string
+	e = tx.QueryRow(ctx, `SELECT platform,billing_identity FROM platform_accounts WHERE id::text=$1 AND tenant_id=$2 AND code_id=$3 AND device_id=$4 AND connection_type='web' AND removed_at IS NULL AND paused_at IS NULL AND (proxy_id IS NULL OR EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled)) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=platform_accounts.code_id AND l.deleted_at IS NULL AND l.enabled AND platform_accounts.platform=ANY(l.allowed_platforms)) FOR UPDATE`, c.Param("id"), id.Tenant, id.Code, id.Device).Scan(&platform, &identifier)
+	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "账号不属于当前设备")
+		return
+	}
+	if e != nil {
+		dbError(c, e)
+		return
+	}
+	if b.Status == "ready" {
+		if !billingPhone.MatchString(b.Identifier) {
+			fail(c, 409, "尚未识别当前登录账号，请等待同步或重新加载账号")
+			return
+		}
+		identifier = b.Identifier
+		if e = chargeAccountDay(ctx, tx, id.Tenant, c.Param("id"), platform, identifier, a.billingTime()); e != nil {
+			commerceFail(c, e)
+			return
+		}
+	}
+	if _, e = tx.Exec(ctx, `UPDATE platform_accounts SET observed_status=$1,observed_at=now(),billing_identity=$3 WHERE id::text=$2`, b.Status, c.Param("id"), identifier); e != nil {
+		dbError(c, e)
+		return
+	}
+	if e = tx.Commit(ctx); e != nil {
+		dbError(c, e)
 		return
 	}
 	ok(c, true)

@@ -11,7 +11,7 @@ import (
 
 func (h *harness) commerceConfig(t *testing.T) gin.H {
 	t.Helper()
-	b := gin.H{"currency": "USD", "paymentInstructions": "test receipt only", "payoutChannel": "test transfer", "rechargeEnabled": true, "withdrawalEnabled": true, "registrationEnabled": true, "commissionBps": 1000, "minRecharge": "1.00", "minWithdrawal": "1.00"}
+	b := gin.H{"currency": "CNY", "paymentInstructions": "test receipt only", "payoutChannel": "test transfer", "rechargeEnabled": true, "withdrawalEnabled": true, "registrationEnabled": true, "commissionBps": 1000, "minRecharge": "1.00", "minWithdrawal": "1.00"}
 	if s, d := h.call("PUT", "/operations/settings", h.admin, b); s != 200 {
 		t.Fatal(s, d)
 	}
@@ -44,6 +44,9 @@ func (h *harness) credit(t *testing.T, id string, n int) {
 }
 func TestCommerceDisabledByDefaultAndMoneyParsing(t *testing.T) {
 	h := setup(t)
+	if _, e := h.app.DB.Exec(context.Background(), `UPDATE commerce_settings SET registration_enabled=false`); e != nil {
+		t.Fatal(e)
+	}
 	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "member", "password": "test-password-12345", "teamName": "test"}); s != 403 {
 		t.Fatal("registration must be explicitly enabled", s)
 	}
@@ -96,13 +99,13 @@ func TestCommerceCreditCommissionWithdrawalAndLedger(t *testing.T) {
 			t.Fatal("credit retry failed", s)
 		}
 	}
-	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "100.00" {
+	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "200.00" {
 		t.Fatal("credit repeated", b)
 	}
 	if b := h.commerceCall(t, "GET", "/promotion", h.admin, nil)["available"]; b != "10.00" {
 		t.Fatal("commission incorrect", b)
 	}
-	config["currency"] = "CNY"
+	config["currency"] = "USD"
 	if s, _ := h.call("PUT", "/operations/settings", h.admin, config); s != 409 {
 		t.Fatal("currency changed after orders", s)
 	}
@@ -117,7 +120,7 @@ func TestCommerceCreditCommissionWithdrawalAndLedger(t *testing.T) {
 	if s, _ := h.call("POST", "/operations/recharges/"+second+"/review", h.admin, gin.H{"action": "credit", "receiptReference": "receipt-1"}); s != 409 {
 		t.Fatal("receipt reused", s)
 	}
-	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "100.00" {
+	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "200.00" {
 		t.Fatal("failed receipt partially committed", b)
 	}
 	h.commerceCall(t, "POST", "/promotion/transfers", h.admin, gin.H{"amount": "3.00", "requestId": key(3)})
@@ -158,7 +161,7 @@ func TestCommerceCreditCommissionWithdrawalAndLedger(t *testing.T) {
 	if s, _ := h.call("POST", "/operations/recharges/"+order+"/review", h.admin, gin.H{"action": "refund", "note": "test refund", "refundReference": "refund-1"}); s != 409 {
 		t.Fatal("spent commission should prevent partial refund", s)
 	}
-	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "100.00" {
+	if b := h.commerceCall(t, "GET", "/account/summary", member, nil)["balance"]; b != "200.00" {
 		t.Fatal("failed refund partially debited", b)
 	}
 	h.credit(t, second, 2)

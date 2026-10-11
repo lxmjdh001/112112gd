@@ -48,6 +48,8 @@ const server = createServer(async (req, res) => {
       label: "演示工作台",
       leaseSeconds: 3600,
     };
+  else if (route === "/client/billing")
+    data = { points: "99.00", status: "normal", graceDaysRemaining: 3 };
   else if (route === "/client/accounts") data = accounts;
   else if (route === "/client/platforms") data = platforms;
   else if (route === "/client/account-options")

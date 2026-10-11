@@ -32,7 +32,7 @@ func settings(ctx context.Context, q querier, lock bool) (CommerceSettings, erro
 	return s, err
 }
 func (s CommerceSettings) response() gin.H {
-	return gin.H{"currency": s.Currency, "paymentInstructions": s.PaymentInstructions, "payoutChannel": s.PayoutChannel, "rechargeEnabled": s.RechargeEnabled, "withdrawalEnabled": s.WithdrawalEnabled, "registrationEnabled": s.RegistrationEnabled, "commissionBps": s.CommissionBPS, "minRecharge": money(s.MinRecharge), "minWithdrawal": money(s.MinWithdrawal)}
+	return gin.H{"currency": s.Currency, "paymentInstructions": s.PaymentInstructions, "payoutChannel": s.PayoutChannel, "rechargeEnabled": s.RechargeEnabled, "withdrawalEnabled": s.WithdrawalEnabled, "registrationEnabled": s.RegistrationEnabled, "commissionBps": s.CommissionBPS, "minRecharge": pointText(s.MinRecharge), "minWithdrawal": money(s.MinWithdrawal)}
 }
 func (a *App) getCommerceSettings(c *gin.Context) {
 	s, e := settings(c.Request.Context(), a.DB, false)
@@ -59,7 +59,11 @@ func (a *App) saveCommerceSettings(c *gin.Context) {
 		fail(c, 400, "币种、佣金比例或收款说明无效")
 		return
 	}
-	minRecharge, e := parseMoney(body.MinRecharge)
+	if body.Currency != "CNY" {
+		commerceFail(c, businessError("账号点数统一以人民币充值，1 元 = 1 点"))
+		return
+	}
+	minRecharge, e := parsePointAmount(body.MinRecharge)
 	if e != nil {
 		commerceFail(c, e)
 		return

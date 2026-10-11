@@ -4,8 +4,6 @@ import {
   ElButton,
   ElInput,
   ElInputNumber,
-  ElSelect,
-  ElOption,
   ElSwitch,
   ElTabs,
   ElTabPane,
@@ -27,14 +25,14 @@ const tab = ref("recharges"),
   busy = ref(false),
   rate = ref(0);
 const config = reactive<CommerceSettings>({
-  currency: "",
+  currency: "CNY",
   paymentInstructions: "",
   payoutChannel: "",
   rechargeEnabled: false,
   withdrawalEnabled: false,
   registrationEnabled: false,
   commissionBps: 0,
-  minRecharge: "1.00",
+  minRecharge: "1",
   minWithdrawal: "1.00",
 });
 const table = ref<InstanceType<typeof FinanceTable>>(),
@@ -165,11 +163,9 @@ onMounted(load);
     <ElTabPane label="结算规则" name="settings"
       ><form class="settings-form" @submit.prevent="save">
         <label class="field"
-          >结算币种<ElSelect v-model="config.currency" aria-label="结算币种" placeholder="请选择"
-            ><ElOption label="人民币 CNY" value="CNY" /><ElOption
-              label="美元 USD"
-              value="USD" /><ElOption label="USDT" value="USDT" /></ElSelect
-          ><small>统一保留两位小数。产生账务记录后不可更换币种。</small></label
+          >结算币种<ElInput model-value="人民币 CNY" disabled /><small
+            >1 元 = 1 点。账号每天消耗 1 点，翻译免费。</small
+          ></label
         >
         <label class="field"
           >推广佣金比例（%）<ElInputNumber
@@ -196,7 +192,10 @@ onMounted(load);
           >最低充值金额<ElInput
             v-model="config.minRecharge"
             aria-label="最低充值金额"
-            inputmode="decimal"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
             required /></label
         ><label class="field"
           >充值开放状态<ElSwitch

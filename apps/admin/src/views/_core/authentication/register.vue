@@ -33,7 +33,7 @@ async function submit() {
   try {
     await api.post("/auth/register", form);
     await auth.authLogin({ username: form.username, password: form.password });
-    ElMessage.success("账户已创建");
+    ElMessage.success("账户已创建，100 点体验点数已到账");
   } finally {
     busy.value = false;
   }
@@ -42,7 +42,7 @@ async function submit() {
 <template>
   <form class="register-form" @submit.prevent="submit">
     <h1>创建管理账户</h1>
-    <p>创建独立团队，在网站管理登录码、账号与业务数据。</p>
+    <p>新公司注册即送 100 点，翻译免费。每个实际上线账号每天消耗 1 点。</p>
     <ElAlert
       v-if="loaded && !enabled"
       title="注册暂未开放，请联系平台运营。"

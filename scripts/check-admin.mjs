@@ -23,7 +23,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.setDefaultTimeout(15000);
 try {
-  await page.goto("http://127.0.0.1:5779/", { waitUntil: "networkidle" });
+  await page.goto("http://127.0.0.1:5779/#/auth/login", { waitUntil: "networkidle" });
   await page.locator("#username").fill(env.BOOTSTRAP_USERNAME);
   await page.locator("#password").fill(env.BOOTSTRAP_PASSWORD);
   await page.getByRole("button", { name: "登录", exact: true }).click();

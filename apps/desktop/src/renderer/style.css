@@ -943,3 +943,13 @@ details input {
 .workspace > main {
   min-width: 0;
 }
+
+.billing-status {
+  font-size: 11px;
+  color: #63836e;
+  margin-left: auto;
+  margin-right: 16px;
+}
+.billing-low {
+  color: #c0712f;
+}
