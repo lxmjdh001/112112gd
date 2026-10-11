@@ -102,6 +102,9 @@ func (a *App) Routes() *gin.Engine {
 		if strings.Contains(c.Request.URL.Path, "/whatsapp-cloud/numbers/") && strings.HasSuffix(c.Request.URL.Path, "/media") && c.Request.Method == "POST" {
 			limit = 23 << 20
 		}
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/client/tools/assets") && (c.Request.Method == "POST" || c.Request.Method == "PATCH") {
+			limit = 7 << 20
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
@@ -167,6 +170,7 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/customers/check", a.checkClientCustomer)
 	client.POST("/conversations", a.recordClientConversation)
 	a.cloudRoutes(v, admin, client)
+	a.customerToolsRoutes(client)
 	return r
 }
 func (a *App) auth(client bool) gin.HandlerFunc {

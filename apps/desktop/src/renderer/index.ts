@@ -1,3 +1,5 @@
+import { mountCustomerTools } from "./customer-tools.ts";
+import type { CustomerContext } from "../shared/customer-tools.ts";
 import type { Account, ShellAPI, ViewState } from "../shared/types.ts";
 import { stateLabels } from "../shared/types.ts";
 import { createAccountForm } from "./account-form.ts";
@@ -10,6 +12,48 @@ declare global {
 const container = document.querySelector<HTMLDivElement>("#app")!;
 let current: ViewState;
 let busy = false;
+let tools: { host: HTMLElement; widget: ReturnType<typeof mountCustomerTools> } | undefined;
+let cloudCustomer: CustomerContext | undefined;
+function updateTools(state: ViewState) {
+  if (!tools) {
+    const host = document.createElement("section");
+    const widget = mountCustomerTools(host, {
+      toggle: (collapsed) => window.gongdan.setToolsCollapsed(collapsed),
+      async prepare(context, asset, content, text) {
+        if (context.chatId) {
+          if (cloud?.id !== context.accountId) throw Error("当前账号已切换");
+          await cloud.widget.prepareQuick(
+            context.chatId,
+            asset.kind === "image" ? { image: content } : { text },
+          );
+        } else
+          await window.gongdan.prepareQuick(
+            context,
+            asset.kind === "image" ? { assetId: asset.id } : { text },
+          );
+      },
+      async language(context, language) {
+        if (context.chatId) cloud?.widget.setCustomerLanguage(context.chatId, language);
+        else await window.gongdan.customerLanguage(context, language);
+      },
+      async translate(context, text, language) {
+        if (context.chatId)
+          return (
+            await window.gongdan.cloudRequest<{ text: string }>(context.accountId, "/translate", {
+              text,
+              target: language,
+            })
+          ).text;
+        return (await window.gongdan.customerTranslate(context, text, language)).text;
+      },
+    });
+    tools = { host, widget };
+  }
+  if (!tools.host.isConnected) container.querySelector(".workspace")!.append(tools.host);
+  const context = cloudCustomer?.accountId === state.activeId ? cloudCustomer : state.customer;
+  tools.widget.update(context, state.toolsCollapsed === true);
+}
+
 let cloud: { id: string; host: HTMLElement; widget: ReturnType<typeof mountCloudChat> } | undefined;
 const accountForm = createAccountForm(
   () => current,
@@ -88,6 +132,9 @@ function render(state: ViewState) {
     cloud = undefined;
   }
   if (!state.loggedIn) {
+    tools?.widget.dispose();
+    tools = undefined;
+    cloudCustomer = undefined;
     void accountForm.dismiss().catch(() => {});
     if (wasLoggedIn === false && container.querySelector("#login-code")) {
       const error = container.querySelector(".error")!;
@@ -144,16 +191,16 @@ function render(state: ViewState) {
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;
-  if (keepCloud) {
+  if (container.querySelector(".workspace")) {
     const updated = document.createElement("div");
     updated.innerHTML = shellMarkup;
     container.querySelector(".topbar")!.replaceWith(updated.querySelector(".topbar")!);
     container
       .querySelector(".workspace > aside")!
       .replaceWith(updated.querySelector(".workspace > aside")!);
-  } else {
-    container.innerHTML = shellMarkup;
-  }
+    if (!keepCloud)
+      container.querySelector(".workspace > main")!.replaceWith(updated.querySelector("main")!);
+  } else container.innerHTML = shellMarkup;
   if (activeCloud && !keepCloud) {
     const main = container.querySelector<HTMLElement>("main.empty")!;
     main.className = "cloud-client-content";
@@ -165,14 +212,27 @@ function render(state: ViewState) {
       cloud = {
         id,
         host,
-        widget: mountCloudChat(host, {
-          request: <T>(path: string, body?: unknown) =>
-            window.gongdan.cloudRequest<T>(id, path, body),
-        }),
+        widget: mountCloudChat(
+          host,
+          {
+            request: <T>(path: string, body?: unknown) =>
+              window.gongdan.cloudRequest<T>(id, path, body),
+          },
+          {
+            onCustomerChange: (chat) => {
+              cloudCustomer = chat
+                ? { accountId: id, identifier: chat.customerId, name: chat.name, chatId: chat.id }
+                : undefined;
+              if (current?.loggedIn) updateTools(current);
+            },
+          },
+        ),
       };
     }
     main.append(cloud.host);
   }
+  if (!activeCloud) cloudCustomer = undefined;
+  updateTools(state);
   container.querySelector("#add-account")!.addEventListener("click", () => void accountForm.open());
   container
     .querySelectorAll<HTMLButtonElement>("[data-id]")

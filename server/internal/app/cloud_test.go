@@ -27,9 +27,10 @@ const cloudToken = "test-cloud-access-token-0123456789"
 
 type cloudHarness struct {
 	*harness
-	sent    atomic.Int32
-	failure atomic.Int32
-	payload map[string]any
+	sent     atomic.Int32
+	uploaded atomic.Int32
+	failure  atomic.Int32
+	payload  map[string]any
 }
 
 func setupCloud(t *testing.T) *cloudHarness {
@@ -49,7 +50,7 @@ func setupCloud(t *testing.T) *cloudHarness {
 			if e := r.ParseMultipartForm(20 << 20); e != nil {
 				t.Error(e)
 			}
-			io.WriteString(w, `{"id":"400001"}`)
+			fmt.Fprintf(w, `{"id":"%d"}`, 400000+h.uploaded.Add(1))
 		case strings.HasSuffix(r.URL.Path, "/messages"):
 			h.sent.Add(1)
 			_ = json.NewDecoder(r.Body).Decode(&h.payload)

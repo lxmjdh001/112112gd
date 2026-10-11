@@ -1,3 +1,4 @@
+import type { CustomerContext } from "./customer-tools.ts";
 export interface Account {
   networkMode?: "system" | "proxy";
   connectionType?: "web" | "cloud";
@@ -51,6 +52,8 @@ export interface ClientAuth {
   leaseSeconds: number;
 }
 export interface ViewState {
+  customer?: CustomerContext;
+  toolsCollapsed?: boolean;
   loggedIn: boolean;
   connection: "connecting" | "online" | "reconnecting";
   label: string;
@@ -62,6 +65,20 @@ export interface ViewState {
   apiURL: string;
 }
 export interface ShellAPI {
+  toolsModal(open: boolean): Promise<void>;
+  toolsRequest<T>(method: string, path: string, body?: unknown): Promise<T>;
+  setToolsCollapsed(collapsed: boolean): Promise<void>;
+  prepareQuick(
+    context: CustomerContext,
+    content: { text?: string; assetId?: string },
+  ): Promise<void>;
+  customerTranslate(
+    context: CustomerContext,
+    text: string,
+    language: string,
+  ): Promise<{ text: string }>;
+  customerLanguage(context: CustomerContext, language: string): Promise<void>;
+
   cloudRequest<T>(numberId: string, path: string, body?: unknown): Promise<T>;
   state(): Promise<ViewState>;
   login(code: string): Promise<void>;

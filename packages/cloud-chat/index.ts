@@ -74,7 +74,14 @@ function button(text: string, action: () => void, className = "wc-button") {
 function time(value: string) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
-export function mountCloudChat(host: HTMLElement, transport: CloudTransport) {
+export interface CloudChatOptions {
+  onCustomerChange?: (chat: { id: string; customerId: string; name: string } | undefined) => void;
+}
+export function mountCloudChat(
+  host: HTMLElement,
+  transport: CloudTransport,
+  options: CloudChatOptions = {},
+) {
   let disposed = false,
     loading = false,
     selected = "",
@@ -136,6 +143,7 @@ export function mountCloudChat(host: HTMLElement, transport: CloudTransport) {
     if (selected) drafts.set(selected, draft.value);
     selected = chat.id;
     selectedChat = chat;
+    options.onCustomerChange?.(chat);
     messages = [];
     lastRead = 0;
     attachment = undefined;
@@ -542,8 +550,41 @@ export function mountCloudChat(host: HTMLElement, transport: CloudTransport) {
   }, 3000);
   void action(refresh);
   return {
+    setCustomerLanguage(chatId: string, target: string) {
+      if (!disposed && selected === chatId && cloudLanguages.some(([id]) => id === target))
+        language.value = target;
+    },
+    async prepareQuick(
+      chatId: string,
+      content: { text?: string; image?: { data: string; mime: string; filename: string } },
+    ) {
+      if (disposed || selected !== chatId || !selected) throw Error("当前客户已切换，请重新选择");
+      if (busy || !inWindow()) throw Error("当前无法放入普通消息，请等待操作完成或使用获批模板");
+      if (draft.value.trim() || attachment) throw Error("聊天输入框已有草稿或附件，请先处理后再试");
+      if (content.image) {
+        busy = true;
+        composer();
+        try {
+          const result = await transport.request<{ id: string; kind: string; filename: string }>(
+            "/media",
+            content.image,
+          );
+          if (disposed || selected !== chatId) throw Error("客户已切换，图片未放入新会话");
+          attachment = result;
+        } finally {
+          busy = false;
+          if (!disposed) composer();
+        }
+      } else {
+        draft.value = content.text || "";
+        drafts.set(selected, draft.value);
+      }
+      notify("素材已放入当前聊天，确认后点击发送");
+      draft.focus();
+    },
     dispose() {
       disposed = true;
+      options.onCustomerChange?.(undefined);
       clearInterval(timer);
       clearTimeout(searchTimer);
       host.replaceChildren();

@@ -230,6 +230,61 @@ try {
   await client.getByRole("button", { name: "进入工作台" }).click();
   await client.locator(`.account[data-id="${fixture.numberId}"]`).click();
   await client.locator(".wc-conversation").filter({ hasText: "客户 <script>" }).click();
+  await client.waitForFunction(() => !document.querySelector(".ct-language")?.disabled);
+  await client.locator(".ct-language").selectOption("fr");
+  await client.getByText("已保存当前客户的翻译语言", { exact: true }).waitFor();
+  assert.equal(await client.locator(".wc-language").inputValue(), "fr");
+  await client.getByRole("button", { name: "客户资料 / 备注", exact: true }).click();
+  await client.locator(".ct-notes").fill("API 客户独立备注");
+  await client.getByRole("button", { name: "保存资料", exact: true }).click();
+  await client.getByText("客户资料与备注已保存", { exact: true }).waitFor();
+  await client.getByRole("button", { name: "聊天工具", exact: true }).click();
+  await client.evaluate(async () => {
+    await window.gongdan.toolsRequest("POST", "/assets", {
+      kind: "text",
+      scope: "team",
+      title: "API 快捷话术",
+      body: "API 快捷回复验收",
+      category: "售前",
+    });
+  });
+  await client.getByRole("button", { name: "刷新工具资料", exact: true }).click();
+  await client.getByRole("button", { name: "团队话术", exact: true }).click();
+  await client
+    .locator(".ct-text-library .ct-asset-use")
+    .filter({ hasText: "API 快捷话术" })
+    .click();
+  let quickDialog = client.getByRole("dialog", { name: "发送预览" });
+  await quickDialog.getByRole("button", { name: "放入当前聊天" }).click();
+  await quickDialog.waitFor({ state: "hidden" });
+  assert.equal(await client.locator(".wc-draft").inputValue(), "API 快捷回复验收");
+  await client.locator(".wc-draft").fill("");
+  const quickImage = await desktop.evaluate(({ nativeImage }) =>
+    nativeImage
+      .createFromBitmap(Buffer.from([0, 140, 0, 255]), { width: 1, height: 1 })
+      .toPNG()
+      .toString("base64"),
+  );
+  await client.evaluate(async (data) => {
+    await window.gongdan.toolsRequest("POST", "/assets", {
+      kind: "image",
+      scope: "personal",
+      title: "API 报价图片",
+      mime: "image/png",
+      filename: "quote.png",
+      data,
+    });
+  }, quickImage);
+  await client.getByRole("button", { name: "刷新工具资料", exact: true }).click();
+  await client
+    .locator(".ct-image-library .ct-asset-use")
+    .filter({ hasText: "API 报价图片" })
+    .click();
+  quickDialog = client.getByRole("dialog", { name: "发送预览" });
+  await quickDialog.getByRole("button", { name: "放入当前聊天" }).click();
+  await quickDialog.waitFor({ state: "hidden" });
+  assert.match(await client.locator(".wc-file").innerText(), /quote.png/);
+  await client.locator(".wc-file").click();
   await client.locator(".wc-draft").fill("客户端验收回复");
   await client.locator(".wc-send").click();
   await client
@@ -280,6 +335,13 @@ try {
   console.log(
     "Cloud browser and Electron checks passed: onboarding, assignment, callbacks, text, template, attachment, translation UI, drafts, revocation. Graph API was mocked.",
   );
+} catch (error) {
+  if (desktop) {
+    const client = await desktop.firstWindow();
+    await client.screenshot({ path: ".runtime/cloud-client-failure.png" }).catch(() => {});
+    console.error(await client.locator(".ct-dialog-error").allTextContents());
+  }
+  throw error;
 } finally {
   if (desktop) await desktop.close();
   if (browser) await browser.close();

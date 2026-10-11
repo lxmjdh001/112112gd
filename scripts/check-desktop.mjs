@@ -7,6 +7,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import assert from "node:assert/strict";
 import { waitClientState } from "./desktop-wait.mjs";
+import { checkCustomerTools } from "./check-customer-tools.mjs";
 import { build } from "../apps/desktop/node_modules/esbuild/lib/main.js";
 const env = JSON.parse(await readFile(".runtime/e2e.json", "utf8"));
 const requests = [];
@@ -349,6 +350,7 @@ try {
       .length,
     1,
   );
+  await checkCustomerTools(app, page, wa, account.id);
   await app.evaluate(async ({ webContents }, id) => {
     await webContents
       .fromId(id)

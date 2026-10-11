@@ -1,3 +1,5 @@
+import { installChatContext } from "./chat-context.ts";
+import { currentWhatsAppCustomer } from "../../../../packages/platform/whatsapp/customer.ts";
 import { installCustomerPanel } from "./customer.ts";
 import { ipcRenderer } from "electron";
 import { observeWhatsApp } from "../../../../packages/platform/whatsapp/index.ts";
@@ -6,6 +8,7 @@ import { observeWhatsApp } from "../../../../packages/platform/whatsapp/index.ts
 window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.whatsapp.com") return;
   installCustomerPanel();
+  installChatContext();
   const host = document.createElement("div");
   host.id = "gongdan-translation";
   host.style.cssText =
@@ -33,6 +36,15 @@ window.addEventListener("DOMContentLoaded", () => {
     copy.disabled = true;
     output.textContent = "";
   };
+  ipcRenderer.on("wa:customer-language", (_event, payload) => {
+    if (
+      currentWhatsAppCustomer(document) === payload.identifier &&
+      [...lang.options].some((o) => o.value === payload.language)
+    ) {
+      invalidate();
+      lang.value = payload.language;
+    }
+  });
   input.addEventListener("input", invalidate);
   lang.addEventListener("change", invalidate);
   async function run() {

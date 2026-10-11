@@ -1,3 +1,4 @@
+import type { CustomerContext, AssetContent } from "../shared/customer-tools.ts";
 import {
   app,
   BrowserWindow,
@@ -6,6 +7,8 @@ import {
   ipcMain,
   Menu,
   clipboard,
+  ClipboardItem,
+  nativeImage,
   safeStorage,
   powerMonitor,
   type IpcMainInvokeEvent,
@@ -68,8 +71,10 @@ const state: ViewState = {
   statuses: {},
   message: "",
   apiURL,
+  toolsCollapsed: false,
 };
 interface Runtime {
+  customer?: CustomerContext;
   id: string;
   view: WebContentsView;
   ses: Session;
@@ -81,6 +86,7 @@ interface Runtime {
 const runtimes = new Map<string, Runtime>();
 const credentialsFile = () => path.join(app.getPath("userData"), "authorization.bin");
 function emit() {
+  state.customer = runtimes.get(state.activeId)?.customer;
   state.loggedIn = !!auth;
   state.apiURL = apiURL;
   if (win && !win.isDestroyed()) win.webContents.send("shell:state", state);
@@ -143,6 +149,7 @@ function saveAuth() {
           accounts: state.accounts,
           platforms: state.platforms,
           activeId: state.activeId || restoringAccount,
+          toolsCollapsed: state.toolsCollapsed,
         }),
       );
       const temporary = credentialsFile() + ".tmp";
@@ -204,7 +211,7 @@ function bounds() {
       runtime.view.setBounds({
         x: 224,
         y: 58,
-        width: Math.max(0, width - 224),
+        width: Math.max(0, width - 224 - (state.toolsCollapsed ? 42 : 330)),
         height: Math.max(0, height - 58),
       });
   }
@@ -660,6 +667,149 @@ app.whenReady().then(async () => {
       return result;
     });
   }
+  ipcMain.handle("shell:tools-modal", (event, open) => {
+    requireShell(event);
+    if (typeof open !== "boolean") throw Error("参数无效");
+    accountFormOpen = open;
+    bounds();
+  });
+  ipcMain.handle("shell:tools-collapsed", (event, collapsed) => {
+    requireShell(event);
+    if (typeof collapsed !== "boolean") throw Error("参数无效");
+    state.toolsCollapsed = collapsed;
+    bounds();
+    persistSession();
+    emit();
+  });
+  ipcMain.handle("shell:tools-request", async (event, method, route, body) => {
+    requireShell(event);
+    if (
+      !auth ||
+      !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method) ||
+      typeof route !== "string" ||
+      !/^\/(assets(?:\/[0-9a-f-]{36})?|tags|customer(?:\/tag)?)$/.test(route)
+    )
+      throw Error("工具请求无效");
+    if (body !== undefined && JSON.stringify(body).length > 7 * 1024 * 1024)
+      throw Error("内容过大");
+    return request("/client/tools" + route, body, method);
+  });
+  const nativeContext = (context: CustomerContext) => {
+    const runtime = runtimes.get(context?.accountId);
+    if (
+      !auth ||
+      !runtime ||
+      state.activeId !== runtime.id ||
+      !context.identifier ||
+      context.identifier !== runtime.customer?.identifier ||
+      runtime.view.webContents.isDestroyed()
+    )
+      throw Error("当前客户已切换，请重新选择");
+    return runtime;
+  };
+  ipcMain.handle(
+    "shell:customer-translate",
+    async (event, context: CustomerContext, text: string, language: string) => {
+      requireShell(event);
+      const runtime = nativeContext(context);
+      if (typeof text !== "string" || typeof language !== "string") throw Error("翻译参数无效");
+      const result = await runtime.translator.translate(text, language);
+      nativeContext(context);
+      return result;
+    },
+  );
+  ipcMain.handle("shell:customer-language", (event, context: CustomerContext, language: string) => {
+    requireShell(event);
+    const runtime = nativeContext(context);
+    if (typeof language !== "string" || language.length > 16) throw Error("语言无效");
+    runtime.view.webContents.send("wa:customer-language", {
+      identifier: context.identifier,
+      language,
+    });
+  });
+  const composerPending = new Map<string, { runtime: Runtime; resolve: (error: string) => void }>();
+  ipcMain.on("wa:composer-ready", (event, payload) => {
+    try {
+      const runtime = requireRuntime(event);
+      const pending = composerPending.get(payload?.requestId);
+      if (pending?.runtime === runtime)
+        pending.resolve(typeof payload.error === "string" ? payload.error : "无效响应");
+    } catch {
+      /* Reject events from other web contents. */
+    }
+  });
+  ipcMain.handle(
+    "shell:prepare-quick",
+    async (event, context: CustomerContext, content: { text?: string; assetId?: string }) => {
+      requireShell(event);
+      const runtime = nativeContext(context);
+      if (!content || (typeof content.text !== "string" && typeof content.assetId !== "string"))
+        throw Error("请选择图片或话术");
+      let asset: AssetContent | undefined;
+      if (content.assetId) {
+        if (!/^[0-9a-f-]{36}$/.test(content.assetId)) throw Error("素材无效");
+        asset = await request<AssetContent>("/client/tools/assets/" + content.assetId);
+      }
+      const text = content.text ?? asset?.body ?? "";
+      if (text.length > 16000) throw Error("话术过长");
+      if (asset?.kind === "image") {
+        const picture = nativeImage.createFromBuffer(Buffer.from(asset.data, "base64"));
+        if (picture.isEmpty()) throw Error("图片无法读取");
+        await clipboard.write([
+          new ClipboardItem({
+            "image/png": new Blob([new Uint8Array(picture.toPNG())], { type: "image/png" }),
+          }),
+        ]);
+      }
+      if (nativeContext(context) !== runtime) throw Error("账号已切换");
+      const requestId = randomUUID();
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          composerPending.delete(requestId);
+          reject(Error("未找到聊天输入框，请重新打开客户聊天"));
+        }, 4000);
+        composerPending.set(requestId, {
+          runtime,
+          resolve: (error) => {
+            clearTimeout(timer);
+            composerPending.delete(requestId);
+            error ? reject(Error(error)) : resolve();
+          },
+        });
+        runtime.view.webContents.send("wa:prepare-composer", {
+          identifier: context.identifier,
+          requestId,
+        });
+      });
+      if (nativeContext(context) !== runtime) throw Error("账号已切换");
+      runtime.view.webContents.focus();
+      if (asset?.kind === "image") {
+        runtime.view.webContents.paste();
+      } else {
+        if (!text.trim()) throw Error("话术内容为空");
+        await runtime.view.webContents.insertText(text);
+      }
+    },
+  );
+  ipcMain.on("wa:customer-context", (event, payload) => {
+    try {
+      const runtime = requireRuntime(event);
+      if (
+        typeof payload?.identifier !== "string" ||
+        typeof payload.name !== "string" ||
+        payload.name.length > 150 ||
+        (payload.identifier !== "" &&
+          !/^(?:[1-9][0-9]{6,14}|[0-9]{5,30}@lid)$/.test(payload.identifier))
+      )
+        return;
+      runtime.customer = payload.identifier
+        ? { accountId: runtime.id, identifier: payload.identifier, name: payload.name }
+        : undefined;
+      if (runtime.id === state.activeId) emit();
+    } catch {
+      /* Observations never grant access. */
+    }
+  });
   ipcMain.handle("wa:translate", async (event, payload) => {
     const runtime = requireRuntime(event);
     if (!payload || typeof payload.text !== "string" || typeof payload.target !== "string")
@@ -689,6 +839,7 @@ app.whenReady().then(async () => {
         state.label = auth!.label;
         state.accounts = Array.isArray(saved.accounts) ? saved.accounts : [];
         state.platforms = Array.isArray(saved.platforms) ? saved.platforms : [];
+        state.toolsCollapsed = saved.toolsCollapsed === true;
         restoringAccount = typeof saved.activeId === "string" ? saved.activeId : "";
         state.message = "登录已保留，正在恢复连接…";
       }
