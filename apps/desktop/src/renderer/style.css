@@ -32,6 +32,10 @@ button:disabled {
   font-size: 17px;
   font-weight: 650;
 }
+.topbar .brand {
+  font-size: 15px;
+  font-weight: 600;
+}
 .mark {
   display: grid;
   place-items: center;

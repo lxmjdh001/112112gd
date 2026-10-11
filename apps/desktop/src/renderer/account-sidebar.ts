@@ -19,8 +19,8 @@ const platforms = [
   { id: "x", name: "X", icon: "x.ico" },
 ];
 type Platform = (typeof platforms)[number];
-const icon = (platform: Platform) =>
-  `<span class="platform-icon"><img class="platform-logo" src="assets/${platform.icon}" alt="" draggable="false" />${platform.id === "whatsapp_cloud" ? '<span class="api-icon-badge">API</span>' : ""}</span>`;
+const icon = (platform: Platform, status = "") =>
+  `<span class="platform-icon ${status ? "has-status" : ""}"><img class="platform-logo" src="assets/${platform.icon}" alt="" draggable="false" />${platform.id === "whatsapp_cloud" ? '<span class="api-icon-badge">API</span>' : ""}${status ? `<small class="platform-availability" aria-hidden="true">${escape(status === "连接恢复中" ? "重连中" : status)}</small>` : ""}</span>`;
 const glyph = (path: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 const collapseIcon = glyph('<path d="M4 4v16M20 6H10m10 6H10m10 6H10M13 9l-3 3 3 3"/>');
@@ -91,7 +91,7 @@ export function createAccountSidebar(
       const isFolded = folded.has(p.id);
       return `<section class="account-group ${accounts.some((a) => a.id === state.activeId) ? "is-active" : ""}" data-platform="${p.id}" aria-labelledby="group-${p.id}">
         <div class="platform-heading">
-          <button class="platform-toggle" type="button" data-fold="${p.id}" aria-expanded="${!isFolded}" aria-controls="accounts-${p.id}" title="${p.name} · ${accounts.length} 个账号">${icon(p)}<h2 id="group-${p.id}">${p.name}</h2><span class="platform-count">${accounts.length}</span></button>
+          <button class="platform-toggle" type="button" data-fold="${p.id}" aria-expanded="${!isFolded}" aria-controls="accounts-${p.id}" title="${p.name} · ${accounts.length} 个账号">${icon(p, disabled)}<h2 id="group-${p.id}">${p.name}</h2><span class="platform-count">${accounts.length}</span></button>
           <button class="platform-add" type="button" data-add-platform="${p.id}" aria-label="添加 ${p.name} 账号" title="${disabled || (p.id === "whatsapp_cloud" ? "查看 API 号码分配" : `添加 ${p.name} 账号`)}" ${disabled ? "disabled" : ""}>+</button>
           <button class="platform-fold" type="button" data-fold="${p.id}" aria-label="${isFolded ? "展开" : "收起"} ${p.name}" aria-expanded="${!isFolded}" aria-controls="accounts-${p.id}"><span class="sidebar-chevron"></span></button>
         </div>
@@ -114,7 +114,7 @@ export function createAccountSidebar(
                   ? `请联系管理员授权 ${p.name}`
                   : disabled ||
                     (p.id === "whatsapp_cloud" ? "查看 API 号码分配" : `添加 ${p.name} 账号`);
-            return `<button class="unused-platform" data-add-platform="${p.id}" type="button" title="${title}" aria-label="${title}" ${disabled ? "disabled" : ""}>${icon(p)}<span class="unused-name">${p.name}</span>${disabled ? `<small class="platform-availability">${disabled}</small>` : ""}<span class="unused-plus" aria-hidden="true">+</span></button>`;
+            return `<button class="unused-platform" data-add-platform="${p.id}" type="button" title="${title}" aria-label="${title}" ${disabled ? "disabled" : ""}>${icon(p, disabled)}<span class="unused-name">${p.name}</span><span class="unused-plus" aria-hidden="true">+</span></button>`;
           })
           .join("")}</div>
       </div>

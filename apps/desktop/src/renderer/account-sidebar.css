@@ -25,8 +25,8 @@
   align-items: center;
   flex-shrink: 0;
   gap: 11px;
-  min-height: 94px;
-  padding: 19px 14px;
+  min-height: 80px;
+  padding: 14px;
   border-bottom: 1px solid #e5ebe7;
   background: linear-gradient(110deg, #ffebdfb0, #fffaf6a0 60%, #fff);
 }
@@ -57,16 +57,16 @@
   box-shadow: 0 2px 4px #22332b08;
 }
 .sidebar-mark {
-  width: 39px;
-  height: 39px;
+  width: 35px;
+  height: 35px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: white;
   background: #4d6cf5;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 650;
   letter-spacing: -0.5px;
   box-shadow: 0 3px 8px #4d6cf51a;
 }
@@ -75,8 +75,9 @@
 }
 .sidebar-brand-info strong {
   display: block;
-  font-size: 20px;
-  letter-spacing: -0.5px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
 }
 .sidebar-status {
   display: flex;
@@ -121,7 +122,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: 52px;
+  min-height: 46px;
   padding: 0 10px;
   background: #f3f9f5;
 }
@@ -143,8 +144,8 @@
 }
 .platform-toggle h2 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .platform-icon {
@@ -152,13 +153,13 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 9px;
 }
 .platform-icon .platform-logo {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   border-radius: 7px;
 }
@@ -226,10 +227,10 @@
 .account {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 11px;
   width: 100%;
-  min-height: 77px;
-  padding: 13px 12px;
+  min-height: 68px;
+  padding: 11px 12px;
   border: 1px solid transparent;
   border-radius: 14px;
   background: #f5f7f6;
@@ -258,13 +259,13 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   background: linear-gradient(145deg, #e1e9e5, #c6d7cd);
   color: #547b65;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 600;
 }
 .account-platform-badge {
   position: absolute;
@@ -295,8 +296,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 550;
 }
 .account small {
   display: block;
@@ -362,17 +363,17 @@
   padding: 15px 10px 14px;
 }
 .unused-heading {
-  margin: 0 4px 13px;
+  margin: 0 4px 10px;
   color: #99a29c;
-  font-size: 12px;
+  font-size: 11px;
 }
 .unused-platform {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
-  min-height: 47px;
-  padding: 7px 4px;
+  min-height: 42px;
+  padding: 6px 4px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -387,30 +388,45 @@
   opacity: 1;
   color: #909894;
 }
-.unused-platform:disabled .platform-icon {
+.unused-platform:disabled .platform-logo {
   opacity: 0.48;
   filter: saturate(0.75);
 }
 .unused-name {
-  font-size: 15px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
 }
 .platform-availability {
-  font-size: 9px;
-  color: #b0b8b2;
-  margin-left: auto;
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: -2px;
+  transform: translateX(-50%);
+  padding: 0 2px;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  background: #edf2ef;
+  color: #74827b;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 11px;
   white-space: nowrap;
+  pointer-events: none;
+}
+.platform-icon.has-status .api-icon-badge {
+  top: -2px;
+  bottom: auto;
+  right: -5px;
+  font-size: 6px;
+  line-height: 8px;
+  padding: 0 2px;
 }
 .unused-plus {
   margin-left: auto;
   padding: 0 8px;
   color: #9ba9a0;
-  font-size: 22px;
-}
-.platform-availability + .unused-plus {
-  margin-left: 0;
-  padding-left: 0;
+  font-size: 20px;
 }
 .sidebar-actions {
   display: flex;
@@ -421,7 +437,7 @@
   border-top: 1px solid #e5ebe7;
   background: #ffffff80;
 }
-.add-account {
+.account-sidebar .add-account {
   flex: 1;
   padding: 8px;
   border: 1px dashed #c7d8cd;
@@ -474,7 +490,6 @@
 .is-compact .account-info,
 .is-compact .unused-heading,
 .is-compact .unused-name,
-.is-compact .platform-availability,
 .is-compact .unused-plus,
 .is-compact .sidebar-button-label,
 .is-compact .sidebar-user {
