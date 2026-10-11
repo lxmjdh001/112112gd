@@ -46,6 +46,8 @@ import {
 } from "../../../../packages/platform/registry.ts";
 import { LINE_EXTENSION_ID } from "../../../../packages/platform/line/index.ts";
 import { ensureLineComponent, LineComponentError } from "./line-component.ts";
+import { validateFingerprint, type Fingerprint } from "../shared/fingerprint.ts";
+import { applyFingerprint, FingerprintError } from "./fingerprint.ts";
 
 // Keep the existing profile when the display name changes, including saved logins.
 app.setPath(
@@ -93,6 +95,7 @@ const state: ViewState = {
   toolsCollapsed: false,
 };
 interface Runtime {
+  fingerprintCleanup?: () => void;
   platform: string;
   customer?: CustomerContext;
   id: string;
@@ -200,8 +203,9 @@ function persistSession() {
 async function closeRuntime(runtime: Runtime) {
   runtimes.delete(runtime.id);
   runtime.translator.clear();
-  await runtime.history.close().catch(() => {});
   if (!runtime.view.webContents.isDestroyed()) runtime.view.webContents.close();
+  runtime.fingerprintCleanup?.();
+  await runtime.history.close().catch(() => {});
   await runtime.ses.setProxy({
     mode: "fixed_servers",
     proxyRules: "http://127.0.0.1:9",
@@ -445,19 +449,22 @@ async function openAccount(id: string) {
       tenantId: string;
       networkMode: "system" | "proxy";
       proxy: ProxyConfig | null;
+      fingerprint?: Fingerprint | null;
     }>(`/client/accounts/${id}/open`, {});
     if (generation !== epoch || !auth) return;
     accountsRevision++;
     for (const row of state.accounts) if (row.id === id) row.paused = false;
     const p = settings.proxy;
+    const fingerprint = validateFingerprint(settings.fingerprint);
     const ses = session.fromPartition(`persist:gd7-${settings.tenantId}-${id}`);
     if (lineDirectory && !ses.extensions.getExtension(LINE_EXTENSION_ID)) {
       const extension = await ses.extensions.loadExtension(lineDirectory);
       if (extension.id !== LINE_EXTENSION_ID)
         throw new LineComponentError("LINE 登录组件身份校验失败");
     }
-    const browserUA = chromiumUserAgent(app.userAgentFallback, app.getName());
-    ses.setUserAgent(browserUA);
+    const browserUA =
+      fingerprint?.userAgent || chromiumUserAgent(app.userAgentFallback, app.getName());
+    ses.setUserAgent(browserUA, fingerprint?.language);
     ses.webRequest.onBeforeRequest((_details, callback) =>
       callback({ cancel: !runtimes.has(id) || !auth }),
     );
@@ -584,6 +591,26 @@ async function openAccount(id: string) {
       Menu.buildFromTemplate(items).popup({ window: win });
     });
     await updateStatus(current, "loading");
+    if (fingerprint) {
+      current.fingerprintCleanup = await applyFingerprint(
+        wc,
+        fingerprint,
+        adapter.allowedOrigins,
+        () => {
+          if (!runtimes.has(id)) return;
+          state.message = "账号指纹配置已中断，请重新打开账号以恢复配置。";
+          void closeRuntime(current).then(() => {
+            if (state.activeId === id) state.activeId = "";
+            bounds();
+            emit();
+          });
+        },
+      );
+      if (!runtimes.has(id) || generation !== epoch || !auth) {
+        current.fingerprintCleanup();
+        return;
+      }
+    }
     await wc.loadURL(adapter.homeURL);
   } catch (error) {
     if (runtime && runtimes.get(id) === runtime) {
@@ -594,7 +621,7 @@ async function openAccount(id: string) {
     state.activeId = "";
     bounds();
     state.message =
-      error instanceof LineComponentError
+      error instanceof LineComponentError || error instanceof FingerprintError
         ? error.message
         : "账号打开失败，请检查代理地址、认证信息和网络连接后重试";
     emit();
@@ -837,6 +864,7 @@ app.whenReady().then(async () => {
     )
       throw Error("请填写账号名称并选择平台");
     getPlatform(input.platform);
+    const fingerprint = validateFingerprint(input.fingerprint);
     const generation = epoch;
     creatingAccount = true;
     try {
@@ -845,6 +873,7 @@ app.whenReady().then(async () => {
         platform: input.platform,
         proxyId: input.proxyId,
         requestId: input.requestId,
+        fingerprint,
       });
       if (!auth || generation !== epoch) throw Error("登录状态已变化，请重新登录后查看账号");
       await refresh();

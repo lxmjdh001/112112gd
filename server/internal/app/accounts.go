@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -109,7 +110,8 @@ func (a *App) openAccount(c *gin.Context) {
 	}
 	var account, device, protocol, host, user, cipher string
 	var port int
-	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),COALESCE(p.password_cipher,'') FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND a.connection_type='web' AND a.removed_at IS NULL AND (a.proxy_id IS NULL OR p.enabled) AND a.platform=ANY($4::text[]) FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code, grants).Scan(&account, &device, &protocol, &host, &port, &user, &cipher)
+	var fingerprint json.RawMessage
+	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),COALESCE(p.password_cipher,''),a.browser_fingerprint FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND a.connection_type='web' AND a.removed_at IS NULL AND (a.proxy_id IS NULL OR p.enabled) AND a.platform=ANY($4::text[]) FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code, grants).Scan(&account, &device, &protocol, &host, &port, &user, &cipher, &fingerprint)
 	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "账号、平台授权或代理不可用")
 		return
@@ -139,7 +141,7 @@ func (a *App) openAccount(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
-	ok(c, gin.H{"id": account, "tenantId": id.Tenant, "networkMode": accountNetworkMode(host), "proxy": proxy})
+	ok(c, gin.H{"id": account, "tenantId": id.Tenant, "networkMode": accountNetworkMode(host), "proxy": proxy, "fingerprint": fingerprint})
 }
 func (a *App) accountStatus(c *gin.Context) {
 	var b struct {

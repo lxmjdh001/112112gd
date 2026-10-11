@@ -1,7 +1,9 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -50,16 +52,21 @@ func (a *App) clientAccountOptions(c *gin.Context) {
 
 func (a *App) createClientAccount(c *gin.Context) {
 	var body struct {
-		Label     string `json:"label"`
-		Platform  string `json:"platform"`
-		ProxyID   string `json:"proxyId"`
-		RequestID string `json:"requestId"`
+		Label       string              `json:"label"`
+		Platform    string              `json:"platform"`
+		ProxyID     string              `json:"proxyId"`
+		RequestID   string              `json:"requestId"`
+		Fingerprint *accountFingerprint `json:"fingerprint"`
 	}
 	if c.ShouldBindJSON(&body) != nil {
 		fail(c, 400, "请填写账号名称并选择平台")
 		return
 	}
 	body.Label = strings.TrimSpace(body.Label)
+	if err := validateAccountFingerprint(body.Fingerprint); err != nil {
+		fail(c, 400, err.Error())
+		return
+	}
 	var requestID pgtype.UUID
 	if body.Label == "" || utf8.RuneCountInString(body.Label) > 100 || !nativePlatform(body.Platform) || len(body.RequestID) != 36 || requestID.Scan(body.RequestID) != nil {
 		fail(c, 400, "请填写 1–100 字的账号名称，并选择已开放的平台")
@@ -100,9 +107,17 @@ func (a *App) createClientAccount(c *gin.Context) {
 	}
 	var account, label, platform, proxy, creator string
 	var removed bool
-	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,COALESCE(proxy_id::text,''),created_by_device_id::text,removed_at IS NOT NULL FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator, &removed)
+	var savedFingerprint json.RawMessage
+	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,COALESCE(proxy_id::text,''),created_by_device_id::text,removed_at IS NOT NULL,browser_fingerprint FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator, &removed, &savedFingerprint)
 	if err == nil {
-		if removed || creator != id.Device || label != body.Label || platform != body.Platform || proxy != body.ProxyID {
+		var previous *accountFingerprint
+		if len(savedFingerprint) > 0 {
+			if err = json.Unmarshal(savedFingerprint, &previous); err != nil {
+				dbError(c, err)
+				return
+			}
+		}
+		if removed || creator != id.Device || label != body.Label || platform != body.Platform || proxy != body.ProxyID || !reflect.DeepEqual(previous, body.Fingerprint) {
 			fail(c, 409, "添加请求已使用，请关闭弹窗后重新添加")
 			return
 		}
@@ -148,7 +163,8 @@ func (a *App) createClientAccount(c *gin.Context) {
 			return
 		}
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,device_id,label,platform,client_request_id,created_by_device_id) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$4) RETURNING id::text`, id.Tenant, id.Code, proxy, id.Device, body.Label, body.Platform, requestID).Scan(&account)
+	fingerprintJSON, _ := json.Marshal(body.Fingerprint)
+	err = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,device_id,label,platform,client_request_id,created_by_device_id,browser_fingerprint) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$4,NULLIF($8::jsonb,'null'::jsonb)) RETURNING id::text`, id.Tenant, id.Code, proxy, id.Device, body.Label, body.Platform, requestID, fingerprintJSON).Scan(&account)
 	if err != nil {
 		dbError(c, err)
 		return

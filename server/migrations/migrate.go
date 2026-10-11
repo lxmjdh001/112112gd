@@ -63,6 +63,9 @@ var translationMonitor string
 //go:embed 019_account_day_billing.sql
 var accountDayBilling string
 
+//go:embed 020_account_fingerprints.sql
+var accountFingerprints string
+
 func Run(ctx context.Context, db *pgxpool.Pool) error {
 	tx, e := db.Begin(ctx)
 	if e != nil {
@@ -78,7 +81,7 @@ func Run(ctx context.Context, db *pgxpool.Pool) error {
 	for _, migration := range []struct {
 		version int
 		sql     string
-	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}, {5, accountPromotion}, {6, baseline}, {7, codePlatforms}, {8, persistentClientSessions}, {9, copyableLoginCodes}, {10, loginCodeDeletion}, {11, sharedProxyIPLimits}, {12, whatsappCloud}, {13, accountSystemNetwork}, {14, customerTools}, {15, accountLifecycle}, {16, translationProviders}, {17, libreTranslateProvider}, {18, translationMonitor}, {19, accountDayBilling}} {
+	}{{1, initial}, {2, loginCodeGroups}, {3, clientAccountCreation}, {4, proxyControls}, {5, accountPromotion}, {6, baseline}, {7, codePlatforms}, {8, persistentClientSessions}, {9, copyableLoginCodes}, {10, loginCodeDeletion}, {11, sharedProxyIPLimits}, {12, whatsappCloud}, {13, accountSystemNetwork}, {14, customerTools}, {15, accountLifecycle}, {16, translationProviders}, {17, libreTranslateProvider}, {18, translationMonitor}, {19, accountDayBilling}, {20, accountFingerprints}} {
 		var applied bool
 		if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, migration.version).Scan(&applied); e != nil {
 			return e

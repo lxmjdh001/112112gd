@@ -1,4 +1,5 @@
 import type { CustomerContext } from "./customer-tools.ts";
+import type { Fingerprint } from "./fingerprint.ts";
 export interface Account {
   paused?: boolean;
   hidden?: boolean;
@@ -40,6 +41,7 @@ export interface AccountOptions {
   }[];
 }
 export interface NewAccount {
+  fingerprint?: Fingerprint | null;
   label: string;
   platform: string;
   proxyId: string;

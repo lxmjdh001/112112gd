@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { _electron as electron } from "playwright";
 import { waitClientState } from "./desktop-wait.mjs";
+import { userAgentFor } from "../apps/desktop/src/shared/fingerprint.ts";
 
 const profile = await mkdtemp(path.join(tmpdir(), "d1-native-platforms-"));
 const tenant = "00000000-0000-4000-8000-000000000010";
@@ -28,6 +29,28 @@ const platforms = [
   { id: "telegram", name: "Telegram" },
   { id: "line", name: "LINE" },
 ];
+const fingerprint =
+  process.env.NATIVE_FINGERPRINT_CHECK === "1"
+    ? {
+        version: 1,
+        seed: "0123456789abcdef0123456789abcdef",
+        os: "windows",
+        userAgent: userAgentFor("windows", "144.0.0.0"),
+        gpuVendor: "",
+        gpuRenderer: "",
+        screenWidth: 1920,
+        screenHeight: 1080,
+        timezone: "Asia/Tokyo",
+        language: "ja-JP",
+        hardwareConcurrency: 8,
+        deviceMemory: 4,
+        webrtc: "proxy",
+        canvasNoise: true,
+        audioNoise: true,
+        webglNoise: true,
+        blockLocalFonts: false,
+      }
+    : null;
 const observations = [],
   unexpected = [];
 const server = createServer(async (req, res) => {
@@ -58,7 +81,7 @@ const server = createServer(async (req, res) => {
     assert.ok(row);
     if (match[2] === "open") {
       row.paused = false;
-      data = { id: row.id, tenantId: tenant, networkMode: "system", proxy: null };
+      data = { id: row.id, tenantId: tenant, networkMode: "system", proxy: null, fingerprint };
     }
     if (match[2] === "close") row.paused = true;
     if (match[2] === "remove") accounts = accounts.filter((a) => a !== row);

@@ -1,4 +1,5 @@
 import type { NewProxy, ViewState } from "../shared/types.ts";
+import { mountFingerprintForm } from "./fingerprint-form.ts";
 
 const escape = (text: string) =>
   text.replace(
@@ -47,13 +48,14 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
         <form id="account-form" hidden>
           <p class="muted">在本机打开官方登录页面，扫码或按平台提示登录后开始聊天。</p>
           <div class="network-summary"><span id="network-summary"></span><button class="text-btn" type="button" id="change-network">更改</button></div>
-          <label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
-          <label for="account-label">账号名称</label><input id="account-label" placeholder="例如：客服账号 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required />
+          <div class="account-basics"><div><label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
+          </div><div><label for="account-label">账号名称</label><input id="account-label" placeholder="例如：客服账号 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required /></div></div>
           <div id="proxy-settings" hidden>
             <div class="proxy-picker-heading"><label for="account-proxy">选择独立 IP</label><button class="text-btn" type="button" id="add-proxy">＋ 添加代理 IP</button></div><select id="account-proxy"><option value="">请选择代理 IP</option></select>
             <p class="muted" id="proxy-empty"></p>
             <p class="error" id="proxy-limit-error"></p>
           </div>
+          <section id="account-fingerprint"></section>
           ${!options.platforms.length ? '<p class="error">当前登录码没有可用平台，请联系管理员在登录码设置中勾选。</p>' : ""}
           <p class="error" role="alert" id="account-error"></p>
           <div class="dialog-actions"><button class="secondary" type="button" data-cancel>取消</button><button class="primary" type="submit">添加并登录</button></div>
@@ -71,6 +73,9 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
       document.body.append(modal);
       let networkMode: "system" | "proxy" = "system";
       const form = modal.querySelector<HTMLFormElement>("#account-form")!;
+      const fingerprint = mountFingerprintForm(
+        modal.querySelector<HTMLElement>("#account-fingerprint")!,
+      );
       const proxyForm = modal.querySelector<HTMLFormElement>("#new-proxy-form")!;
       let saving = false;
       const choice = modal.querySelector<HTMLElement>("#network-choice")!;
@@ -231,6 +236,13 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
         event.preventDefault();
         if (saving || !options.platforms.length || (networkMode === "proxy" && !proxySelect.value))
           return;
+        let profile;
+        try {
+          profile = fingerprint.value();
+        } catch (error) {
+          modal.querySelector("#account-error")!.textContent = message(error);
+          return;
+        }
         saving = true;
         const controls = [
           ...modal.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>(
@@ -250,6 +262,7 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
             platform: modal.querySelector<HTMLSelectElement>("#account-platform")!.value,
             proxyId: networkMode === "proxy" ? proxySelect.value : "",
             requestId,
+            fingerprint: profile,
           });
           if (dialog !== modal || !getState().loggedIn) return;
           await dismiss();

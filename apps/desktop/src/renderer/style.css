@@ -957,3 +957,185 @@ details input {
 .billing-low {
   color: #c0712f;
 }
+
+/* Account-specific browser settings. Keep the network chooser compact. */
+.account-dialog:has(.fingerprint-card):has(#account-form:not([hidden])) {
+  width: min(720px, calc(100vw - 48px));
+}
+.fingerprint-card {
+  margin-top: 22px;
+  padding: 18px;
+  border: 1px solid #e1e7ee;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.fp-heading,
+.fp-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fp-heading {
+  justify-content: space-between;
+}
+.fp-heading h3 {
+  margin: 0 0 5px;
+  font-size: 14px;
+}
+.fp-status {
+  font-size: 11px;
+  color: #7b899a;
+}
+.fp-actions button {
+  padding: 7px 10px;
+  border: 1px solid #dce4ed;
+  border-radius: 8px;
+  background: white;
+  color: #53667b;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fp-actions [data-fp-random] {
+  background: #eef0ff;
+  border-color: #d7dcff;
+  color: #5263d9;
+}
+.fp-help {
+  font-size: 11px;
+  color: #8290a0;
+  line-height: 1.7;
+  margin: 10px 0;
+}
+.fp-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 14px;
+}
+.fingerprint-card .fp-grid label {
+  margin: 0;
+  font-size: 12px;
+  color: #627287;
+  min-width: 0;
+}
+.fingerprint-card input,
+.fingerprint-card select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  margin: 5px 0 0;
+  padding: 7px 9px;
+  border: 1px solid #dae2eb;
+  border-radius: 8px;
+  background: white;
+  color: #34465c;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.fp-wide {
+  grid-column: 1 / -1;
+}
+.fp-resolution {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fp-resolution span {
+  margin-top: 5px;
+  color: #a0a9b5;
+}
+.fp-privacy {
+  margin-top: 16px;
+  font-size: 12px;
+  color: #627287;
+}
+.fp-privacy summary {
+  cursor: pointer;
+}
+.fp-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.fingerprint-card .fp-checks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+}
+.fingerprint-card .fp-checks input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #596ce7;
+}
+@media (max-width: 600px) {
+  .fp-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .fp-grid {
+    grid-template-columns: 1fr;
+  }
+  .fp-checks {
+    grid-template-columns: 1fr;
+  }
+}
+.account-basics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.account-dialog .account-basics label {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.account-basics input,
+.account-basics select {
+  font-size: 13px;
+  padding: 8px 10px;
+  height: 38px;
+  margin-top: 6px;
+}
+#account-form > .muted {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+#account-form > .dialog-actions {
+  position: sticky;
+  bottom: -26px;
+  z-index: 1;
+  background: white;
+  margin-top: 12px;
+  padding: 14px 0 2px;
+  border-top: 1px solid #e7ecf1;
+}
+.fp-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fp-gpu-preset {
+  grid-column: span 2;
+}
+.fp-gpu-manual summary {
+  font-size: 11px;
+  color: #8290a0;
+  cursor: pointer;
+}
+.fp-gpu-manual .fp-grid {
+  grid-template-columns: 1fr 1fr;
+  padding-top: 10px;
+}
+@media (max-width: 600px) {
+  .fp-grid {
+    grid-template-columns: 1fr;
+  }
+  .fp-gpu-preset {
+    grid-column: auto;
+  }
+  .account-basics {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
