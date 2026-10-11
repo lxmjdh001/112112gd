@@ -5,7 +5,7 @@ export interface ProxyAuth {
   username: string;
   password: string;
 }
-export function throughSession(ses: Session, auth: ProxyAuth) {
+export function throughSession(ses: Session, auth?: ProxyAuth) {
   return (url: string, init?: RequestInit) =>
     new Promise<Response>((resolve, reject) => {
       const request = net.request({
@@ -35,11 +35,17 @@ export function throughSession(ses: Session, auth: ProxyAuth) {
       }
       init?.signal?.addEventListener("abort", abort, { once: true });
       request.on("login", (info, callback) => {
-        if (info.isProxy && info.host === auth.host && info.port === auth.port && attempts++ < 1)
+        if (
+          auth &&
+          info.isProxy &&
+          info.host === auth.host &&
+          info.port === auth.port &&
+          attempts++ < 1
+        )
           callback(auth.username, auth.password);
         else callback();
       });
-      request.on("error", () => finish(new Error("proxy request failed")));
+      request.on("error", () => finish(new Error("network request failed")));
       request.on("response", (response) => {
         const chunks: Buffer[] = [];
         let size = 0;

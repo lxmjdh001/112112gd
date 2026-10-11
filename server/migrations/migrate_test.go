@@ -101,8 +101,14 @@ func TestUpgradeExistingCodesAndRepeatMigration(t *testing.T) {
 		t.Fatal("legacy code lost WhatsApp permission", grants, err)
 	}
 	var versions int
-	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 12 {
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`).Scan(&versions); err != nil || versions != 13 {
 		t.Fatal("migration not idempotent", err, versions)
+	}
+	if err = db.QueryRow(ctx, `SELECT count(*)=3 FROM platform_accounts WHERE proxy_id=$1 AND code_id=$2`, proxy, code).Scan(&preserved); err != nil || !preserved {
+		t.Fatal("existing proxy bindings changed", err)
+	}
+	if _, err = db.Exec(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,label) VALUES($1,$2,'system network')`, tenant, code); err != nil {
+		t.Fatal("upgraded schema rejected system networking", err)
 	}
 	if err = db.QueryRow(ctx, `SELECT expires_at='infinity'::timestamptz FROM client_sessions WHERE token_hash='live-token'`).Scan(&preserved); err != nil || !preserved {
 		t.Fatal("live session did not become persistent", err)

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -140,5 +141,80 @@ func TestConcurrentClientAccountProxyQuota(t *testing.T) {
 	}
 	if created != 1 || denied != 7 {
 		t.Fatal("account quota race", created, denied)
+	}
+}
+
+func TestClientAccountSystemNetwork(t *testing.T) {
+	h := setup(t)
+	code, raw := h.code(t)
+	_, login := h.login(raw, "system-network")
+	client := login["data"].(map[string]any)["accessToken"].(string)
+	options := h.commerceCall(t, "GET", "/client/account-options", client, nil)
+	if len(options["proxies"].([]any)) != 0 {
+		t.Fatal("fixture should have no proxies")
+	}
+	body := gin.H{"label": "当前电脑网络", "platform": "whatsapp", "proxyId": "", "requestId": key(1100)}
+	account := h.commerceCall(t, "POST", "/client/accounts", client, body)["id"].(string)
+	if retry := h.commerceCall(t, "POST", "/client/accounts", client, body); retry["id"] != account {
+		t.Fatal("system account retry duplicated the account", retry)
+	}
+	var stored bool
+	if err := h.app.DB.QueryRow(context.Background(), `SELECT proxy_id IS NULL AND connection_type='web' FROM platform_accounts WHERE id=$1`, account).Scan(&stored); err != nil || !stored {
+		t.Fatal("system account must not allocate a proxy", err)
+	}
+	for _, route := range []string{"/client/accounts", "/platform-accounts"} {
+		token := client
+		if route == "/platform-accounts" {
+			token = h.admin
+		}
+		status, list := h.call("GET", route, token, nil)
+		if status != 200 || len(list["data"].([]any)) != 1 {
+			t.Fatal("missing system account", status, list)
+		}
+		row := list["data"].([]any)[0].(map[string]any)
+		if row["networkMode"] != "system" || row["proxyHost"] != "" || row["proxyPort"] != float64(0) {
+			t.Fatal("invalid network display", row)
+		}
+		if route == "/client/accounts" && row["available"] != true {
+			t.Fatal("system account unavailable", row)
+		}
+	}
+	opened := h.commerceCall(t, "POST", "/client/accounts/"+account+"/open", client, gin.H{})
+	if opened["networkMode"] != "system" || opened["proxy"] != nil {
+		t.Fatal("system network not explicit", opened)
+	}
+	payload := gin.H{"accountId": account, "status": "ready", "identifier": "447410419512", "provider": "google-free", "inputChars": 4, "outputChars": 2, "targetLanguage": "en", "requestId": key(1101)}
+	routes := []string{"/client/accounts/" + account + "/status", "/client/customers/check", "/client/conversations", "/client/usage"}
+	for _, route := range routes {
+		if status, result := h.call("POST", route, client, payload); status != 200 {
+			t.Fatal("system account operation rejected", route, status, result)
+		}
+	}
+	_, otherLogin := h.login(raw, "other-system-device")
+	other := otherLogin["data"].(map[string]any)["accessToken"].(string)
+	if status, _ := h.call("POST", "/client/accounts/"+account+"/open", other, gin.H{}); status != 409 {
+		t.Fatal("system account shared across devices", status)
+	}
+	for _, route := range routes {
+		if status, _ := h.call("POST", route, other, payload); status != 404 {
+			t.Fatal("other device accessed system account", route, status)
+		}
+	}
+	// A missing/disabled proxy is an error, never an implicit switch to system networking.
+	body["proxyId"] = "missing"
+	body["requestId"] = key(1102)
+	if status, _ := h.call("POST", "/client/accounts", client, body); status != 400 {
+		t.Fatal("invalid proxy silently fell back", status)
+	}
+	h.commerceCall(t, "PATCH", "/login-codes/"+code, h.admin, gin.H{"label": "system", "enabled": true, "expiresAt": time.Now().Add(time.Hour), "allowedPlatforms": []string{}})
+	for _, route := range append(routes, "/client/accounts/"+account+"/open") {
+		if status, _ := h.call("POST", route, client, payload); status != 404 {
+			t.Fatal("revoked system account accepted", route, status)
+		}
+	}
+	body["proxyId"] = ""
+	body["requestId"] = key(1100)
+	if status, _ := h.call("POST", "/client/accounts", client, body); status != 403 {
+		t.Fatal("system retry bypassed revocation", status)
 	}
 }

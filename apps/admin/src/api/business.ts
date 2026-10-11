@@ -46,6 +46,7 @@ export interface Account {
   label: string;
   platform: string;
   codeLabel: string;
+  networkMode?: "system" | "proxy";
   proxyHost: string;
   proxyPort: number;
   status: string;

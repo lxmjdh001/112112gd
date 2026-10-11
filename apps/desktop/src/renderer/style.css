@@ -379,3 +379,32 @@ aside {
 .wa-cloud-chat .wc-language {
   width: auto;
 }
+
+.account-dialog [hidden] {
+  display: none;
+}
+.network-intro {
+  color: #758199;
+  line-height: 1.7;
+  margin: 20px 0 24px;
+}
+.network-default {
+  width: 100%;
+  background: #139d66;
+}
+.network-custom {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  font-size: 14px;
+}
+.network-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f4f7fc;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}

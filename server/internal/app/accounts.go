@@ -9,7 +9,7 @@ import (
 )
 
 func (a *App) listAccounts(c *gin.Context) {
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,l.label,p.host,p.port,a.observed_status,a.observed_at,COALESCE(d.name,''),COALESCE(d.active,false),d.last_seen,p.enabled,a.platform=ANY(l.allowed_platforms),l.deleted_at IS NOT NULL FROM platform_accounts a JOIN login_codes l ON a.code_id=l.id JOIN proxies p ON p.id=a.proxy_id LEFT JOIN devices d ON d.id=a.device_id WHERE a.tenant_id=$1 ORDER BY a.created_at DESC`, identity(c).Tenant)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,l.label,COALESCE(p.host,''),COALESCE(p.port,0),a.observed_status,a.observed_at,COALESCE(d.name,''),COALESCE(d.active,false),d.last_seen,(a.proxy_id IS NULL OR COALESCE(p.enabled,false)),a.platform=ANY(l.allowed_platforms),l.deleted_at IS NOT NULL FROM platform_accounts a JOIN login_codes l ON a.code_id=l.id LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN devices d ON d.id=a.device_id WHERE a.tenant_id=$1 AND a.connection_type='web' ORDER BY a.created_at DESC`, identity(c).Tenant)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -37,7 +37,7 @@ func (a *App) listAccounts(c *gin.Context) {
 		if codeDeleted {
 			state = "code_deleted"
 		}
-		out = append(out, gin.H{"id": id, "label": label, "platform": platform, "codeLabel": code, "proxyHost": host, "proxyPort": port, "status": state, "observedAt": at, "deviceName": device})
+		out = append(out, gin.H{"id": id, "label": label, "platform": platform, "codeLabel": code, "proxyHost": host, "proxyPort": port, "networkMode": accountNetworkMode(host), "status": state, "observedAt": at, "deviceName": device})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -52,7 +52,7 @@ func (a *App) listAccounts(c *gin.Context) {
 }
 func (a *App) clientAccounts(c *gin.Context) {
 	id := identity(c)
-	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,p.host,p.port,COALESCE(a.device_id::text,''),p.enabled,a.platform=ANY(l.allowed_platforms) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id JOIN login_codes l ON l.id=a.code_id WHERE a.tenant_id=$1 AND a.code_id=$2 AND l.deleted_at IS NULL ORDER BY a.created_at`, id.Tenant, id.Code)
+	rows, e := a.DB.Query(c.Request.Context(), `SELECT a.id::text,a.label,a.platform,COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(a.device_id::text,''),(a.proxy_id IS NULL OR COALESCE(p.enabled,false)),a.platform=ANY(l.allowed_platforms) FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id JOIN login_codes l ON l.id=a.code_id WHERE a.tenant_id=$1 AND a.code_id=$2 AND l.deleted_at IS NULL AND a.connection_type='web' ORDER BY a.created_at`, id.Tenant, id.Code)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -75,7 +75,7 @@ func (a *App) clientAccounts(c *gin.Context) {
 		} else if device != "" && device != id.Device {
 			reason = "other_device"
 		}
-		out = append(out, gin.H{"id": key, "label": label, "platform": platform, "proxyHost": host, "proxyPort": port, "available": reason == "", "unavailableReason": reason})
+		out = append(out, gin.H{"id": key, "label": label, "platform": platform, "proxyHost": host, "proxyPort": port, "networkMode": accountNetworkMode(host), "available": reason == "", "unavailableReason": reason})
 	}
 	if e = rows.Err(); e != nil {
 		dbError(c, e)
@@ -109,7 +109,7 @@ func (a *App) openAccount(c *gin.Context) {
 	}
 	var account, device, protocol, host, user, cipher string
 	var port int
-	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),p.protocol,p.host,p.port,p.username,p.password_cipher FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND p.enabled AND a.platform=ANY($4::text[]) FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code, grants).Scan(&account, &device, &protocol, &host, &port, &user, &cipher)
+	e = tx.QueryRow(ctx, `SELECT a.id::text,COALESCE(a.device_id::text,''),COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),COALESCE(p.password_cipher,'') FROM platform_accounts a LEFT JOIN proxies p ON p.id=a.proxy_id WHERE a.id::text=$1 AND a.tenant_id=$2 AND a.code_id=$3 AND a.connection_type='web' AND (a.proxy_id IS NULL OR p.enabled) AND a.platform=ANY($4::text[]) FOR UPDATE OF a`, c.Param("id"), id.Tenant, id.Code, grants).Scan(&account, &device, &protocol, &host, &port, &user, &cipher)
 	if errors.Is(e, pgx.ErrNoRows) {
 		fail(c, 404, "账号、平台授权或代理不可用")
 		return
@@ -122,10 +122,14 @@ func (a *App) openAccount(c *gin.Context) {
 		fail(c, 409, "该账号已绑定其他设备，请管理员先解绑；新设备需重新扫码")
 		return
 	}
-	password, e := security.Open(a.Key, cipher)
-	if e != nil {
-		dbError(c, e)
-		return
+	var proxy any
+	if host != "" {
+		password, err := security.Open(a.Key, cipher)
+		if err != nil {
+			dbError(c, err)
+			return
+		}
+		proxy = gin.H{"protocol": protocol, "host": host, "port": port, "username": user, "password": password}
 	}
 	if _, e = tx.Exec(ctx, `UPDATE platform_accounts SET device_id=$1 WHERE id=$2`, id.Device, account); e != nil {
 		dbError(c, e)
@@ -135,7 +139,7 @@ func (a *App) openAccount(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
-	ok(c, gin.H{"id": account, "tenantId": id.Tenant, "proxy": gin.H{"protocol": protocol, "host": host, "port": port, "username": user, "password": password}})
+	ok(c, gin.H{"id": account, "tenantId": id.Tenant, "networkMode": accountNetworkMode(host), "proxy": proxy})
 }
 func (a *App) accountStatus(c *gin.Context) {
 	var b struct {
@@ -152,7 +156,7 @@ func (a *App) accountStatus(c *gin.Context) {
 		return
 	}
 	id := identity(c)
-	r, e := a.DB.Exec(c.Request.Context(), `UPDATE platform_accounts SET observed_status=$1,observed_at=now() WHERE id::text=$2 AND tenant_id=$3 AND code_id=$4 AND device_id=$5 AND EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=platform_accounts.code_id AND l.deleted_at IS NULL AND l.enabled AND platform_accounts.platform=ANY(l.allowed_platforms))`, b.Status, c.Param("id"), id.Tenant, id.Code, id.Device)
+	r, e := a.DB.Exec(c.Request.Context(), `UPDATE platform_accounts SET observed_status=$1,observed_at=now() WHERE id::text=$2 AND tenant_id=$3 AND code_id=$4 AND device_id=$5 AND connection_type='web' AND (proxy_id IS NULL OR EXISTS(SELECT 1 FROM proxies p WHERE p.id=platform_accounts.proxy_id AND p.enabled)) AND EXISTS(SELECT 1 FROM login_codes l WHERE l.id=platform_accounts.code_id AND l.deleted_at IS NULL AND l.enabled AND platform_accounts.platform=ANY(l.allowed_platforms))`, b.Status, c.Param("id"), id.Tenant, id.Code, id.Device)
 	if e != nil {
 		dbError(c, e)
 		return
@@ -162,4 +166,12 @@ func (a *App) accountStatus(c *gin.Context) {
 		return
 	}
 	ok(c, true)
+}
+
+// An unproxied native account follows the computer's system network settings.
+func accountNetworkMode(host string) string {
+	if host == "" {
+		return "system"
+	}
+	return "proxy"
 }

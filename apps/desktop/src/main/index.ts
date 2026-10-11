@@ -75,7 +75,7 @@ interface Runtime {
   ses: Session;
   translator: GoogleFreeTranslator;
   bridge?: Bridge;
-  proxyAuth: ProxyAuth;
+  proxyAuth?: ProxyAuth;
   status: string;
 }
 const runtimes = new Map<string, Runtime>();
@@ -352,10 +352,12 @@ async function openAccount(id: string) {
   let bridge: Bridge | undefined;
   let runtime: Runtime | undefined;
   try {
-    const settings = await request<{ id: string; tenantId: string; proxy: ProxyConfig }>(
-      `/client/accounts/${id}/open`,
-      {},
-    );
+    const settings = await request<{
+      id: string;
+      tenantId: string;
+      networkMode: "system" | "proxy";
+      proxy: ProxyConfig | null;
+    }>(`/client/accounts/${id}/open`, {});
     if (generation !== epoch || !auth) return;
     const p = settings.proxy;
     const ses = session.fromPartition(`persist:gd7-${settings.tenantId}-${id}`);
@@ -364,28 +366,32 @@ async function openAccount(id: string) {
     ses.webRequest.onBeforeRequest((_details, callback) =>
       callback({ cancel: !runtimes.has(id) || !auth }),
     );
-    let host = p.host,
-      port = p.port,
-      username = p.username,
-      password = p.password,
-      protocol = p.protocol;
-    if (protocol === "socks5") {
-      bridge = await socksBridge(p);
-      host = "127.0.0.1";
-      port = bridge.port;
-      username = bridge.username;
-      password = bridge.password;
-      protocol = "http";
+    let proxyAuth: ProxyAuth | undefined;
+    if (p) {
+      let { host, port, username, password, protocol } = p;
+      if (protocol === "socks5") {
+        bridge = await socksBridge(p);
+        host = "127.0.0.1";
+        port = bridge.port;
+        username = bridge.username;
+        password = bridge.password;
+        protocol = "http";
+      }
+      await ses.setProxy({
+        mode: "fixed_servers",
+        proxyRules: `${protocol}://${host.includes(":") ? "[" + host + "]" : host}:${port}`,
+        proxyBypassRules: "<-loopback>",
+      });
+      proxyAuth = { host, port, username, password };
+    } else if (settings.networkMode === "system") {
+      // Explicitly reset persisted sessions to the current OS network settings.
+      await ses.setProxy({ mode: "system" });
+    } else {
+      throw new Error("账号网络配置无效，请刷新后重试");
     }
-    await ses.setProxy({
-      mode: "fixed_servers",
-      proxyRules: `${protocol}://${host.includes(":") ? "[" + host + "]" : host}:${port}`,
-      proxyBypassRules: "<-loopback>",
-    });
     await ses.closeAllConnections();
     ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     ses.setPermissionCheckHandler(() => false);
-    const proxyAuth = { host, port, username, password };
     const view = new WebContentsView({
       webPreferences: {
         session: ses,
@@ -436,8 +442,14 @@ async function openAccount(id: string) {
     wc.setUserAgent(browserUA);
     wc.on("login", (event, _details, info, callback) => {
       event.preventDefault();
-      if (_details.firstAuthAttempt && info.isProxy && info.host === host && info.port === port)
-        callback(username, password);
+      if (
+        proxyAuth &&
+        _details.firstAuthAttempt &&
+        info.isProxy &&
+        info.host === proxyAuth.host &&
+        info.port === proxyAuth.port
+      )
+        callback(proxyAuth.username, proxyAuth.password);
       else callback();
     });
     wc.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -604,7 +616,7 @@ app.whenReady().then(async () => {
       typeof input.proxyId !== "string" ||
       typeof input.requestId !== "string"
     )
-      throw Error("请填写账号名称并选择平台和代理");
+      throw Error("请填写账号名称并选择平台");
     getPlatform(input.platform);
     const generation = epoch;
     creatingAccount = true;

@@ -114,6 +114,8 @@ try {
   await page.getByRole("button", { name: "＋ 添加账号", exact: true }).waitFor();
   await page.screenshot({ path: ".runtime/desktop-shell.png" });
   await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "是否设置独立 IP？" }).waitFor();
+  await page.getByRole("button", { name: "设置独立 IP", exact: true }).click();
   await page.getByRole("dialog", { name: "添加账号" }).waitFor();
   await page.locator("#account-label").fill("验收 WhatsApp");
   await page.locator("#account-proxy").selectOption(p.id);
@@ -174,6 +176,8 @@ try {
   assert(requests.includes("web.whatsapp.com"));
   // Keep the native page alive, but hide it while the shell's form is open.
   await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "是否设置独立 IP？" }).waitFor();
+  await page.getByRole("button", { name: "设置独立 IP", exact: true }).click();
   await page.getByRole("dialog", { name: "添加账号" }).waitFor();
   assert.equal(
     await app.evaluate(({ BrowserWindow }) =>
@@ -211,6 +215,8 @@ try {
     ),
   };
   await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "是否设置独立 IP？" }).waitFor();
+  await page.getByRole("button", { name: "设置独立 IP", exact: true }).click();
   await page.getByRole("dialog", { name: "添加账号" }).waitFor();
   assert.equal(
     await page.getByRole("button", { name: "添加并登录", exact: true }).isDisabled(),
@@ -493,6 +499,59 @@ try {
     { tenant: (await api("/user/info")).tenantId, account: account.id },
   );
   assert.equal(whileDisabled, "one", "Closing a disabled view must retain its storage");
+  // With no enabled proxies, the default path still creates a usable native account.
+  await page.getByRole("button", { name: "＋ 添加账号", exact: true }).click();
+  await page.getByRole("dialog", { name: "是否设置独立 IP？" }).waitFor();
+  await page.screenshot({ path: ".runtime/desktop-network-choice.png" });
+  await page.getByRole("button", { name: "设置独立 IP", exact: true }).click();
+  assert.equal(
+    await page.getByRole("button", { name: "添加并登录", exact: true }).isDisabled(),
+    true,
+  );
+  await page.getByRole("button", { name: "更改", exact: true }).click();
+  await page.getByRole("button", { name: "使用当前电脑网络（默认）", exact: true }).click();
+  assert.equal(await page.locator("#account-proxy").isVisible(), false);
+  assert.equal(
+    await page.getByRole("button", { name: "添加并登录", exact: true }).isEnabled(),
+    true,
+  );
+  await page.locator("#account-label").fill("当前电脑网络验收");
+  await page.getByRole("button", { name: "添加并登录", exact: true }).click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  const systemAccount = (await api("/platform-accounts")).find(
+    (a) => a.label === "当前电脑网络验收",
+  );
+  assert.equal(systemAccount.networkMode, "system");
+  assert.equal(systemAccount.proxyHost, "");
+  await waitClientState(
+    page,
+    (s) =>
+      s.accounts.some((a) => a.id === systemAccount.id && a.available) &&
+      s.activeId === systemAccount.id,
+  );
+  const routing = await app.evaluate(
+    async ({ session }, { tenant, id }) => {
+      const reference = session.fromPartition("system-network-reference");
+      await reference.setProxy({ mode: "system" });
+      const accountSession = session.fromPartition(`persist:gd7-${tenant}-${id}`);
+      return {
+        expected: await reference.resolveProxy("https://web.whatsapp.com"),
+        actual: await accountSession.resolveProxy("https://web.whatsapp.com"),
+        cookies: (await accountSession.cookies.get({ name: "gd7_isolation_probe" })).length,
+      };
+    },
+    { tenant: (await api("/user/info")).tenantId, id: systemAccount.id },
+  );
+  assert.equal(
+    routing.actual,
+    routing.expected,
+    "Default account must follow the OS network, not a managed proxy",
+  );
+  assert.equal(routing.cookies, 0, "Default network must retain a separate account profile");
+  await waitClientState(
+    page,
+    (s) => s.statuses[systemAccount.id] && s.statuses[systemAccount.id] !== "loading",
+  );
   // Re-enabling retains the same profile and never requires creating a new account.
   await api("/proxies/" + p.id, { enabled: true }, "PATCH");
   await page.evaluate(() => window.gongdan.refresh());
@@ -530,6 +589,7 @@ try {
         "client account creation and admin synchronization",
         "native view preserved behind account form",
         "shared proxy IP quota feedback",
+        "network choice: no-proxy default creation, system routing, separate account cookies",
         "authenticated HTTP proxy",
         "official WhatsApp page",
         "translation overlay",

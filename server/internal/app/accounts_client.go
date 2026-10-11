@@ -56,13 +56,13 @@ func (a *App) createClientAccount(c *gin.Context) {
 		RequestID string `json:"requestId"`
 	}
 	if c.ShouldBindJSON(&body) != nil {
-		fail(c, 400, "请填写账号名称并选择平台和代理")
+		fail(c, 400, "请填写账号名称并选择平台")
 		return
 	}
 	body.Label = strings.TrimSpace(body.Label)
 	var requestID pgtype.UUID
-	if body.Label == "" || utf8.RuneCountInString(body.Label) > 100 || body.Platform != "whatsapp" || body.ProxyID == "" || len(body.RequestID) != 36 || requestID.Scan(body.RequestID) != nil {
-		fail(c, 400, "请填写 1–100 字的账号名称，选择 WhatsApp 和可用代理")
+	if body.Label == "" || utf8.RuneCountInString(body.Label) > 100 || body.Platform != "whatsapp" || len(body.RequestID) != 36 || requestID.Scan(body.RequestID) != nil {
+		fail(c, 400, "请填写 1–100 字的账号名称，选择 WhatsApp")
 		return
 	}
 	id := identity(c)
@@ -99,7 +99,7 @@ func (a *App) createClientAccount(c *gin.Context) {
 		return
 	}
 	var account, label, platform, proxy, creator string
-	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,proxy_id::text,created_by_device_id::text FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator)
+	err = tx.QueryRow(ctx, `SELECT id::text,label,platform,COALESCE(proxy_id::text,''),created_by_device_id::text FROM platform_accounts WHERE code_id=$1 AND client_request_id=$2`, id.Code, requestID).Scan(&account, &label, &platform, &proxy, &creator)
 	if err == nil {
 		if creator != id.Device || label != body.Label || platform != body.Platform || proxy != body.ProxyID {
 			fail(c, 409, "添加请求已使用，请关闭弹窗后重新添加")
@@ -112,39 +112,42 @@ func (a *App) createClientAccount(c *gin.Context) {
 		dbError(c, err)
 		return
 	}
-	var proxyHost string
-	err = tx.QueryRow(ctx, `SELECT host FROM proxies WHERE id::text=$1 AND tenant_id=$2`, body.ProxyID, id.Tenant).Scan(&proxyHost)
-	if errors.Is(err, pgx.ErrNoRows) {
-		fail(c, 400, "代理不可用，请刷新后选择")
-		return
+	// An empty proxy ID explicitly selects the current computer network.
+	if body.ProxyID != "" {
+		var proxyHost string
+		err = tx.QueryRow(ctx, `SELECT host FROM proxies WHERE id::text=$1 AND tenant_id=$2`, body.ProxyID, id.Tenant).Scan(&proxyHost)
+		if errors.Is(err, pgx.ErrNoRows) {
+			fail(c, 400, "代理不可用，请刷新后选择")
+			return
+		}
+		if err == nil {
+			err = lockProxyHosts(ctx, tx, id.Tenant, []string{proxyHost})
+		}
+		if err != nil {
+			dbError(c, err)
+			return
+		}
+		var proxyMax int
+		err = tx.QueryRow(ctx, `SELECT id::text,max_accounts_per_platform FROM proxies WHERE id::text=$1 AND tenant_id=$2 AND enabled FOR UPDATE`, body.ProxyID, id.Tenant).Scan(&proxy, &proxyMax)
+		if errors.Is(err, pgx.ErrNoRows) {
+			fail(c, 400, "代理不可用，请刷新后选择")
+			return
+		}
+		if err != nil {
+			dbError(c, err)
+			return
+		}
+		var proxyUsed int
+		if err = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE p.tenant_id=$1 AND p.host=$2 AND a.platform=$3`, id.Tenant, proxyHost, body.Platform).Scan(&proxyUsed); err != nil {
+			dbError(c, err)
+			return
+		}
+		if proxyUsed >= proxyMax {
+			fail(c, 409, "该 IP 在当前平台的登录账号数已达上限，请选择其他 IP")
+			return
+		}
 	}
-	if err == nil {
-		err = lockProxyHosts(ctx, tx, id.Tenant, []string{proxyHost})
-	}
-	if err != nil {
-		dbError(c, err)
-		return
-	}
-	var proxyMax int
-	err = tx.QueryRow(ctx, `SELECT id::text,max_accounts_per_platform FROM proxies WHERE id::text=$1 AND tenant_id=$2 AND enabled FOR UPDATE`, body.ProxyID, id.Tenant).Scan(&proxy, &proxyMax)
-	if errors.Is(err, pgx.ErrNoRows) {
-		fail(c, 400, "代理不可用，请刷新后选择")
-		return
-	}
-	if err != nil {
-		dbError(c, err)
-		return
-	}
-	var proxyUsed int
-	if err = tx.QueryRow(ctx, `SELECT count(*) FROM platform_accounts a JOIN proxies p ON p.id=a.proxy_id WHERE p.tenant_id=$1 AND p.host=$2 AND a.platform=$3`, id.Tenant, proxyHost, body.Platform).Scan(&proxyUsed); err != nil {
-		dbError(c, err)
-		return
-	}
-	if proxyUsed >= proxyMax {
-		fail(c, 409, "该 IP 在当前平台的登录账号数已达上限，请选择其他 IP")
-		return
-	}
-	err = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,device_id,label,platform,client_request_id,created_by_device_id) VALUES($1,$2,$3,$4,$5,$6,$7,$4) RETURNING id::text`, id.Tenant, id.Code, proxy, id.Device, body.Label, body.Platform, requestID).Scan(&account)
+	err = tx.QueryRow(ctx, `INSERT INTO platform_accounts(tenant_id,code_id,proxy_id,device_id,label,platform,client_request_id,created_by_device_id) VALUES($1,$2,NULLIF($3,'')::uuid,$4,$5,$6,$7,$4) RETURNING id::text`, id.Tenant, id.Code, proxy, id.Device, body.Label, body.Platform, requestID).Scan(&account)
 	if err != nil {
 		dbError(c, err)
 		return

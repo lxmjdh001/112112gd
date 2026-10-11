@@ -1,4 +1,5 @@
 export interface Account {
+  networkMode?: "system" | "proxy";
   connectionType?: "web" | "cloud";
   status?: string;
   id: string;
