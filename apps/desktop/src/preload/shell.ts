@@ -22,6 +22,7 @@ const api: ShellAPI = {
   removeAccount: (id) => ipcRenderer.invoke("shell:remove-account", id),
   accountForm: (open) => ipcRenderer.invoke("shell:account-form", open),
   createAccount: (account) => ipcRenderer.invoke("shell:create-account", account),
+  createProxy: (proxy) => ipcRenderer.invoke("shell:create-proxy", proxy),
   onState: (fn) => {
     ipcRenderer.on("shell:state", (_e, state) => fn(state));
   },

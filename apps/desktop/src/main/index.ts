@@ -24,6 +24,7 @@ import type {
   AccountOptions,
   ClientAuth,
   NewAccount,
+  NewProxy,
   ProxyConfig,
   ViewState,
 } from "../shared/types.ts";
@@ -711,6 +712,39 @@ app.whenReady().then(async () => {
     accountFormOpen = true;
     bounds();
     return options;
+  });
+  ipcMain.handle("shell:create-proxy", async (event, input: NewProxy) => {
+    requireShell(event);
+    if (!auth) throw Error("请先登录客户端");
+    if (creatingAccount || changingAccount) throw Error("正在处理账号，请稍后");
+    if (
+      !input ||
+      ![input.label, input.protocol, input.host, input.username, input.password].every(
+        (v) => typeof v === "string" && v.length <= 1024,
+      ) ||
+      !Number.isInteger(input.port) ||
+      input.port < 1 ||
+      input.port > 65535
+    )
+      throw Error("请填写有效的代理配置");
+    const generation = epoch;
+    creatingAccount = true;
+    try {
+      const result = await request<{ id: string }>("/client/proxies", {
+        label: input.label,
+        protocol: input.protocol,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        password: input.password,
+      });
+      if (!auth || generation !== epoch) throw Error("登录状态已变化");
+      const options = await request<AccountOptions>("/client/account-options");
+      if (!auth || generation !== epoch) throw Error("登录状态已变化");
+      return { id: result.id, options };
+    } finally {
+      creatingAccount = false;
+    }
   });
   ipcMain.handle("shell:create-account", async (event, input: NewAccount) => {
     requireShell(event);

@@ -7,8 +7,10 @@ const adminOnly = process.argv.includes("--admin-only");
 const desktopOnly = process.argv.includes("--desktop-only");
 const sessionOnly = process.argv.includes("--session-only");
 const lifecycleOnly = process.argv.includes("--lifecycle-only");
-if ([adminOnly, desktopOnly, sessionOnly, lifecycleOnly].filter(Boolean).length > 1)
+const proxyOnly = process.argv.includes("--proxy-only");
+if ([adminOnly, desktopOnly, sessionOnly, lifecycleOnly, proxyOnly].filter(Boolean).length > 1)
   throw Error("Choose only one focused suite");
+const withAdmin = !desktopOnly && !sessionOnly && !lifecycleOnly && !proxyOnly;
 const pg = process.env.GONGDAN_PG_BIN || "/opt/homebrew/opt/postgresql@17/bin";
 const database =
   process.env.TEST_DATABASE_URL || "postgres://127.0.0.1:55437/gongdan007?sslmode=disable";
@@ -57,7 +59,7 @@ async function ready(url) {
   }
   throw Error("Service did not start: " + url);
 }
-for (const port of desktopOnly || sessionOnly || lifecycleOnly ? [18081] : [18081, 5779]) {
+for (const port of withAdmin ? [18081, 5779] : [18081]) {
   try {
     await fetch(`http://127.0.0.1:${port}`);
     throw Error("E2E port is already occupied: " + port);
@@ -69,11 +71,11 @@ await mkdir(".runtime", { recursive: true });
 await writeFile(".runtime/e2e.json", JSON.stringify(settings), { mode: 0o600 });
 sql("CREATE SCHEMA " + schema);
 try {
-  if (!desktopOnly && !sessionOnly && !lifecycleOnly) await run("pnpm", ["build:admin"]);
+  if (withAdmin) await run("pnpm", ["build:admin"]);
   if (!adminOnly) await run("pnpm", ["build:desktop"]);
   launch("go", ["run", "./cmd/api"], settings, path.resolve("server"));
   await ready("http://127.0.0.1:18081/healthz");
-  if (!desktopOnly && !sessionOnly && !lifecycleOnly) {
+  if (withAdmin) {
     launch(
       "pnpm",
       [
@@ -95,9 +97,13 @@ try {
     await run(process.execPath, ["scripts/check-baseline.mjs"]);
   }
   if (!adminOnly) {
-    if (lifecycleOnly) await run(process.execPath, ["scripts/check-account-lifecycle.mjs"]);
+    if (proxyOnly) await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
+    else if (lifecycleOnly) await run(process.execPath, ["scripts/check-account-lifecycle.mjs"]);
     else {
-      if (!sessionOnly) await run(process.execPath, ["scripts/check-desktop.mjs"]);
+      if (!sessionOnly) {
+        await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
+        await run(process.execPath, ["scripts/check-desktop.mjs"]);
+      }
       await run(process.execPath, ["scripts/check-client-session.mjs"]);
     }
   }

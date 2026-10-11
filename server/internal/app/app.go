@@ -161,6 +161,7 @@ func (a *App) Routes() *gin.Engine {
 	client.GET("/platforms", a.clientPlatforms)
 	client.GET("/accounts", a.clientAccounts)
 	client.GET("/account-options", a.clientAccountOptions)
+	client.POST("/proxies", a.createClientProxy)
 	client.POST("/accounts", a.createClientAccount)
 	client.POST("/heartbeat", a.heartbeat)
 	client.POST("/logout", a.clientLogout)

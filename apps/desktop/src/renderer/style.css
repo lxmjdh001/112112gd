@@ -430,6 +430,28 @@ aside {
   gap: 10px;
   margin-top: 24px;
 }
+.proxy-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 0 9px;
+  gap: 12px;
+}
+.account-dialog .proxy-picker-heading label {
+  margin: 0;
+}
+.proxy-picker-heading .text-btn {
+  color: #4d6cf5;
+  padding: 0;
+}
+.proxy-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.proxy-fields > div {
+  min-width: 0;
+}
 .secondary {
   background: white;
   border: 1px solid #dfe5ee;

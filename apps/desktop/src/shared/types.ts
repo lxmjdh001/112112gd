@@ -45,6 +45,9 @@ export interface NewAccount {
   proxyId: string;
   requestId: string;
 }
+export interface NewProxy extends ProxyConfig {
+  label: string;
+}
 export interface ClientAuth {
   accessToken: string;
   deviceId: string;
@@ -92,6 +95,7 @@ export interface ShellAPI {
   removeAccount(id: string): Promise<void>;
   accountForm(open: boolean): Promise<AccountOptions | undefined>;
   createAccount(account: NewAccount): Promise<string>;
+  createProxy(proxy: NewProxy): Promise<{ id: string; options: AccountOptions }>;
   onState(fn: (s: ViewState) => void): void;
 }
 export const stateLabels: Record<string, string> = {
