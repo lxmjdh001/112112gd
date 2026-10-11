@@ -98,7 +98,10 @@ func (a *App) rate(c *gin.Context) {
 func (a *App) Routes() *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.SetTrustedProxies(nil)
+	// Production Caddy overwrites X-Real-IP. Only a proxy on this machine may
+	// supply it; external clients cannot bypass login limits with forwarded headers.
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
+	r.RemoteIPHeaders = []string{"X-Real-IP"}
 	r.Use(func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		c.Header("X-Content-Type-Options", "nosniff")

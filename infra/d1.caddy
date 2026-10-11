@@ -1,0 +1,34 @@
+# Merge this site block into the existing Caddy configuration only after a
+# backup. Do not replace a shared Caddyfile or overwrite unrelated site blocks.
+# If a CDN forwards HTTPS visitors over HTTP, preserve the existing verified
+# CDN routing instead of enabling a redirect loop; inspect the live config first.
+scrm.chuhai7.com {
+    encode gzip zstd
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+    @api path /api/* /healthz
+    handle @api {
+        reverse_proxy 127.0.0.1:18080 {
+            # Never pass through a visitor-supplied X-Real-IP header.
+            header_up X-Real-IP {remote_host}
+        }
+    }
+    # Retired endpoints must not return the SPA or reach the old backend.
+    @retired path /web-api/* /updates/* /downloads/*
+    handle @retired {
+        respond "This version has been retired." 410
+    }
+    handle {
+        root * /opt/d1scrm/current/web
+        @html path / /index.html
+        header @html Cache-Control "no-cache"
+        @assets path /assets/*
+        header @assets Cache-Control "public, max-age=31536000, immutable"
+        try_files {path} /index.html
+        file_server
+    }
+}

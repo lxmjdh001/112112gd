@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily D1 Scrm backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=600
+Unit=d1-backup.service
+
+[Install]
+WantedBy=timers.target

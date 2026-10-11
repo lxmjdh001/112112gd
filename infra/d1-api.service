@@ -1,0 +1,29 @@
+[Unit]
+Description=D1 Scrm API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=d1scrm
+Group=d1scrm
+WorkingDirectory=/opt/d1scrm/current
+EnvironmentFile=/etc/d1scrm/api.env
+ExecStart=/opt/d1scrm/current/api
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

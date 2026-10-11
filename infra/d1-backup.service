@@ -1,0 +1,8 @@
+[Unit]
+Description=D1 Scrm database and encryption key backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/d1-backup
+UMask=0077
