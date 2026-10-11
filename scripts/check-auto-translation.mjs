@@ -90,7 +90,6 @@ try {
   await page.getByText("译：中文：Quero 500 unidades.", { exact: false }).waitFor();
   await editor.fill("今天发报价单");
   await page.getByText("将发送：pt: 今天发报价单", { exact: false }).waitFor();
-  await page.getByText("翻译服务：MyMemory", { exact: false }).first().waitFor();
   assert.equal(
     await page.evaluate(
       () => window.nativeFixture.calls.find((c) => c.text === "今天发报价单").source,
@@ -110,10 +109,6 @@ try {
     window.nativeFixture.mount();
   });
   await page.getByText("原文：今天发报价单", { exact: true }).waitFor();
-  await page
-    .locator("[data-gd7-auto-translation=message]")
-    .getByText("翻译服务：MyMemory", { exact: false })
-    .waitFor();
   await page.screenshot({ path: ".runtime/native-auto-translation.png" });
   await page.evaluate(() => {
     window.nativeFixture.fail = "不能发";
@@ -265,10 +260,6 @@ try {
   const draft = cloud.locator(".wc-draft");
   await draft.fill("今天发报价单");
   await cloud.getByText("将发送：pt: 今天发报价单", { exact: false }).waitFor();
-  await cloud
-    .locator(".wc-draft-translation")
-    .getByText("翻译服务：MyMemory", { exact: true })
-    .waitFor();
   await cloud.locator(".wc-send").click();
   await cloud.locator(".wc-out").getByText("今天发报价单", { exact: true }).waitFor();
   await cloud.locator(".wc-out").getByText("译：pt: 今天发报价单", { exact: true }).waitFor();

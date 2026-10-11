@@ -99,10 +99,7 @@ export function mountCloudChat(
   let selectedChat: Chat | undefined;
   let pending: { fingerprint: string; requestId: string } | undefined;
   let attachment: { id: string; kind: string; filename: string } | undefined;
-  const translations = new Map<
-    string,
-    { text?: string; error?: string; loading?: boolean; provider?: string }
-  >();
+  const translations = new Map<string, { text?: string; error?: string; loading?: boolean }>();
   const translator = new AutomaticTranslator((text, target, source) =>
     transport.request("/translate", { text, target, source }),
   );
@@ -279,9 +276,7 @@ export function mountCloudChat(
             "p",
             "wc-translation",
             translated?.text
-              ? "译：" +
-                  translated.text +
-                  (translated.provider ? "\n翻译服务：" + translated.provider : "")
+              ? "译：" + translated.text
               : translated?.error
                 ? "翻译失败：" + translated.error
                 : "正在自动翻译…",
@@ -347,10 +342,7 @@ export function mountCloudChat(
       void translator
         .translate(m.body, "zh-CN", sourceHint)
         .then((text) => {
-          translations.set(key, {
-            text,
-            provider: translator.provider(m.body, "zh-CN", sourceHint),
-          });
+          translations.set(key, { text });
         })
         .catch((e) => {
           translations.set(key, { error: String(e.message || e) });
@@ -379,8 +371,6 @@ export function mountCloudChat(
           if (disposed || ticket !== previewVersion || chat !== selected) return;
           translatedDraft = { source: text, text: result, language: target, chat };
           box.replaceChildren(element("p", "", "将发送：" + result));
-          const provider = translator.provider(text, target, "zh-CN");
-          if (provider) box.append(element("small", "", "翻译服务：" + provider));
         })
         .catch((e) => {
           if (!disposed && ticket === previewVersion)

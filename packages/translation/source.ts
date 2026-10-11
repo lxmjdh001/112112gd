@@ -44,14 +44,3 @@ export function detectSource(text: string, hint = "") {
   if (validHint && !strong) return validHint;
   return first?.lang === "zh" ? "zh-CN" : first?.lang || validHint || (latin ? "en" : "");
 }
-
-export function providerLabel(provider?: string) {
-  return (
-    (
-      { "google-free": "Google", mymemory: "MyMemory", original: "原文（同语言）" } as Record<
-        string,
-        string
-      >
-    )[provider || ""] || ""
-  );
-}

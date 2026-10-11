@@ -69,8 +69,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if (current !== version) return;
       lastResult = result.text;
       output.textContent = result.text;
-      $(".source").textContent =
-        `翻译服务：${result.provider === "mymemory" ? "MyMemory" : result.provider === "original" ? "原文（同语言）" : "Google"}`;
+
       copy.disabled = false;
     } catch {
       if (current === version) {

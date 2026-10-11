@@ -9,11 +9,7 @@ interface Original {
   text: string;
 }
 interface Transport {
-  translate(
-    text: string,
-    target: string,
-    source?: string,
-  ): Promise<{ text: string; provider?: string }>;
+  translate(text: string, target: string, source?: string): Promise<{ text: string }>;
   loadOriginals(identifier: string): Promise<Record<string, Original>>;
   saveOriginal(id: string, value: Original): Promise<void>;
 }
@@ -26,10 +22,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
   const translator = new AutomaticTranslator(transport.translate);
   const languages = new Map<string, string>();
   const originals = new Map<string, Original>();
-  const translated = new Map<
-    string,
-    { text?: string; error?: string; loading?: boolean; provider?: string }
-  >();
+  const translated = new Map<string, { text?: string; error?: string; loading?: boolean }>();
   const pending: {
     source: string;
     text: string;
@@ -105,13 +98,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
         .then((text) => {
           if (disposed || ticket !== previewTicket || currentPeer() !== identifier) return;
           prepared = { peer: identifier, source, text, target };
-          show(
-            "将发送：" +
-              text +
-              (translator.provider(source, target, "zh-CN")
-                ? "\n翻译服务：" + translator.provider(source, target, "zh-CN")
-                : ""),
-          );
+          show("将发送：" + text);
         })
         .catch((e) => {
           if (!disposed && ticket === previewTicket) show("翻译失败，原文未发送：" + errorText(e));
@@ -218,10 +205,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
         void translator
           .translate(source, "zh-CN", sourceHint)
           .then((text) => {
-            translated.set(key, {
-              text,
-              provider: translator.provider(source, "zh-CN", sourceHint),
-            });
+            translated.set(key, { text });
           })
           .catch((e) => {
             translated.set(key, { error: errorText(e) });
@@ -236,7 +220,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
         textNode,
         key,
         result?.text
-          ? "译：" + result.text + (result.provider ? "\n翻译服务：" + result.provider : "")
+          ? "译：" + result.text
           : result?.error
             ? "翻译失败：" + result.error
             : "正在自动翻译…",
