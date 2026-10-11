@@ -54,7 +54,7 @@ function accountMarkup(account: Account, state: ViewState, platform: Platform) {
   const scanning =
     !account.paused && account.available && state.statuses[account.id] === "qr_required";
   const label = scanning ? "等待扫码登录" : account.label;
-  const initials = [...account.label.trim()].slice(0, 2).join("").toUpperCase() || "007";
+  const initials = [...account.label.trim()].slice(0, 2).join("").toUpperCase() || "D1";
   return `<div class="account-item">
     <button type="button" class="account ${account.id === state.activeId ? "active" : ""} ${account.paused ? "paused" : ""}" data-id="${escape(account.id)}" title="${escape(account.label)} · ${escape(status)}" ${account.id === state.activeId ? 'aria-current="true"' : ""} ${account.available ? "" : "disabled"}>
       <span class="account-avatar" aria-hidden="true">${escape(initials)}<span class="account-platform-badge">${icon(platform)}</span></span>
@@ -102,7 +102,7 @@ export function createAccountSidebar(
       </section>`;
     };
     return `<aside class="account-sidebar ${state.sidebarCollapsed ? "is-compact" : ""}" aria-label="平台与账号">
-      <div class="sidebar-brand"><button class="sidebar-collapse icon-button" id="sidebar-toggle" type="button" title="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-label="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-expanded="${!state.sidebarCollapsed}">${collapseIcon}</button><span class="sidebar-mark">007</span><div class="sidebar-brand-info"><strong>工单007</strong><div class="sidebar-status"><span title="网页已就绪或 API 可用"><i class="is-ready"></i>${readyCount} 就绪</span><span title="等待登录、已退出或暂不可用"><i></i>${visible.length - readyCount} 未就绪</span></div></div></div>
+      <div class="sidebar-brand"><button class="sidebar-collapse icon-button" id="sidebar-toggle" type="button" title="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-label="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-expanded="${!state.sidebarCollapsed}">${collapseIcon}</button><span class="sidebar-mark">D1</span><div class="sidebar-brand-info"><strong>D1 Scrm</strong><div class="sidebar-status"><span title="网页已就绪或 API 可用"><i class="is-ready"></i>${readyCount} 就绪</span><span title="等待登录、已退出或暂不可用"><i></i>${visible.length - readyCount} 未就绪</span></div></div></div>
       <div class="account-list">${added.map(group).join("")}
         <div class="unused-platforms"><p class="unused-heading">还没添加的平台</p>${unused
           .map((p) => {

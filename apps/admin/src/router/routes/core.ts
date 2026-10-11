@@ -13,7 +13,7 @@ const coreRoutes: RouteRecordRaw[] = [
     path: "/home",
     component: () => import("#/views/public/home.vue"),
     meta: {
-      title: "工单007 · 跨境沟通工作台",
+      title: "D1 工单 · D1scrm｜多账号客服与免费翻译",
       hideInMenu: true,
       hideInTab: true,
       ignoreAccess: true,

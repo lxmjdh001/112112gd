@@ -28,7 +28,7 @@ set +a
 python3 - "$DATA" <<'PYACCESS'
 import os,pathlib,sys
 p=pathlib.Path(sys.argv[1])/'admin-access.txt'
-p.write_text('工单007 本机开发环境\n后台：http://127.0.0.1:5777\n账号：'+os.environ['BOOTSTRAP_USERNAME']+'\n密码：'+os.environ['BOOTSTRAP_PASSWORD']+'\n');p.chmod(0o600)
+p.write_text('D1 Scrm 本机开发环境\n后台：http://127.0.0.1:5777\n账号：'+os.environ['BOOTSTRAP_USERNAME']+'\n密码：'+os.environ['BOOTSTRAP_PASSWORD']+'\n');p.chmod(0o600)
 PYACCESS
 printf '%s\n' "Local credentials: $DATA/development.env" 'API: http://127.0.0.1:18080'
 cd "$ROOT/server"

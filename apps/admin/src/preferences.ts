@@ -1,7 +1,7 @@
 import { defineOverridesPreferences } from "@vben/preferences";
 export const overridesPreferences = defineOverridesPreferences({
   app: {
-    name: "工单007",
+    name: "D1 Scrm",
     defaultHomePath: "/dashboard",
     locale: "zh-CN",
     enableRefreshToken: false,

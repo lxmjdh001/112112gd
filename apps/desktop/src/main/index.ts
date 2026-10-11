@@ -40,8 +40,14 @@ import { socksBridge, type Bridge } from "./proxy.ts";
 import { throughSession, type ProxyAuth } from "./network.ts";
 import { getPlatform } from "../../../../packages/platform/registry.ts";
 
-if (process.env.GONGDAN_USER_DATA)
-  app.setPath("userData", path.resolve(process.env.GONGDAN_USER_DATA));
+// Keep the existing profile when the display name changes, including saved logins.
+app.setPath(
+  "userData",
+  process.env.GONGDAN_USER_DATA
+    ? path.resolve(process.env.GONGDAN_USER_DATA)
+    : path.join(app.getPath("appData"), "@gongdan/desktop"),
+);
+app.setName("D1 Scrm");
 app.commandLine.appendSwitch("force-webrtc-ip-handling-policy", "disable_non_proxied_udp");
 app.commandLine.appendSwitch("disable-quic");
 if (!app.requestSingleInstanceLock()) {
@@ -128,7 +134,7 @@ async function request<T>(
     method,
     headers: {
       "Content-Type": "application/json",
-      "User-Agent": `gongdan007-desktop/${app.getVersion()} (${process.platform}; ${process.arch})`,
+      "User-Agent": `D1scrm-desktop/${app.getVersion()} (${process.platform}; ${process.arch})`,
       ...(requestAuth ? { Authorization: "Bearer " + requestAuth.accessToken } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -594,7 +600,7 @@ app.whenReady().then(async () => {
     height: 900,
     minWidth: 960,
     minHeight: 640,
-    title: backgroundTest ? "工单007 · 自动测试" : "工单007 客户端",
+    title: backgroundTest ? "D1 Scrm · 自动测试" : "D1 Scrm 客户端",
     show: !backgroundTest,
     skipTaskbar: backgroundTest,
     backgroundColor: "#f5f7fb",

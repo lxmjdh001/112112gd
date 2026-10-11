@@ -87,7 +87,7 @@ const faqs = [
   ],
   [
     "翻译字符和员工席位也收费吗？",
-    "工单007 的文字翻译和员工席位不单独收费，按实际上线的平台账号消耗点数。第三方平台自身收取的费用不包含在软件点数中。",
+    "D1 Scrm 的文字翻译和员工席位不单独收费，按实际上线的平台账号消耗点数。第三方平台自身收取的费用不包含在软件点数中。",
   ],
   [
     "现在支持哪些平台？",
@@ -104,7 +104,7 @@ function go(id: string) {
   <div class="gd-home">
     <header class="home-nav">
       <RouterLink class="home-brand" to="/home"
-        ><span>007</span>工单007<i>让沟通有条不紊</i></RouterLink
+        ><span>D1</span>D1 Scrm<i>让沟通有条不紊</i></RouterLink
       >
       <button class="mobile-menu" :aria-expanded="menu" aria-label="展开导航" @click="menu = !menu">
         ☰
@@ -121,7 +121,7 @@ function go(id: string) {
     <main>
       <section class="home-hero home-wrap">
         <div class="hero-copy">
-          <div class="home-eyebrow"><span></span> 为跨境沟通，留出更多可能</div>
+          <div class="home-eyebrow"><span></span> D1 工单 · D1scrm 跨境沟通工作台</div>
           <h1>客户在世界各地。<br />你的工作台，<br /><em>只有一个。</em></h1>
           <p>把多账号、免费翻译和客户跟进放在一起。<br />少一点来回切换，多一点认真沟通。</p>
           <div class="home-buttons">
@@ -139,7 +139,7 @@ function go(id: string) {
           <div class="orbit-label">CONNECTED, NOT COMPLICATED.</div>
           <div class="demo-window">
             <div class="demo-title">
-              <span class="window-dots"><i></i><i></i><i></i></span><b>工单007 / 聊天工作台</b
+              <span class="window-dots"><i></i><i></i><i></i></span><b>D1 Scrm / 聊天工作台</b
               ><small>功能演示</small>
             </div>
             <div class="demo-body">
@@ -339,17 +339,17 @@ function go(id: string) {
         <span class="home-eyebrow">YOUR NEXT CONVERSATION STARTS HERE.</span>
         <h2>下一句“你好”，<br />可以来自世界任何地方。</h2>
         <RouterLink class="home-button primary" to="/auth/register"
-          >开始使用工单007 <span>↗</span></RouterLink
+          >开始使用D1 Scrm <span>↗</span></RouterLink
         >
         <p>新公司注册赠送 100 点 · 翻译免费</p>
         <span class="cta-symbol" aria-hidden="true">↗</span>
       </section>
     </main>
     <footer class="home-footer home-wrap">
-      <RouterLink class="home-brand" to="/home"><span>007</span>工单007</RouterLink>
-      <p>让每一段跨境沟通，有回应，也有记录。</p>
+      <RouterLink class="home-brand" to="/home"><span>D1</span>D1 Scrm</RouterLink>
+      <p>D1 工单（D1scrm），让跨境沟通有回应，也有记录。</p>
       <RouterLink to="/dashboard">管理后台 ↗</RouterLink
-      ><small>© {{ new Date().getFullYear() }} 工单007</small>
+      ><small>© {{ new Date().getFullYear() }} D1 Scrm</small>
     </footer>
   </div>
 </template>

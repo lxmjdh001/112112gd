@@ -2,6 +2,7 @@
   "name": "@gongdan/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "D1 Scrm 跨境客户沟通工作台",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
@@ -14,9 +15,10 @@
     "socks": "2.8.7"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "electron": "44.7.0",
     "esbuild": "0.25.11",
-    "typescript": "catalog:",
-    "@types/node": "catalog:"
-  }
+    "typescript": "catalog:"
+  },
+  "productName": "D1 Scrm"
 }
