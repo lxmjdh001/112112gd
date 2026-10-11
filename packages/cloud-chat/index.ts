@@ -1,9 +1,11 @@
+import { AutomaticTranslator } from "../translation/automatic.js";
 export interface CloudTransport {
   request<T>(path: string, body?: unknown, method?: string): Promise<T>;
 }
 interface Chat {
   id: string;
   customerId: string;
+  language?: string;
   name: string;
   lastInboundAt: string | null;
   lastMessageAt: string;
@@ -22,6 +24,8 @@ interface Message {
   occurredAt: string;
   mediaId: string;
   filename: string;
+  originalText?: string;
+  translationLanguage?: string;
 }
 interface Template {
   name: string;
@@ -95,10 +99,22 @@ export function mountCloudChat(
   let selectedChat: Chat | undefined;
   let pending: { fingerprint: string; requestId: string } | undefined;
   let attachment: { id: string; kind: string; filename: string } | undefined;
-  const translations = new Map<string, string>();
+  const translations = new Map<
+    string,
+    { text?: string; error?: string; loading?: boolean; provider?: string }
+  >();
+  const translator = new AutomaticTranslator((text, target, source) =>
+    transport.request("/translate", { text, target, source }),
+  );
+  let translatingMessages = 0,
+    previewVersion = 0,
+    selectionVersion = 0;
+  let previewTimer: ReturnType<typeof setTimeout>;
+  let translatedDraft: { source: string; text: string; language: string; chat: string } | undefined;
+  const messageKey = (m: Message) => m.id + "\0" + m.body;
   const drafts = new Map<string, string>();
   host.classList.add("wa-cloud-chat");
-  host.innerHTML = `<section class="wc-sidebar"><div class="wc-side-head"><strong>在线聊天</strong><button class="wc-new wc-button" type="button">新对话</button></div><input class="wc-search" placeholder="搜索客户手机号 / 名称" aria-label="搜索客户"/><div class="wc-conversations"></div><div class="wc-pagination"></div></section><section class="wc-main"><header class="wc-chat-head"><div><strong class="wc-title">选择一位客户</strong><p class="wc-info">消息由 WhatsApp 官方 API 收发</p></div><button class="wc-refresh wc-button" type="button">刷新</button></header><p class="wc-notice" role="status"></p><div class="wc-messages"><div class="wc-welcome">在左侧选择对话，或使用获批模板开始新对话。</div></div><div class="wc-composer" hidden><div class="wc-compose-tools"><button class="wc-templates wc-button" type="button">模板消息</button><button class="wc-attach wc-button" type="button">添加附件</button><select class="wc-language" aria-label="翻译目标语言"></select><button class="wc-translate wc-button" type="button">翻译草稿</button><span class="wc-file"></span><input class="wc-file-input" type="file" hidden/></div><textarea class="wc-draft" rows="3" maxlength="4096" placeholder="输入回复内容，点击发送" aria-label="回复内容"></textarea><div class="wc-draft-translation" hidden></div><footer class="wc-compose-footer"><span class="wc-window"></span><button class="wc-send wc-primary" type="button">发送</button></footer></div></section>`;
+  host.innerHTML = `<section class="wc-sidebar"><div class="wc-side-head"><strong>在线聊天</strong><button class="wc-new wc-button" type="button">新对话</button></div><input class="wc-search" placeholder="搜索客户手机号 / 名称" aria-label="搜索客户"/><div class="wc-conversations"></div><div class="wc-pagination"></div></section><section class="wc-main"><header class="wc-chat-head"><div><strong class="wc-title">选择一位客户</strong><p class="wc-info">消息由 WhatsApp 官方 API 收发</p></div><button class="wc-refresh wc-button" type="button">刷新</button></header><p class="wc-notice" role="status"></p><div class="wc-messages"><div class="wc-welcome">在左侧选择对话，或使用获批模板开始新对话。</div></div><div class="wc-composer" hidden><div class="wc-compose-tools"><button class="wc-templates wc-button" type="button">模板消息</button><button class="wc-attach wc-button" type="button">添加附件</button><select class="wc-language" aria-label="翻译目标语言"></select><button class="wc-translate wc-button" type="button">重试翻译</button><span class="wc-file"></span><input class="wc-file-input" type="file" hidden/></div><textarea class="wc-draft" rows="3" maxlength="4000" placeholder="输入中文，自动翻译后发送给客户" aria-label="回复内容"></textarea><div class="wc-draft-translation" hidden></div><footer class="wc-compose-footer"><span class="wc-window"></span><small class="wc-auto-hint">接收自动译成中文 · 发送自动译成客户语言</small><button class="wc-send wc-primary" type="button">发送</button></footer></div></section>`;
   const get = <T extends HTMLElement = HTMLElement>(selector: string) =>
     host.querySelector<T>(selector)!;
   const draft = get<HTMLTextAreaElement>(".wc-draft"),
@@ -142,6 +158,10 @@ export function mountCloudChat(
   function select(chat: Chat) {
     if (selected) drafts.set(selected, draft.value);
     selected = chat.id;
+    selectionVersion++;
+    previewVersion++;
+    translatedDraft = undefined;
+    language.value = chat.language || "en";
     selectedChat = chat;
     options.onCustomerChange?.(chat);
     messages = [];
@@ -156,6 +176,7 @@ export function mountCloudChat(
     renderChats();
     composer();
     void action(loadMessages);
+    scheduleDraftTranslation();
   }
   function renderChats() {
     const root = get(".wc-conversations");
@@ -243,25 +264,41 @@ export function mountCloudChat(
         bubble.append(
           button("下载附件", () => void action(() => download(m)), "wc-message-action"),
         );
-      if (m.body && ["text", "template"].includes(m.kind))
+      if (m.originalText) {
+        // Keep the actual wire text in body; show the operator's original separately.
+        bubble.querySelector(".wc-message-body")!.textContent = m.originalText;
+        bubble.append(element("p", "wc-translation", "译：" + m.body));
+      } else if (
+        m.body &&
+        ["text", "template", "image", "video", "document"].includes(m.kind) &&
+        !/^\[.*\]$/.test(m.body)
+      ) {
+        const translated = translations.get(messageKey(m));
         bubble.append(
-          button(
-            "翻译",
-            () =>
-              void action(async () => {
-                const v = await transport.request<{ text: string }>("/translate", {
-                  text: m.body,
-                  target: language.value,
-                });
-                if (disposed) return;
-                translations.set(m.id, v.text);
-                renderMessages();
-              }),
-            "wc-message-action",
+          element(
+            "p",
+            "wc-translation",
+            translated?.text
+              ? "译：" +
+                  translated.text +
+                  (translated.provider ? "\n翻译服务：" + translated.provider : "")
+              : translated?.error
+                ? "翻译失败：" + translated.error
+                : "正在自动翻译…",
           ),
         );
-      const translated = translations.get(m.id);
-      if (translated) bubble.append(element("p", "wc-translation", translated));
+        if (translated?.error)
+          bubble.append(
+            button(
+              "重试翻译",
+              () => {
+                translations.delete(messageKey(m));
+                renderMessages();
+              },
+              "wc-message-action",
+            ),
+          );
+      }
       const state = m.error
         ? `${statuses[m.status] || m.status} · ${m.error}`
         : statuses[m.status] || "";
@@ -277,7 +314,8 @@ export function mountCloudChat(
           button(
             "恢复到草稿",
             () => {
-              draft.value = m.body;
+              draft.value = m.originalText || m.body;
+              scheduleDraftTranslation();
               draft.focus();
             },
             "wc-message-action",
@@ -288,6 +326,69 @@ export function mountCloudChat(
     }
     if (forceBottom || nearBottom) list.scrollTop = list.scrollHeight;
     else list.scrollTop = oldTop;
+    translateMessages();
+  }
+  function translateMessages() {
+    if (disposed) return;
+    for (const m of [...messages].reverse()) {
+      if (translatingMessages >= 2) break;
+      if (
+        m.originalText ||
+        !m.body ||
+        !["text", "template", "image", "video", "document"].includes(m.kind) ||
+        /^\[.*\]$/.test(m.body)
+      )
+        continue;
+      const key = messageKey(m);
+      if (translations.has(key)) continue;
+      translations.set(key, { loading: true });
+      translatingMessages++;
+      const sourceHint = language.value;
+      void translator
+        .translate(m.body, "zh-CN", sourceHint)
+        .then((text) => {
+          translations.set(key, {
+            text,
+            provider: translator.provider(m.body, "zh-CN", sourceHint),
+          });
+        })
+        .catch((e) => {
+          translations.set(key, { error: String(e.message || e) });
+        })
+        .finally(() => {
+          translatingMessages--;
+          if (!disposed) renderMessages();
+        });
+    }
+  }
+  function scheduleDraftTranslation() {
+    const ticket = ++previewVersion;
+    clearTimeout(previewTimer);
+    translatedDraft = undefined;
+    const box = get(".wc-draft-translation");
+    const text = draft.value.trim(),
+      chat = selected,
+      target = language.value;
+    box.hidden = !text || !chat;
+    if (box.hidden) return;
+    box.replaceChildren(element("p", "", "正在自动翻译…"));
+    previewTimer = setTimeout(() => {
+      void translator
+        .translate(text, target, "zh-CN")
+        .then((result) => {
+          if (disposed || ticket !== previewVersion || chat !== selected) return;
+          translatedDraft = { source: text, text: result, language: target, chat };
+          box.replaceChildren(element("p", "", "将发送：" + result));
+          const provider = translator.provider(text, target, "zh-CN");
+          if (provider) box.append(element("small", "", "翻译服务：" + provider));
+        })
+        .catch((e) => {
+          if (!disposed && ticket === previewVersion)
+            box.replaceChildren(
+              element("p", "wc-error", "翻译失败，原文未发送：" + String(e.message || e)),
+            );
+        });
+    }, 650);
   }
   async function loadMessages() {
     if (!selected) return;
@@ -334,10 +435,30 @@ export function mountCloudChat(
     composer();
     const chat = selected;
     const sentDraft = draft.value;
-    const fingerprint = JSON.stringify({ chat, ...body });
-    if (pending?.fingerprint !== fingerprint)
-      pending = { fingerprint, requestId: crypto.randomUUID() };
+    const ticket = selectionVersion,
+      target = language.value;
     try {
+      if (body.kind !== "template" && typeof body.text === "string" && body.text.trim()) {
+        const original = body.text.trim();
+        const translated =
+          translatedDraft?.source === original &&
+          translatedDraft.language === target &&
+          translatedDraft.chat === chat
+            ? translatedDraft.text
+            : await translator.translate(original, target, "zh-CN");
+        if (
+          disposed ||
+          chat !== selected ||
+          ticket !== selectionVersion ||
+          draft.value !== sentDraft ||
+          language.value !== target
+        )
+          throw Error("客户、语言或草稿已变化，本次未发送，请重新确认");
+        body = { ...body, text: translated, originalText: original, translationLanguage: target };
+      }
+      const fingerprint = JSON.stringify({ chat, ...body });
+      if (pending?.fingerprint !== fingerprint)
+        pending = { fingerprint, requestId: crypto.randomUUID() };
       await transport.request(`/chats/${chat}/messages`, { ...body, requestId: pending.requestId });
       if (disposed) return;
       if (body.kind !== "template" && drafts.get(chat) === sentDraft) drafts.delete(chat);
@@ -348,7 +469,11 @@ export function mountCloudChat(
         else drafts.delete(chat);
         attachment = undefined;
         pending = undefined;
+        previewVersion++;
+        clearTimeout(previewTimer);
+        translatedDraft = undefined;
         get(".wc-draft-translation").hidden = true;
+        if (draft.value) scheduleDraftTranslation();
         notify("消息已加入发送队列");
         await loadMessages();
       }
@@ -471,29 +596,15 @@ export function mountCloudChat(
         }),
       ),
   );
-  get(".wc-translate").addEventListener(
-    "click",
-    () =>
-      void action(async () => {
-        const text = draft.value;
-        if (!text.trim()) return;
-        const id = selected;
-        const result = await transport.request<{ text: string }>("/translate", {
-          text,
-          target: language.value,
-        });
-        if (disposed || id !== selected) return;
-        const box = get(".wc-draft-translation");
-        box.replaceChildren(
-          element("p", "", result.text),
-          button("使用译文", () => {
-            draft.value = result.text;
-            box.hidden = true;
-          }),
-        );
-        box.hidden = false;
-      }),
-  );
+  get(".wc-translate").addEventListener("click", scheduleDraftTranslation);
+  draft.addEventListener("input", () => {
+    if (selected) drafts.set(selected, draft.value);
+    scheduleDraftTranslation();
+  });
+  language.addEventListener("change", () => {
+    if (current()) current()!.language = language.value;
+    scheduleDraftTranslation();
+  });
   get(".wc-file").addEventListener("click", () => {
     attachment = undefined;
     composer();
@@ -551,8 +662,13 @@ export function mountCloudChat(
   void action(refresh);
   return {
     setCustomerLanguage(chatId: string, target: string) {
-      if (!disposed && selected === chatId && cloudLanguages.some(([id]) => id === target))
-        language.value = target;
+      if (!disposed && selected === chatId && cloudLanguages.some(([id]) => id === target)) {
+        if (current()) current()!.language = target;
+        if (language.value !== target) {
+          language.value = target;
+          scheduleDraftTranslation();
+        }
+      }
     },
     async prepareQuick(
       chatId: string,
@@ -578,6 +694,7 @@ export function mountCloudChat(
       } else {
         draft.value = content.text || "";
         drafts.set(selected, draft.value);
+        scheduleDraftTranslation();
       }
       notify("素材已放入当前聊天，确认后点击发送");
       draft.focus();
@@ -587,6 +704,7 @@ export function mountCloudChat(
       options.onCustomerChange?.(undefined);
       clearInterval(timer);
       clearTimeout(searchTimer);
+      clearTimeout(previewTimer);
       host.replaceChildren();
     },
     refresh,

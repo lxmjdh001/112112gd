@@ -2,11 +2,9 @@ package app
 
 import (
 	"encoding/base64"
-	"encoding/json"
-	"io"
+	"gongdan007/server/internal/translation"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -93,54 +91,28 @@ func (a *App) cloudDownload(c *gin.Context) {
 	ok(c, gin.H{"data": base64.StdEncoding.EncodeToString(data), "mime": mime, "filename": filename})
 }
 
-var cloudLanguages = map[string]bool{"zh-CN": true, "zh-TW": true, "en": true, "es": true, "pt": true, "ar": true, "ru": true, "fr": true, "de": true, "ja": true, "ko": true, "vi": true, "th": true, "id": true, "hi": true}
+var cloudLanguages = translation.Languages
 
 func (a *App) cloudTranslate(c *gin.Context) {
 	var b struct {
 		Text   string `json:"text"`
 		Target string `json:"target"`
+		Source string `json:"source"`
 	}
-	if c.ShouldBindJSON(&b) != nil || strings.TrimSpace(b.Text) == "" || utf8.RuneCountInString(b.Text) > 4000 || !cloudLanguages[b.Target] {
+	if c.ShouldBindJSON(&b) != nil || strings.TrimSpace(b.Text) == "" || utf8.RuneCountInString(b.Text) > 4000 || !cloudLanguages[b.Target] || (b.Source != "" && !cloudLanguages[b.Source]) {
 		fail(c, 400, "每次可翻译 1–4000 字，请选择目标语言")
 		return
 	}
-	q := url.Values{"client": {"gtx"}, "sl": {"auto"}, "tl": {b.Target}, "dt": {"t"}, "q": {b.Text}}
-	req, _ := http.NewRequestWithContext(c.Request.Context(), "GET", "https://translate.googleapis.com/translate_a/single?"+q.Encode(), nil)
-	res, e := a.TranslationHTTP.Do(req)
+	result, e := a.Translations.Translate(c.Request.Context(), a.TranslationHTTP, identity(c).Tenant+":"+c.Param("number"), b.Text, b.Target, b.Source)
 	if e != nil {
-		fail(c, 502, "Google 翻译连接失败，请稍后重试")
+		fail(c, 502, e.Error())
 		return
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		fail(c, 502, "Google 翻译暂不可用或已限流，请稍后重试")
-		return
-	}
-	var v []json.RawMessage
-	if json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&v) != nil || len(v) == 0 {
-		fail(c, 502, "翻译结果格式异常")
-		return
-	}
-	var parts [][]json.RawMessage
-	if json.Unmarshal(v[0], &parts) != nil {
-		fail(c, 502, "翻译结果格式异常")
-		return
-	}
-	var text strings.Builder
-	for _, part := range parts {
-		if len(part) > 0 {
-			var t string
-			_ = json.Unmarshal(part[0], &t)
-			text.WriteString(t)
+	// Store counts only; cache hits and same-language passthrough consume no quota.
+	if !result.Cached && result.Provider != "original" {
+		if _, e = a.DB.Exec(c.Request.Context(), `INSERT INTO usage_records(tenant_id,account_id,request_id,provider,input_chars,output_chars,target_language) VALUES($1,$2,gen_random_uuid(),$3,$4,$5,$6)`, identity(c).Tenant, c.Param("number"), result.Provider, utf8.RuneCountInString(strings.TrimSpace(b.Text)), utf8.RuneCountInString(result.Text), b.Target); e != nil {
+			slog.Error("cloud translation usage record failed")
 		}
 	}
-	if text.Len() == 0 || utf8.RuneCountInString(text.String()) > 32000 {
-		fail(c, 502, "未获得译文，请稍后重试")
-		return
-	}
-	// Store counts only. Translation content and credentials never enter usage logs.
-	if _, e = a.DB.Exec(c.Request.Context(), `INSERT INTO usage_records(tenant_id,account_id,request_id,provider,input_chars,output_chars,target_language) VALUES($1,$2,gen_random_uuid(),'google-free',$3,$4,$5)`, identity(c).Tenant, c.Param("number"), utf8.RuneCountInString(b.Text), utf8.RuneCountInString(text.String()), b.Target); e != nil {
-		slog.Error("cloud translation usage record failed")
-	}
-	ok(c, gin.H{"text": text.String(), "targetLanguage": b.Target, "provider": "google-free"})
+	ok(c, result)
 }

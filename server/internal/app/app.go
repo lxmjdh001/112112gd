@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"gongdan007/server/internal/security"
+	"gongdan007/server/internal/translation"
 	"gongdan007/server/internal/whatsappcloud"
 	"log/slog"
 	"net/http"
@@ -25,6 +26,7 @@ type App struct {
 	Cloud           *whatsappcloud.Client
 	PublicURL       string
 	TranslationHTTP *http.Client
+	Translations    translation.Service
 }
 type attempt struct {
 	n     int
@@ -82,7 +84,11 @@ func (a *App) rate(c *gin.Context) {
 		}
 	}
 	a.mu.Unlock()
-	if v.n > 12 {
+	limit := 12
+	if strings.HasSuffix(c.FullPath(), "/translate") {
+		limit = 120
+	}
+	if v.n > limit {
 		fail(c, 429, "尝试过于频繁，请稍后重试")
 		return
 	}

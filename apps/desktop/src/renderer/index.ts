@@ -1,3 +1,4 @@
+import { detectSource } from "../../../../packages/translation/source.ts";
 import { mountCustomerTools } from "./customer-tools.ts";
 import type { CustomerContext } from "../shared/customer-tools.ts";
 import type { Account, ShellAPI, ViewState } from "../shared/types.ts";
@@ -43,6 +44,7 @@ function updateTools(state: ViewState) {
             await window.gongdan.cloudRequest<{ text: string }>(context.accountId, "/translate", {
               text,
               target: language,
+              source: detectSource(text, "zh-CN"),
             })
           ).text;
         return (await window.gongdan.customerTranslate(context, text, language)).text;

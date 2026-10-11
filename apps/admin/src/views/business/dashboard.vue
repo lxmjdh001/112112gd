@@ -61,7 +61,7 @@ onMounted(async () => {
           <p class="subtitle">
             用登录码进入客户端，添加账号并选择代理，再在 WhatsApp 官方页面扫码登录。
           </p>
-          <span class="subtitle">聊天区支持 Google 免费翻译</span>
+          <span class="subtitle">聊天区支持收发自动翻译</span>
         </div>
       </div>
     </div>

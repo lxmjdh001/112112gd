@@ -89,6 +89,8 @@ func (a *App) processCloudSend(parent context.Context) (bool, error) {
 	}
 	delete(message, "localMediaId")
 	delete(message, "filename")
+	delete(message, "originalText")
+	delete(message, "translationLanguage")
 	wire, _ := json.Marshal(message)
 	meta, sendError := a.Cloud.Send(ctx, n.Token, n.PhoneID, wire)
 	// Persist results even if the worker is being stopped after Meta accepted the request.

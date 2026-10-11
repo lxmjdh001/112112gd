@@ -350,3 +350,16 @@
     max-width: 230px;
   }
 }
+.wc-auto-hint {
+  color: #6d8277;
+  font-size: 11px;
+}
+.wc-draft-translation {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.wc-draft-translation p {
+  margin: 4px 0;
+}

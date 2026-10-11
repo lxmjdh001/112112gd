@@ -1,3 +1,4 @@
+import { TranslationHistory } from "./translation-history.ts";
 import type { CustomerContext, AssetContent } from "../shared/customer-tools.ts";
 import {
   app,
@@ -33,7 +34,7 @@ import { AccountCleanup } from "./account-cleanup.ts";
 
 declare const __GONGDAN_API_URL__: string;
 
-import { GoogleFreeTranslator } from "./translation.ts";
+import { FreeTranslator } from "./translation.ts";
 import { chromiumUserAgent } from "./browser-identity.ts";
 import { socksBridge, type Bridge } from "./proxy.ts";
 import { throughSession, type ProxyAuth } from "./network.ts";
@@ -83,12 +84,15 @@ interface Runtime {
   id: string;
   view: WebContentsView;
   ses: Session;
-  translator: GoogleFreeTranslator;
+  translator: FreeTranslator;
+  history: TranslationHistory;
   bridge?: Bridge;
   proxyAuth?: ProxyAuth;
   status: string;
 }
 const runtimes = new Map<string, Runtime>();
+const historyFile = (tenant: string, account: string) =>
+  path.join(app.getPath("userData"), "translation-history", tenant, account + ".bin");
 const credentialsFile = () => path.join(app.getPath("userData"), "authorization.bin");
 function emit() {
   state.customer = runtimes.get(state.activeId)?.customer;
@@ -179,6 +183,7 @@ function persistSession() {
 async function closeRuntime(runtime: Runtime) {
   runtimes.delete(runtime.id);
   runtime.translator.clear();
+  await runtime.history.close().catch(() => {});
   if (!runtime.view.webContents.isDestroyed()) runtime.view.webContents.close();
   await runtime.ses.setProxy({
     mode: "fixed_servers",
@@ -447,13 +452,20 @@ async function openAccount(id: string) {
       bridge,
       proxyAuth,
       status: "loading",
-      translator: new GoogleFreeTranslator(throughSession(ses, proxyAuth), (usage) => {
+      history: new TranslationHistory(
+        historyFile(auth!.tenantId, id),
+        (value) => {
+          if (!safeStorage.isEncryptionAvailable()) throw Error("本机加密存储不可用");
+          return safeStorage.encryptString(value);
+        },
+        (value) => safeStorage.decryptString(value),
+      ),
+      translator: new FreeTranslator(throughSession(ses, proxyAuth), (usage) => {
         // Free usage metadata only: never send message content to the management API.
         if (generation === epoch && auth && runtimes.has(id))
           void request("/client/usage", {
             ...usage,
             accountId: id,
-            provider: "google-free",
             requestId: randomUUID(),
           }).catch(() => {});
       }),
@@ -542,6 +554,7 @@ app.whenReady().then(async () => {
       await ses.clearStorageData();
       await ses.clearCache();
       await ses.clearAuthCache();
+      await rm(historyFile(tenant, id), { force: true });
     },
   );
   await cleanup.load();
@@ -950,7 +963,40 @@ app.whenReady().then(async () => {
     const runtime = requireRuntime(event);
     if (!payload || typeof payload.text !== "string" || typeof payload.target !== "string")
       throw Error("参数无效");
-    return runtime.translator.translate(payload.text, payload.target);
+    return runtime.translator.translate(
+      payload.text,
+      payload.target,
+      typeof payload.source === "string" ? payload.source : "",
+    );
+  });
+  ipcMain.handle("wa:translation-originals", async (event, payload) => {
+    const runtime = requireRuntime(event);
+    if (
+      typeof payload?.identifier !== "string" ||
+      !/^(?:[1-9][0-9]{6,14}|[0-9]{5,30}@lid)$/.test(payload.identifier)
+    )
+      throw Error("客户参数无效");
+    if (payload.id === undefined) return runtime.history.list(payload.identifier);
+    const match = /^true_([^_]+)_[^\s]{1,200}$/.exec(payload.id);
+    const expectedPeer = payload.identifier.endsWith("@lid")
+      ? payload.identifier
+      : payload.identifier + "@s.whatsapp.net";
+    const actualPeer = match?.[1]?.replace(/:[0-9]+@/, "@").replace(/@c\.us$/, "@s.whatsapp.net");
+    if (
+      typeof payload.id !== "string" ||
+      actualPeer !== expectedPeer ||
+      typeof payload.source !== "string" ||
+      typeof payload.text !== "string" ||
+      !payload.source.trim() ||
+      payload.source.length > 4000 ||
+      payload.text.length > 32000
+    )
+      throw Error("翻译原文参数无效");
+    await runtime.history.put(payload.id, {
+      identifier: payload.identifier,
+      source: payload.source,
+      text: payload.text,
+    });
   });
   ipcMain.handle("wa:copy", (event, text) => {
     requireRuntime(event);

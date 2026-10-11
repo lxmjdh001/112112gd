@@ -304,12 +304,12 @@ func TestCloudTranslationCountsAndFailure(t *testing.T) {
 	calls := 0
 	h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
 		calls++
-		if r.URL.Scheme != "https" || r.URL.Host != "translate.googleapis.com" || r.Header.Get("Authorization") != "" || r.URL.Query().Get("q") != "你好 & 世界" {
+		if r.URL.Scheme != "https" || (r.URL.Host != "translate.googleapis.com" && r.URL.Host != "api.mymemory.translated.net") || r.Header.Get("Authorization") != "" || r.URL.Query().Get("q") != "你好 & 世界" {
 			t.Error("unexpected translation request")
 		}
 		status := 200
 		body := `[[["Hello ","你好",null,null],["world!","世界",null,null]],null,"zh-CN"]`
-		if calls == 2 {
+		if calls >= 2 {
 			status = 429
 			body = "private upstream failure"
 		}
@@ -320,7 +320,7 @@ func TestCloudTranslationCountsAndFailure(t *testing.T) {
 	if out := h.commerceCall(t, "POST", route, h.admin, b); out["text"] != "Hello world!" {
 		t.Fatal(out)
 	}
-	if status, out := h.call("POST", route, h.admin, b); status != 502 || strings.Contains(out["message"].(string), "private") {
+	if status, out := h.call("POST", route, h.admin, gin.H{"text": "你好 & 世界", "target": "pt", "source": "zh-CN"}); status != 502 || strings.Contains(out["message"].(string), "private") {
 		t.Fatal(status, out)
 	}
 	if status, _ := h.call("POST", route, h.admin, gin.H{"text": "test", "target": "unsupported"}); status != 400 {
@@ -330,7 +330,7 @@ func TestCloudTranslationCountsAndFailure(t *testing.T) {
 	if e := h.app.DB.QueryRow(context.Background(), `SELECT count(*),sum(input_chars),sum(output_chars) FROM usage_records WHERE account_id=$1`, n).Scan(&count, &input, &output); e != nil || count != 1 || input != 7 || output != 12 {
 		t.Fatal(count, input, output, e)
 	}
-	if calls != 2 {
+	if calls != 3 {
 		t.Fatal("validation contacted Google")
 	}
 }
@@ -350,5 +350,69 @@ func TestCloudQueuedSendHonorsDeviceRevocation(t *testing.T) {
 	}
 	if h.sent.Load() != 0 {
 		t.Fatal("revoked device sent queued message")
+	}
+}
+
+func TestCloudTranslatedReplyPersistsOriginalWithoutSendingIt(t *testing.T) {
+	h := setupCloud(t)
+	n := h.number(t, "200001")
+	chat := h.receive(t, n, "200001", "wamid.translation.in", "15550001111", time.Now())
+	route := "/whatsapp-cloud/numbers/" + n + "/chats/" + chat + "/messages"
+	body := gin.H{"requestId": key(22001), "kind": "text", "text": "Enviarei a cotação hoje.", "originalText": "今天发报价单。", "translationLanguage": "pt"}
+	first := h.commerceCall(t, "POST", route, h.admin, body)
+	again := h.commerceCall(t, "POST", route, h.admin, body)
+	if first["id"] != again["id"] {
+		t.Fatal("translated retry duplicated a message")
+	}
+	if worked, e := h.app.processCloudSend(context.Background()); !worked || e != nil {
+		t.Fatal(worked, e)
+	}
+	if h.sent.Load() != 1 || h.payload["text"].(map[string]any)["body"] != body["text"] {
+		t.Fatal("wrong wire text")
+	}
+	if _, ok := h.payload["originalText"]; ok {
+		t.Fatal("operator original leaked into Meta payload")
+	}
+	if _, ok := h.payload["translationLanguage"]; ok {
+		t.Fatal("local metadata leaked into Meta payload")
+	}
+	status, result := h.call("GET", route, h.admin, nil)
+	if status != 200 {
+		t.Fatal(status, result)
+	}
+	rows := result["data"].([]any)
+	reply := rows[0].(map[string]any)
+	if reply["originalText"] != body["originalText"] || reply["body"] != body["text"] || reply["translationLanguage"] != "pt" {
+		t.Fatal("bilingual history was not retained", reply)
+	}
+	body["requestId"] = key(22002)
+	body["translationLanguage"] = "invalid"
+	if status, _ = h.call("POST", route, h.admin, body); status != 400 {
+		t.Fatal("invalid translation accepted", status)
+	}
+}
+
+func TestCloudTranslationFallbackUsage(t *testing.T) {
+	h := setupCloud(t)
+	n := h.number(t, "200001")
+	h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
+		status := 200
+		body := `{"responseStatus":200,"responseData":{"translatedText":"Olá"}}`
+		if r.URL.Host == "translate.googleapis.com" {
+			status = 429
+			body = ""
+		}
+		return &http.Response{StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})}
+	route := "/whatsapp-cloud/numbers/" + n + "/translate"
+	for range 2 {
+		out := h.commerceCall(t, "POST", route, h.admin, gin.H{"text": "你好", "target": "pt", "source": "zh-CN"})
+		if out["text"] != "Olá" || out["provider"] != "mymemory" {
+			t.Fatal(out)
+		}
+	}
+	var count int
+	if e := h.app.DB.QueryRow(context.Background(), `SELECT count(*) FROM usage_records WHERE account_id=$1 AND provider='mymemory'`, n).Scan(&count); e != nil || count != 1 {
+		t.Fatal(count, e)
 	}
 }

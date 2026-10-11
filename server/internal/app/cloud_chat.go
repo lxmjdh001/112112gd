@@ -15,7 +15,7 @@ import (
 )
 
 func (a *App) cloudChats(c *gin.Context) {
-	a.cloudJSON(c, `SELECT ch.id::text,ch.customer_id AS "customerId",ch.name,ch.last_inbound_at AS "lastInboundAt",ch.last_message_at AS "lastMessageAt",ch.unread,COALESCE(v.duplicate_account OR v.duplicate_ip,false) AS duplicate,COALESCE((SELECT body FROM wa_cloud_messages m WHERE m.chat_id=ch.id ORDER BY m.seq DESC LIMIT 1),'') AS preview FROM wa_cloud_chats ch LEFT JOIN customer_conversations v ON v.account_id=ch.number_id AND v.tenant_id=ch.tenant_id AND v.identifier=ch.customer_id WHERE ch.tenant_id=$1 AND ch.number_id::text=$2 AND ($3='' OR ch.name ILIKE '%'||$3||'%' OR ch.customer_id ILIKE '%'||$3||'%') ORDER BY ch.last_message_at DESC,ch.id DESC LIMIT 100 OFFSET $4`, identity(c).Tenant, c.Param("number"), truncate(c.Query("search"), 100), cloudOffset(c))
+	a.cloudJSON(c, `SELECT ch.id::text,ch.customer_id AS "customerId",ch.name,COALESCE(cp.language,'en') AS language,ch.last_inbound_at AS "lastInboundAt",ch.last_message_at AS "lastMessageAt",ch.unread,COALESCE(v.duplicate_account OR v.duplicate_ip,false) AS duplicate,COALESCE((SELECT body FROM wa_cloud_messages m WHERE m.chat_id=ch.id ORDER BY m.seq DESC LIMIT 1),'') AS preview FROM wa_cloud_chats ch LEFT JOIN customer_profiles cp ON cp.tenant_id=ch.tenant_id AND cp.platform='whatsapp' AND cp.identifier=ch.customer_id LEFT JOIN customer_conversations v ON v.account_id=ch.number_id AND v.tenant_id=ch.tenant_id AND v.identifier=ch.customer_id WHERE ch.tenant_id=$1 AND ch.number_id::text=$2 AND ($3='' OR ch.name ILIKE '%'||$3||'%' OR ch.customer_id ILIKE '%'||$3||'%') ORDER BY ch.last_message_at DESC,ch.id DESC LIMIT 100 OFFSET $4`, identity(c).Tenant, c.Param("number"), truncate(c.Query("search"), 100), cloudOffset(c))
 }
 func cloudOffset(c *gin.Context) int {
 	n, _ := strconv.Atoi(c.Query("offset"))
@@ -51,7 +51,7 @@ func (a *App) cloudMessages(c *gin.Context) {
 	if before < 0 {
 		before = 0
 	}
-	a.cloudJSON(c, `SELECT id::text,seq,direction,kind,body,status,error,occurred_at AS "occurredAt",created_at AS "createdAt",CASE WHEN direction='in' THEN COALESCE(payload->>'mediaId','') ELSE COALESCE(payload->>'localMediaId','') END AS "mediaId",COALESCE(payload->>'filename','') AS filename FROM wa_cloud_messages WHERE tenant_id=$1 AND number_id::text=$2 AND chat_id::text=$3 AND ($4=0 OR seq<$4) ORDER BY seq DESC LIMIT 100`, identity(c).Tenant, c.Param("number"), c.Param("chat"), before)
+	a.cloudJSON(c, `SELECT id::text,seq,direction,kind,body,COALESCE(payload->>'originalText','') AS "originalText",COALESCE(payload->>'translationLanguage','') AS "translationLanguage",status,error,occurred_at AS "occurredAt",created_at AS "createdAt",CASE WHEN direction='in' THEN COALESCE(payload->>'mediaId','') ELSE COALESCE(payload->>'localMediaId','') END AS "mediaId",COALESCE(payload->>'filename','') AS filename FROM wa_cloud_messages WHERE tenant_id=$1 AND number_id::text=$2 AND chat_id::text=$3 AND ($4=0 OR seq<$4) ORDER BY seq DESC LIMIT 100`, identity(c).Tenant, c.Param("number"), c.Param("chat"), before)
 }
 func (a *App) cloudRead(c *gin.Context) {
 	var b struct {
@@ -121,19 +121,25 @@ func (a *App) cloudTemplates(c *gin.Context) {
 }
 
 type cloudSendInput struct {
-	RequestID    string   `json:"requestId"`
-	Kind         string   `json:"kind"`
-	Text         string   `json:"text"`
-	TemplateName string   `json:"templateName"`
-	Language     string   `json:"language"`
-	Parameters   []string `json:"parameters"`
-	MediaID      string   `json:"mediaId"`
+	OriginalText        string   `json:"originalText,omitempty"`
+	TranslationLanguage string   `json:"translationLanguage,omitempty"`
+	RequestID           string   `json:"requestId"`
+	Kind                string   `json:"kind"`
+	Text                string   `json:"text"`
+	TemplateName        string   `json:"templateName"`
+	Language            string   `json:"language"`
+	Parameters          []string `json:"parameters"`
+	MediaID             string   `json:"mediaId"`
 }
 
 func (a *App) cloudSend(c *gin.Context) {
 	var b cloudSendInput
 	if c.ShouldBindJSON(&b) != nil || requestKey(b.RequestID) != nil || utf8.RuneCountInString(b.Text) > 4096 || len(b.Parameters) > 30 {
 		fail(c, 400, "消息内容或请求编号无效")
+		return
+	}
+	if utf8.RuneCountInString(b.OriginalText) > 4000 || (b.OriginalText != "" && (!cloudLanguages[b.TranslationLanguage] || b.Kind == "template" || b.Kind == "audio")) || (b.TranslationLanguage != "" && !cloudLanguages[b.TranslationLanguage]) {
+		fail(c, 400, "翻译原文或目标语言无效")
 		return
 	}
 	b.Text = strings.TrimSpace(b.Text)
@@ -237,6 +243,10 @@ func (a *App) cloudSend(c *gin.Context) {
 			}
 		default:
 			return nil, commerceError{400, "暂不支持此消息类型"}
+		}
+		if b.OriginalText != "" {
+			payload["originalText"] = b.OriginalText
+			payload["translationLanguage"] = b.TranslationLanguage
 		}
 		data, _ := json.Marshal(payload)
 		var message string

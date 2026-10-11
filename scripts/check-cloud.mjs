@@ -157,6 +157,10 @@ try {
     await route.continue();
   });
   await page.locator(".wc-draft").fill("后台验收回复");
+  await page
+    .locator(".wc-draft-translation")
+    .getByText(/将发送：/)
+    .waitFor();
   await page.locator(".wc-send").click();
   await page.locator(".wc-draft").fill("正在编写下一条");
   await page
@@ -177,9 +181,13 @@ try {
   await page.route("**/whatsapp-cloud/numbers/*/translate", (route) =>
     route.fulfill({ json: { code: 0, data: { text: "Draft translation" }, message: "ok" } }),
   );
+  await page.locator(".wc-draft").fill("附件说明");
   await page.locator(".wc-translate").click();
-  await page.getByRole("button", { name: "使用译文" }).click();
-  assert.equal(await page.locator(".wc-draft").inputValue(), "Draft translation");
+  await page
+    .locator(".wc-draft-translation")
+    .getByText("将发送：Draft translation", { exact: true })
+    .waitFor();
+  assert.equal(await page.locator(".wc-draft").inputValue(), "附件说明");
   await page.locator(".wc-file-input").setInputFiles({
     name: "sample.txt",
     mimeType: "text/plain",

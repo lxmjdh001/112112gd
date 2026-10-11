@@ -3,8 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +23,11 @@ func TestCloudBrowserFixture(t *testing.T) {
 		t.Skip("browser fixture not requested")
 	}
 	h := setupCloud(t)
+	h.app.TranslationHTTP = &http.Client{Transport: cloudTranslationTransport(func(r *http.Request) (*http.Response, error) {
+		text := r.URL.Query().Get("tl") + ": " + r.URL.Query().Get("q")
+		body, _ := json.Marshal([]any{[]any{[]any{text}}, nil, "auto"})
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+	})}
 	n := h.number(t, "200001")
 	h.receive(t, n, "200001", "wamid.browser.1", "15550001111", time.Now())
 	code := h.commerceCall(t, "POST", "/login-codes", h.admin, gin.H{"label": "API 验收登录码", "allowedPlatforms": []string{"whatsapp_cloud"}, "expiresAt": time.Now().Add(time.Hour)})
