@@ -1,3 +1,4 @@
+import { InboundQueue, type InboundBatch } from "./inbound-queue.ts";
 import { TranslationHistory } from "./translation-history.ts";
 import type { CustomerContext, AssetContent } from "../shared/customer-tools.ts";
 import {
@@ -97,6 +98,8 @@ const state: ViewState = {
   toolsCollapsed: false,
 };
 interface Runtime {
+  owner?: string;
+  inbound?: InboundQueue;
   fingerprintCleanup?: () => void;
   platform: string;
   customer?: CustomerContext;
@@ -412,12 +415,14 @@ async function login(code: string) {
 async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
   if (!runtimes.has(runtime.id) || !auth) return;
   if (status === "ready" && !validAccountIdentity(runtime.platform, identifier)) {
+    runtime.owner = undefined;
     runtime.status = "identity_pending";
     state.statuses[runtime.id] = "identity_pending";
     bounds();
     emit();
     return;
   }
+  runtime.owner = status === "ready" && identifier ? identifier : undefined;
   runtime.status = status;
   state.statuses[runtime.id] = status;
   bounds();
@@ -1154,6 +1159,59 @@ app.whenReady().then(async () => {
     await runtime.ses.cookies.remove("https://line-chrome-gw.line-apps.com/", "lct");
     return { name: "lct" };
   });
+  ipcMain.handle("platform:inbound-events", async (event, batch: InboundBatch) => {
+    const runtime = requireRuntime(event);
+    if (
+      !batch ||
+      !validAccountIdentity(runtime.platform, batch.owner) ||
+      runtime.owner !== batch.owner ||
+      !Array.isArray(batch.events) ||
+      batch.events.length > 250 ||
+      typeof batch.ready !== "boolean"
+    )
+      throw Error("统计来源无效");
+    for (const e of batch.events) {
+      if (
+        !e ||
+        typeof e.id !== "string" ||
+        e.id.length > 512 ||
+        !e.id ||
+        typeof e.customer !== "string" ||
+        e.customer.length > 80 ||
+        typeof e.at !== "string" ||
+        !Number.isFinite(Date.parse(e.at))
+      )
+        throw Error("统计格式无效");
+    }
+    batch = {
+      owner: batch.owner,
+      ready: batch.ready,
+      events: batch.events.map(({ id, customer, at }) => ({ id, customer, at })),
+    };
+    const generation = epoch;
+    runtime.inbound ||= new InboundQueue(
+      path.join(app.getPath("userData"), "inbound-statistics", auth!.tenantId, runtime.id + ".bin"),
+      (value) => {
+        if (!safeStorage.isEncryptionAvailable()) throw Error("本机加密存储不可用");
+        return safeStorage.encryptString(value);
+      },
+      (value) => safeStorage.decryptString(value),
+    );
+    await runtime.inbound.enqueue(batch);
+    void runtime.inbound
+      .flush(batch.owner, batch.ready, (data) => {
+        if (
+          generation !== epoch ||
+          !auth ||
+          runtimes.get(runtime.id) !== runtime ||
+          runtime.owner !== data.owner
+        )
+          throw Error("账号已关闭");
+        return request(`/client/accounts/${runtime.id}/inbound-events`, data);
+      })
+      .catch(() => {});
+    return { stored: true };
+  });
   for (const channel of ["wa:status", "platform:status"])
     ipcMain.on(channel, (event, status, identifier) => {
       try {
@@ -1203,7 +1261,7 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   // Finish the local encrypted snapshot before closing; quitting is not a logout.
-  void saveAuth()
+  void Promise.all([saveAuth(), ...[...runtimes.values()].map((r) => r.inbound?.close())])
     .catch(() => {})
     .finally(() => {
       for (const r of runtimes.values()) {

@@ -1,6 +1,17 @@
 import type { RouteRecordRaw } from "vue-router";
 const routes: RouteRecordRaw[] = [
   {
+    name: "WorkOrders",
+    path: "/work-orders",
+    component: () => import("#/views/business/work-orders.vue"),
+    meta: {
+      title: "工单管理",
+      icon: "lucide:chart-no-axes-combined",
+      order: 2.7,
+      authority: ["admin"],
+    },
+  },
+  {
     name: "Dashboard",
     path: "/dashboard",
     component: () => import("#/views/business/dashboard.vue"),

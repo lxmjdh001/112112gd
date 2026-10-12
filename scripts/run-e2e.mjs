@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 const schema = "gd007_e2e_" + randomBytes(5).toString("hex");
-const adminOnly = process.argv.includes("--admin-only");
+const ordersOnly = process.argv.includes("--work-orders-only");
+const adminOnly = process.argv.includes("--admin-only") || ordersOnly;
 const desktopOnly = process.argv.includes("--desktop-only");
 const sessionOnly = process.argv.includes("--session-only");
 const lifecycleOnly = process.argv.includes("--lifecycle-only");
@@ -92,9 +93,12 @@ try {
       { GONGDAN_API_TARGET: "http://127.0.0.1:18081" },
     );
     await ready("http://127.0.0.1:5779");
-    await run(process.execPath, ["scripts/check-admin.mjs"]);
-    await run(process.execPath, ["scripts/check-commerce.mjs"]);
-    await run(process.execPath, ["scripts/check-baseline.mjs"]);
+    if (!ordersOnly) {
+      await run(process.execPath, ["scripts/check-admin.mjs"]);
+      await run(process.execPath, ["scripts/check-commerce.mjs"]);
+      await run(process.execPath, ["scripts/check-baseline.mjs"]);
+    }
+    await run(process.execPath, ["scripts/check-work-orders.mjs"]);
   }
   if (!adminOnly) {
     if (proxyOnly) await run(process.execPath, ["scripts/check-client-proxy.mjs"]);

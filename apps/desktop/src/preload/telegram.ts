@@ -1,3 +1,4 @@
+import { installInboundStats } from "./inbound-stats.ts";
 import { ipcRenderer } from "electron";
 import {
   currentTelegramAccount,
@@ -7,6 +8,7 @@ import { installNativeTranslation } from "./native-translation.ts";
 window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.telegram.org") return;
   installNativeTranslation();
+  installInboundStats("telegram");
   function report() {
     const status = observeTelegram(document, navigator.onLine);
     ipcRenderer.send(

@@ -1,3 +1,4 @@
+import { installInboundStats } from "./inbound-stats.ts";
 import { installAutomaticTranslation } from "./automatic-translation.ts";
 import { installChatContext } from "./chat-context.ts";
 import { currentWhatsAppCustomer } from "../../../../packages/platform/whatsapp/customer.ts";
@@ -10,6 +11,7 @@ import { currentWhatsAppAccount } from "../../../../packages/platform/whatsapp/s
 window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.whatsapp.com") return;
   installCustomerPanel();
+  installInboundStats("whatsapp");
   installChatContext();
   const automatic = installAutomaticTranslation(document, {
     translate: (text, target, source) =>

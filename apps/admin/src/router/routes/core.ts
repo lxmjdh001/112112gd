@@ -1,6 +1,12 @@
 import type { RouteRecordRaw } from "vue-router";
 const coreRoutes: RouteRecordRaw[] = [
   {
+    name: "PublicWorkOrder",
+    path: "/s/:token",
+    component: () => import("#/views/public/work-order.vue"),
+    meta: { title: "D1 工单统计", hideInMenu: true, hideInTab: true, ignoreAccess: true },
+  },
+  {
     name: "Root",
     path: "/",
     redirect: "/home",

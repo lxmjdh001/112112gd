@@ -1,3 +1,4 @@
+import { installInboundStats } from "./inbound-stats.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { LINE_ORIGIN, readLineOwner } from "../../../../packages/platform/line/index.ts";
 import { installNativeTranslation } from "./native-translation.ts";
@@ -57,6 +58,7 @@ if (location.href.startsWith(LINE_ORIGIN + "/") && window.top === window) {
   });
   window.addEventListener("DOMContentLoaded", () => {
     installNativeTranslation();
+    installInboundStats("line");
     function report() {
       try {
         const owner = contextBridge.executeInMainWorld({ func: readLineOwner });

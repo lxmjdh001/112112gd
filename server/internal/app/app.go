@@ -187,6 +187,7 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/usage", a.recordUsage)
 	client.POST("/customers/check", a.checkClientCustomer)
 	client.POST("/conversations", a.recordClientConversation)
+	a.workOrderRoutes(v, admin, client)
 	a.cloudRoutes(v, admin, client)
 	a.customerToolsRoutes(client)
 	return r
