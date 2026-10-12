@@ -113,6 +113,8 @@ interface Runtime {
   status: string;
 }
 const runtimes = new Map<string, Runtime>();
+// Reopening an account must reuse its outbox while an earlier upload is finishing.
+const inboundQueues = new Map<string, InboundQueue>();
 const historyFile = (tenant: string, account: string) =>
   path.join(app.getPath("userData"), "translation-history", tenant, account + ".bin");
 const credentialsFile = () => path.join(app.getPath("userData"), "authorization.bin");
@@ -174,6 +176,7 @@ function requireRuntime(event: {
 }) {
   const runtime = [...runtimes.values()].find((r) => r.view.webContents === event.sender);
   if (
+    quitting ||
     !runtime ||
     event.senderFrame !== event.sender.mainFrame ||
     !isPlatformURL(runtime.platform, event.senderFrame?.url || "") ||
@@ -1194,6 +1197,8 @@ app.whenReady().then(async () => {
       })),
     };
     const generation = epoch;
+    const queueKey = `${auth!.tenantId}:${runtime.id}`;
+    runtime.inbound ||= inboundQueues.get(queueKey);
     runtime.inbound ||= new InboundQueue(
       path.join(app.getPath("userData"), "inbound-statistics", auth!.tenantId, runtime.id + ".bin"),
       (value) => {
@@ -1202,6 +1207,7 @@ app.whenReady().then(async () => {
       },
       (value) => safeStorage.decryptString(value),
     );
+    inboundQueues.set(queueKey, runtime.inbound);
     await runtime.inbound.enqueue(batch);
     void runtime.inbound
       .flush(batch.owner, batch.ready, (data) => {
@@ -1266,7 +1272,7 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   // Finish the local encrypted snapshot before closing; quitting is not a logout.
-  void Promise.all([saveAuth(), ...[...runtimes.values()].map((r) => r.inbound?.close())])
+  void Promise.all([saveAuth(), ...[...inboundQueues.values()].map((queue) => queue.close())])
     .catch(() => {})
     .finally(() => {
       for (const r of runtimes.values()) {

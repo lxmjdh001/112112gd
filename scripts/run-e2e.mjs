@@ -73,7 +73,7 @@ await writeFile(".runtime/e2e.json", JSON.stringify(settings), { mode: 0o600 });
 sql("CREATE SCHEMA " + schema);
 try {
   if (withAdmin) await run("pnpm", ["build:admin"]);
-  if (!adminOnly) await run("pnpm", ["build:desktop"]);
+  if (!adminOnly || ordersOnly) await run("pnpm", ["build:desktop"]);
   launch("go", ["run", "./cmd/api"], settings, path.resolve("server"));
   await ready("http://127.0.0.1:18081/healthz");
   if (withAdmin) {
@@ -99,6 +99,7 @@ try {
       await run(process.execPath, ["scripts/check-baseline.mjs"]);
     }
     await run(process.execPath, ["scripts/check-work-orders.mjs"]);
+    if (ordersOnly) await run(process.execPath, ["scripts/check-work-order-native.mjs"]);
   }
   if (!adminOnly) {
     if (proxyOnly) await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
