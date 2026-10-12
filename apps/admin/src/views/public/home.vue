@@ -120,6 +120,7 @@ function go(id: string) {
           <button @click="go('product')">产品能力</button>
           <button @click="go('workflow')">如何开始</button>
           <button @click="go('pricing')">透明计费</button>
+          <button @click="go('download')">客户端下载</button>
           <button @click="go('faq')">常见问题</button>
         </nav>
         <div class="nav-actions">
@@ -159,8 +160,8 @@ function go(id: string) {
               <RouterLink class="home-button primary" to="/auth/register"
                 >免费开始 · 领取 100 点 <span>↗</span></RouterLink
               >
-              <button class="home-button secondary" @click="go('workspace-demo')">
-                探索工作台 <span>↓</span>
+              <button class="home-button secondary" @click="go('download')">
+                下载客户端 <span>↓</span>
               </button>
             </div>
             <div class="hero-note">
@@ -474,6 +475,101 @@ function go(id: string) {
         <p class="price-footnote">
           按北京时间自然日计费。未上线的日期不扣点，余额不足请联系平台充值。第三方平台自身费用另计。
         </p>
+      </section>
+
+      <section id="download" class="home-download">
+        <div class="home-wrap">
+          <div class="download-heading">
+            <div>
+              <span class="section-kicker">客户端下载</span>
+              <h2>你的工作台，随时就位。</h2>
+              <p>下载 D1 Scrm，在电脑上开启客户沟通。</p>
+            </div>
+            <span class="download-version"><i></i> v0.1.0 · 桌面客户端</span>
+          </div>
+          <div class="download-grid">
+            <article class="download-card">
+              <div class="download-os">
+                <span class="download-os-icon windows-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path
+                      d="M2 4.3 10.5 3v8H2zm10-1.6L22 1.3V11h-10zM2 12.5h8.5v8L2 19.2zm10 0h10v9.7l-10-1.5z"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <h3>Windows</h3>
+                  <p>Windows 10 / 11 · 64 位</p>
+                </div>
+                <span class="download-format">EXE</span>
+              </div>
+              <p class="download-description">下载安装，登录后开始工作。</p>
+              <a
+                class="home-button primary download-primary"
+                href="/client-downloads/0.1.0/D1-Scrm-0.1.0-windows-x64-setup.exe"
+                download
+              >
+                下载 Windows 版 <span aria-hidden="true">↓</span>
+              </a>
+              <span class="download-caption">适用于 Intel / AMD 处理器</span>
+            </article>
+            <article class="download-card">
+              <div class="download-os">
+                <span class="download-os-icon apple-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path
+                      d="M17.4 12.8c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-2.9-.7-1.5 0-2.8.9-3.6 2.2-1.5 2.6-.4 6.4 1.1 8.5.7 1 1.5 2.1 2.6 2.1 1 0 1.4-.7 2.8-.7 1.3 0 1.7.7 2.9.7s1.9-1 2.6-2c.8-1.2 1.2-2.3 1.2-2.3s-2.3-.9-2.3-3.3zM15.2 6.1c.6-.8 1.1-1.9 1-3-.9 0-2 .6-2.7 1.4-.6.7-1.2 1.8-1.1 2.8 1 .1 2.1-.5 2.8-1.2z"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <h3>macOS</h3>
+                  <p>macOS 13 Ventura 及以上</p>
+                </div>
+                <span class="download-format">DMG</span>
+              </div>
+              <p class="download-description">选择 Mac 芯片，拖入「应用程序」即可安装。</p>
+              <div class="download-mac-actions">
+                <a
+                  class="home-button primary"
+                  href="/client-downloads/0.1.0/D1-Scrm-0.1.0-mac-arm64.dmg"
+                  download
+                  >苹果芯片版 <span aria-hidden="true">↓</span></a
+                >
+                <a
+                  class="home-button secondary"
+                  href="/client-downloads/0.1.0/D1-Scrm-0.1.0-mac-x64.dmg"
+                  download
+                  >Intel 芯片版 <span aria-hidden="true">↓</span></a
+                >
+              </div>
+              <span class="download-caption">点击左上角  →「关于本机」查看芯片类型</span>
+            </article>
+          </div>
+          <div class="download-guide">
+            <p>
+              <span>01 注册公司账户</span><b aria-hidden="true">→</b><span>02 在后台生成登录码</span
+              ><b aria-hidden="true">→</b><span>03 下载客户端并登录</span>
+            </p>
+            <RouterLink class="text-link" to="/dashboard">获取登录码 <span>↗</span></RouterLink>
+          </div>
+          <details class="download-help">
+            <summary>安装说明与版本校验 <span>+</span></summary>
+            <div>
+              <p>
+                当前为首发体验版。Windows 安装包尚未配置数字签名；Mac 版本尚未完成 Apple
+                公证，首次打开可能收到系统安全提示。请仅使用本页下载的安装包，并按系统提示在安全设置中确认来源后打开。
+              </p>
+              <p>
+                Mac：打开 DMG，将 D1 Scrm 拖到「应用程序」。若系统阻止打开，可在「系统设置 →
+                隐私与安全性」中查看并确认。Windows：运行 EXE，按安装向导完成安装。
+              </p>
+              <a class="text-link" href="/client-downloads/0.1.0/SHA256SUMS" download
+                >下载 SHA-256 校验文件 <span>↓</span></a
+              >
+            </div>
+          </details>
+        </div>
       </section>
 
       <section id="faq" class="home-faq home-wrap">

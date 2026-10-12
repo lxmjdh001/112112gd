@@ -9,7 +9,8 @@
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && electron .",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "fflate": "0.8.2",
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "electron": "44.7.0",
+    "electron-builder": "26.15.3",
     "esbuild": "0.25.11",
     "typescript": "catalog:"
   },

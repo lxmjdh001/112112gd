@@ -46,6 +46,12 @@
 	import d1_headers
 	route {
 		import d1_api
+		handle_path /client-downloads/* {
+			root * /opt/d1scrm/client-downloads
+			header Cache-Control "public, max-age=86400"
+			header Content-Disposition attachment
+			file_server
+		}
 		@retired path /web-api /web-api/* /updates/* /downloads/*
 		handle @retired {
 			respond "This version has been retired." 410
