@@ -47,22 +47,30 @@ button:disabled {
   font-size: 13px;
 }
 .login-wrap {
-  height: 100vh;
+  min-height: 100vh;
+  padding: 20px;
   display: grid;
   place-items: center;
   background: radial-gradient(ellipse at 20% 25%, #e7edff, transparent 60%), #f7f9fd;
 }
 .login {
-  width: 430px;
-  padding: 38px;
+  width: min(100%, 430px);
+  padding: 28px;
   background: white;
   border: 1px solid #e5eaf2;
   border-radius: 18px;
   box-shadow: 0 20px 80px #1a36600b;
 }
 .login h1 {
-  font-size: 23px;
-  margin: 28px 0 10px;
+  font-size: 21px;
+  margin: 24px 0 10px;
+}
+.login .muted {
+  margin: 20px 0 0;
+  font-size: 12px;
+}
+.login .error:empty {
+  display: none;
 }
 .muted {
   color: #8a94a6;

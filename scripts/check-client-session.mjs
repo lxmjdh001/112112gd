@@ -106,6 +106,26 @@ async function waitState(connection) {
   await waitClientState(page, (s) => s.loggedIn && s.connection === connection);
   assert.equal(await page.locator("#login-code").count(), 0, "Must retain the workspace");
 }
+async function checkWindow(loggedIn) {
+  const geometry = await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    return { ...win.getBounds(), resizable: win.isResizable(), fullscreen: win.isFullScreen() };
+  });
+  assert.equal(geometry.resizable, loggedIn);
+  assert.equal(geometry.fullscreen, false);
+  if (loggedIn) assert(geometry.width > 480, "Workspace must expand after login");
+  else {
+    assert(geometry.width <= 480, "Login must use a compact window");
+    assert(geometry.height <= 560, "Login must fit in a compact window");
+    assert(
+      await page.locator(".login").evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return r.x >= 0 && r.y >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+      }),
+      "Login form must remain fully visible",
+    );
+  }
+}
 async function login() {
   await page.locator("#login-code").fill(code.code);
   assert.equal(await page.locator("#api-url").count(), 0);
@@ -114,6 +134,12 @@ async function login() {
 }
 try {
   await launch();
+  await page.locator("#login-code").waitFor();
+  await checkWindow(false);
+  await page.locator("#login-code").fill("GD7-invalid-window-test");
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "登录码无效" }).waitFor();
+  await checkWindow(false);
   // Successful authentication followed by failed account sync must retain credentials too.
   mode = "metadata-failure";
   await login();
@@ -123,6 +149,18 @@ try {
     powerMonitor.emit("resume");
   });
   await waitState("online");
+  await checkWindow(true);
+  const resized = await app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    win.setSize(1000, 680);
+    return win.getBounds();
+  });
+  await page.evaluate(() => window.gongdan.refresh());
+  assert.deepEqual(
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds()),
+    resized,
+    "Heartbeat must not reset the user's workspace size",
+  );
   const account = await page.evaluate(
     (proxyId) =>
       window.gongdan.createAccount({
@@ -169,6 +207,7 @@ try {
   app = undefined;
   await launch();
   await waitState("reconnecting");
+  await checkWindow(true);
   assert.equal((await page.evaluate(() => window.gongdan.state())).accounts[0].id, account);
   await page.screenshot({ path: ".runtime/client-session-reconnecting.png" });
   const beforeRetry = heartbeatCount;
@@ -176,25 +215,29 @@ try {
   // No refresh click: the scheduled retry must recover on its own.
   await waitState("online");
   assert(heartbeatCount > beforeRetry);
-  assert.equal(authCount, 1, "Recovery must reuse the saved device session without the login code");
+  assert.equal(authCount, 2, "Recovery must reuse the saved device session without the login code");
   await page.screenshot({ path: ".runtime/client-session-recovered.png" });
   // An explicit offline logout clears disk immediately and stays logged out after restart.
   mode = "offline";
   await page.getByRole("button", { name: "退出客户端", exact: true }).click();
   await page.locator("#login-code").waitFor();
+  await checkWindow(false);
   await assert.rejects(access(credentials));
   await app.close();
   app = undefined;
   mode = "online";
   await launch();
   await page.locator("#login-code").waitFor();
+  await checkWindow(false);
   assert.equal((await page.evaluate(() => window.gongdan.state())).loggedIn, false);
   await login();
   await waitState("online");
+  await checkWindow(true);
   // Confirmed admin revocation still ends the persistent session.
   await api("/login-codes/" + code.id, { ...policy, enabled: false }, "PATCH");
   await page.evaluate(() => window.gongdan.refresh());
   await page.locator("#login-code").waitFor();
+  await checkWindow(false);
   await assert.rejects(access(credentials));
   assert.deepEqual(errors, []);
   console.log(

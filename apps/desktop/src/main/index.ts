@@ -13,6 +13,7 @@ import {
   safeStorage,
   powerMonitor,
   net,
+  screen,
   type IpcMainInvokeEvent,
   type Session,
 } from "electron";
@@ -78,6 +79,7 @@ let accountsRevision = 0;
 let cleanup: AccountCleanup;
 let quitting = false;
 let readyToQuit = false;
+let windowLoggedIn: boolean | undefined;
 const apiURL = serviceAddress(
   (!app.isPackaged && process.env.GONGDAN_API_URL) || __GONGDAN_API_URL__,
 );
@@ -111,11 +113,53 @@ const runtimes = new Map<string, Runtime>();
 const historyFile = (tenant: string, account: string) =>
   path.join(app.getPath("userData"), "translation-history", tenant, account + ".bin");
 const credentialsFile = () => path.join(app.getPath("userData"), "authorization.bin");
+function windowBounds(loggedIn: boolean) {
+  const { workArea } = win
+    ? screen.getDisplayMatching(win.getBounds())
+    : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const width = Math.min(loggedIn ? 1360 : 480, workArea.width - 32);
+  const height = Math.min(loggedIn ? 900 : 560, workArea.height - 32);
+  return {
+    x: workArea.x + Math.round((workArea.width - width) / 2),
+    y: workArea.y + Math.round((workArea.height - height) / 2),
+    width,
+    height,
+  };
+}
+function syncWindowMode(force = false) {
+  if (!win || win.isDestroyed()) return;
+  const loggedIn = !!auth;
+  // Only resize at the login boundary; heartbeats must preserve the user's window size.
+  if (!force && windowLoggedIn === loggedIn) return;
+  windowLoggedIn = loggedIn;
+  if (win.isFullScreen()) {
+    win.once("leave-full-screen", () => syncWindowMode(true));
+    win.setFullScreen(false);
+    return;
+  }
+  if (win.isMaximized()) {
+    win.once("unmaximize", () => syncWindowMode(true));
+    win.unmaximize();
+    return;
+  }
+  const size = windowBounds(loggedIn);
+  win.setResizable(loggedIn);
+  win.setMaximizable(loggedIn);
+  win.setFullScreenable(loggedIn);
+  win.setMinimumSize(
+    loggedIn ? Math.min(960, size.width) : size.width,
+    loggedIn ? Math.min(640, size.height) : size.height,
+  );
+  win.setBounds(size);
+}
 function emit() {
   state.customer = runtimes.get(state.activeId)?.customer;
   state.loggedIn = !!auth;
   state.apiURL = apiURL;
-  if (win && !win.isDestroyed()) win.webContents.send("shell:state", state);
+  if (win && !win.isDestroyed()) {
+    syncWindowMode();
+    win.webContents.send("shell:state", state);
+  }
 }
 function requireShell(event: IpcMainInvokeEvent) {
   if (event.sender !== win.webContents || event.senderFrame?.url !== pathToFileURL(shellFile).href)
@@ -656,12 +700,12 @@ app.whenReady().then(async () => {
     await writeFile(devicePath, deviceIdentity, { mode: 0o600 });
   }
   win = new BrowserWindow({
-    width: 1360,
-    height: 900,
-    minWidth: 960,
-    minHeight: 640,
+    ...windowBounds(false),
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     title: backgroundTest ? "D1 Scrm · 自动测试" : "D1 Scrm 客户端",
-    show: !backgroundTest,
+    show: false,
     skipTaskbar: backgroundTest,
     backgroundColor: "#f5f7fb",
     webPreferences: {
@@ -671,6 +715,7 @@ app.whenReady().then(async () => {
       sandbox: true,
     },
   });
+  syncWindowMode();
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("did-start-loading", () => {
     accountFormOpen = false;
@@ -1140,6 +1185,7 @@ app.whenReady().then(async () => {
       state.message = "暂时无法读取本机登录状态，请重新打开客户端或输入登录码";
   }
   emit();
+  if (!backgroundTest) win.show();
   void heartbeat();
   setInterval(() => void heartbeat(), 30000);
   powerMonitor.on("resume", () => void heartbeat());
