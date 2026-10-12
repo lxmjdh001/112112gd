@@ -29,3 +29,10 @@ CREATE TABLE account_stats_sync (
  FOREIGN KEY(tenant_id,account_id) REFERENCES platform_accounts(tenant_id,id)
 );
 CREATE INDEX work_orders_list ON work_orders(tenant_id,created_at DESC);
+
+-- WhatsApp may first expose a LID and resolve its phone number later.
+-- Keep historical messages under a stable peer key, resolving aliases at query time.
+CREATE TABLE account_customer_aliases (
+ tenant_id uuid NOT NULL, account_id uuid NOT NULL, alias text NOT NULL, customer_id text NOT NULL,
+ PRIMARY KEY(account_id,alias), FOREIGN KEY(tenant_id,account_id) REFERENCES platform_accounts(tenant_id,id)
+);

@@ -64,6 +64,20 @@ func TestWorkOrderStatisticsAndSharing(t *testing.T) {
 	if e != nil || s.Today != 1 || s.Yesterday != 2 {
 		t.Fatal(s, e)
 	}
+	// A WhatsApp LID can resolve to an already counted phone later. Reconcile history,
+	// including a retry of the exact same message, without adding another person.
+	aliasPayload := gin.H{"owner": "8613800000000", "ready": true, "events": []gin.H{{"id": "lid-event", "customer": "lid:12345678901234", "at": today}}}
+	h.commerceCall(t, "POST", "/client/accounts/"+a+"/inbound-events", client, aliasPayload)
+	s, e = h.app.calculateWorkOrderStats(ctx, tenant, order, now)
+	if e != nil || s.Total != 4 {
+		t.Fatal(s, e)
+	}
+	aliasPayload["events"].([]gin.H)[0]["phone"] = "447700900002"
+	h.commerceCall(t, "POST", "/client/accounts/"+a+"/inbound-events", client, aliasPayload)
+	s, e = h.app.calculateWorkOrderStats(ctx, tenant, order, now)
+	if e != nil || s.Total != 3 || s.Yesterday != 2 {
+		t.Fatal("LID/phone counted twice", s, e)
+	}
 	// Removed accounts preserve historical counts.
 	if _, e = h.app.DB.Exec(ctx, `UPDATE platform_accounts SET removed_at=now() WHERE id=$1`, b); e != nil {
 		t.Fatal(e)

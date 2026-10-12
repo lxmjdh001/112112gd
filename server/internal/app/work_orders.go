@@ -264,6 +264,7 @@ func (a *App) ingestInboundEvents(c *gin.Context) {
 		Events []struct {
 			ID       string    `json:"id"`
 			Customer string    `json:"customer"`
+			Phone    string    `json:"phone"`
 			At       time.Time `json:"at"`
 		} `json:"events"`
 	}
@@ -304,6 +305,16 @@ func (a *App) ingestInboundEvents(c *gin.Context) {
 		if !valid || v.Customer == owner {
 			fail(c, 400, "客户标识与平台不符")
 			return
+		}
+		if v.Phone != "" {
+			if platform != "whatsapp" || !strings.HasPrefix(v.Customer, "lid:") || !validBillingIdentity("whatsapp", v.Phone) {
+				fail(c, 400, "客户号码映射无效")
+				return
+			}
+			if _, e = tx.Exec(ctx, `INSERT INTO account_customer_aliases(tenant_id,account_id,alias,customer_id) VALUES($1,$2,$3,$4) ON CONFLICT(account_id,alias) DO UPDATE SET customer_id=EXCLUDED.customer_id`, id.Tenant, account, v.Customer, v.Phone); e != nil {
+				dbError(c, e)
+				return
+			}
 		}
 		if _, e = tx.Exec(ctx, `INSERT INTO account_inbound_events(tenant_id,account_id,event_id,customer_id,occurred_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT(account_id,event_id) DO NOTHING`, id.Tenant, account, v.ID, v.Customer, v.At); e != nil {
 			dbError(c, e)
@@ -402,7 +413,7 @@ func (a *App) calculateWorkOrderStats(ctx context.Context, tenant, id string, no
 	// Match legacy: first inbound within this work order window, per account/contact.
 	// System/group messages never enter the native event table; Cloud API chats are individual.
 	rows, e = tx.Query(ctx, `WITH incoming AS (
- SELECT e.account_id,e.customer_id,e.occurred_at FROM account_inbound_events e JOIN work_order_accounts x ON x.account_id=e.account_id AND x.tenant_id=e.tenant_id WHERE e.tenant_id=$1 AND x.order_id::text=$2 AND e.occurred_at>=$3 AND e.occurred_at<=COALESCE($4::timestamptz,$5::timestamptz) AND e.occurred_at<=$5
+ SELECT e.account_id,COALESCE(alias.customer_id,e.customer_id) AS customer_id,e.occurred_at FROM account_inbound_events e LEFT JOIN account_customer_aliases alias ON alias.account_id=e.account_id AND alias.tenant_id=e.tenant_id AND alias.alias=e.customer_id JOIN work_order_accounts x ON x.account_id=e.account_id AND x.tenant_id=e.tenant_id WHERE e.tenant_id=$1 AND x.order_id::text=$2 AND e.occurred_at>=$3 AND e.occurred_at<=COALESCE($4::timestamptz,$5::timestamptz) AND e.occurred_at<=$5
  UNION ALL
  SELECT m.number_id,ch.customer_id,m.occurred_at FROM wa_cloud_messages m JOIN wa_cloud_chats ch ON ch.id=m.chat_id JOIN work_order_accounts x ON x.account_id=m.number_id AND x.tenant_id=m.tenant_id WHERE m.tenant_id=$1 AND x.order_id::text=$2 AND m.direction='in' AND m.kind NOT IN ('system','unsupported','unknown') AND m.occurred_at>=$3 AND m.occurred_at<=COALESCE($4::timestamptz,$5::timestamptz) AND m.occurred_at<=$5
  ), leads AS (SELECT account_id,customer_id,min(occurred_at) AS first_at,max(occurred_at) AS last_at FROM incoming GROUP BY account_id,customer_id)

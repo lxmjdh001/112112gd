@@ -144,3 +144,23 @@ test("outbox survives network failure and restart, removes only acknowledged bat
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("WhatsApp keeps LID stable and includes a resolved phone as an alias", () => {
+  const Msg = {
+    getModelsArray: () => [
+      {
+        id: { id: "lid", fromMe: false, remote: { user: "12345678901234", server: "lid" } },
+        t: sec,
+        type: "chat",
+      },
+    ],
+    on() {},
+    off() {},
+  };
+  const read = sandbox({
+    require: () => ({ Msg, Contact: { get: () => ({ phoneNumber: { user: "447700900001" } }) } }),
+  });
+  const event = read("whatsapp").events[0];
+  assert.equal(event.customer, "lid:12345678901234");
+  assert.equal(event.phone, "447700900001");
+});

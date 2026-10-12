@@ -15,7 +15,7 @@ export function collectInbound(platform: string, ack: string[] = [], knownOwner 
     state.seen.add(id);
   }
   while (state.seen.size > 50000) state.seen.delete(state.seen.values().next().value);
-  const add = (owner: string, id: string, customer: string, seconds: number) => {
+  const add = (owner: string, id: string, customer: string, seconds: number, phone?: string) => {
     if (
       !owner ||
       !id ||
@@ -37,6 +37,7 @@ export function collectInbound(platform: string, ack: string[] = [], knownOwner 
       customer,
       at: new Date(seconds * 1000).toISOString(),
       owner,
+      ...(phone ? { phone } : {}),
     });
   };
   state.ready = false;
@@ -76,12 +77,19 @@ export function collectInbound(platform: string, ack: string[] = [], knownOwner 
         const server = remote?.server;
         const user = String(remote?.user || "");
         if (!["c.us", "s.whatsapp.net", "lid"].includes(server) || !/^\d{5,25}$/.test(user)) return;
-        let customer = server === "lid" ? `lid:${user}` : user;
+        const customer = server === "lid" ? `lid:${user}` : user;
         // A resolved phone identity is shared between Cloud API and Web accounts.
         const contact = collections.Contact?.get?.(remote);
         const phone = contact?.phoneNumber?.user;
-        if (phone && /^\d{5,20}$/.test(String(phone))) customer = String(phone);
-        add(owner, String(msg.id?.id || ""), customer, Number(msg.t));
+        add(
+          owner,
+          String(msg.id?.id || ""),
+          customer,
+          Number(msg.t),
+          server === "lid" && phone && /^[1-9][0-9]{5,19}$/.test(String(phone))
+            ? String(phone)
+            : undefined,
+        );
       };
       if (state.attached !== messages) {
         state.cleanup?.();

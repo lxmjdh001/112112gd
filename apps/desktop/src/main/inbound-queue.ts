@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 export interface InboundEvent {
+  phone?: string;
   id: string;
   customer: string;
   at: string;

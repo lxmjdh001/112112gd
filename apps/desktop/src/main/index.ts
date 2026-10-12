@@ -1186,7 +1186,12 @@ app.whenReady().then(async () => {
     batch = {
       owner: batch.owner,
       ready: batch.ready,
-      events: batch.events.map(({ id, customer, at }) => ({ id, customer, at })),
+      events: batch.events.map(({ id, customer, at, phone }) => ({
+        id,
+        customer,
+        at,
+        ...(typeof phone === "string" && /^[1-9][0-9]{5,19}$/.test(phone) ? { phone } : {}),
+      })),
     };
     const generation = epoch;
     runtime.inbound ||= new InboundQueue(
