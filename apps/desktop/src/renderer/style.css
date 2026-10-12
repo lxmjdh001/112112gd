@@ -966,42 +966,149 @@ details input {
   color: #c0712f;
 }
 
-/* Account-specific browser settings. Keep the network chooser compact. */
-.account-dialog:has(.fingerprint-card):has(#account-form:not([hidden])) {
-  width: min(720px, calc(100vw - 48px));
+/* Compact account setup: network on the left, fingerprint on the right. */
+.account-dialog:has(#account-form:not([hidden])) {
+  width: min(980px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 18px;
+  overflow: hidden;
+}
+.account-dialog[open]:has(#account-form:not([hidden])) {
+  display: flex;
+  flex-direction: column;
+}
+.account-dialog:has(#account-form:not([hidden])) .dialog-heading {
+  flex-shrink: 0;
+}
+.account-dialog:has(#account-form:not([hidden])) .dialog-heading h2 {
+  font-size: 18px;
+  font-weight: 650;
+}
+#account-form:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#account-form > .muted {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 0 12px;
+}
+.account-form-body {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.account-connection,
+.fingerprint-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e5eaf2;
+  border-radius: 10px;
+}
+.account-connection {
+  background: #fff;
+}
+.account-section-title,
+.fp-heading h3 {
+  margin: 0;
+  color: #34445b;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 20px;
+}
+.account-connection .network-summary {
+  margin: 12px 0;
+  padding: 6px 9px;
+  font-size: 12px;
+  background: #f1f5ff;
+  color: #53698f;
+}
+.account-connection .network-summary .text-btn {
+  padding: 3px 0 3px 8px;
+  color: #5570c8;
+  font-size: 11px;
+}
+.account-basics {
+  display: grid;
+  gap: 12px;
+}
+.account-dialog .account-basics label {
+  margin: 0 0 5px;
+  font-size: 12px;
+  color: #627287;
+}
+.account-connection input,
+.account-connection select,
+#new-proxy-form input,
+#new-proxy-form select {
+  height: 34px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  min-width: 0;
+}
+.account-connection .proxy-picker-heading {
+  margin: 14px 0 6px;
+  gap: 8px;
+}
+.account-connection .proxy-picker-heading label {
+  color: #627287;
+  font-size: 12px;
+}
+.account-connection .proxy-picker-heading .text-btn {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.account-connection .muted,
+.account-connection .error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.account-dialog .error:empty,
+.account-connection .muted:empty {
+  display: none;
 }
 .fingerprint-card {
-  margin-top: 22px;
-  padding: 18px;
-  border: 1px solid #e1e7ee;
-  border-radius: 14px;
   background: #f8fafc;
 }
 .fp-heading,
+.fp-title,
 .fp-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 .fp-heading {
   justify-content: space-between;
-}
-.fp-heading h3 {
-  margin: 0 0 5px;
-  font-size: 14px;
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 .fp-status {
-  font-size: 11px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #edf1f6;
   color: #7b899a;
+  font-size: 10px;
+  line-height: 16px;
 }
 .fp-actions button {
-  padding: 7px 10px;
+  padding: 5px 8px;
   border: 1px solid #dce4ed;
-  border-radius: 8px;
+  border-radius: 6px;
   background: white;
   color: #53667b;
-  font-size: 12px;
-  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
 }
 .fp-actions [data-fp-random] {
   background: #eef0ff;
@@ -1011,139 +1118,156 @@ details input {
 .fp-help {
   font-size: 11px;
   color: #8290a0;
-  line-height: 1.7;
-  margin: 10px 0;
+  line-height: 1.5;
+  margin: 6px 0 8px;
 }
 .fp-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
 }
 .fingerprint-card .fp-grid label {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #627287;
+  line-height: 16px;
   min-width: 0;
 }
 .fingerprint-card input,
 .fingerprint-card select {
   width: 100%;
   min-width: 0;
-  height: 36px;
-  margin: 5px 0 0;
-  padding: 7px 9px;
+  height: 32px;
+  margin: 4px 0 0;
+  padding: 5px 8px;
   border: 1px solid #dae2eb;
-  border-radius: 8px;
+  border-radius: 6px;
   background: white;
   color: #34465c;
   font-size: 12px;
-  box-sizing: border-box;
 }
 .fp-wide {
   grid-column: 1 / -1;
 }
+.fp-gpu-preset {
+  grid-column: span 2;
+}
 .fp-resolution {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 .fp-resolution span {
-  margin-top: 5px;
+  margin-top: 4px;
   color: #a0a9b5;
 }
+.fp-gpu-manual,
 .fp-privacy {
-  margin-top: 16px;
-  font-size: 12px;
-  color: #627287;
+  margin: 0;
+  color: #718198;
+  font-size: 11px;
+  line-height: 18px;
 }
+.fp-gpu-manual summary,
 .fp-privacy summary {
   cursor: pointer;
 }
+.fp-gpu-manual .fp-grid {
+  grid-template-columns: 1fr 2fr;
+  padding-top: 8px;
+}
+.fp-privacy {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5eaf2;
+}
 .fp-checks {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin-top: 8px;
 }
 .fingerprint-card .fp-checks label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
 }
 .fingerprint-card .fp-checks input {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   margin: 0;
   accent-color: #596ce7;
 }
-@media (max-width: 600px) {
-  .fp-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .fp-grid {
-    grid-template-columns: 1fr;
-  }
-  .fp-checks {
-    grid-template-columns: 1fr;
-  }
-}
-.account-basics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.account-dialog .account-basics label {
-  margin-top: 12px;
+#account-error:not(:empty) {
+  flex-shrink: 0;
+  margin: 9px 0 0;
   font-size: 12px;
-}
-.account-basics input,
-.account-basics select {
-  font-size: 13px;
-  padding: 8px 10px;
-  height: 38px;
-  margin-top: 6px;
-}
-#account-form > .muted {
-  font-size: 12px;
-  line-height: 1.6;
-  margin: 12px 0;
 }
 #account-form > .dialog-actions {
-  position: sticky;
-  bottom: -26px;
-  z-index: 1;
-  background: white;
-  margin-top: 12px;
-  padding: 14px 0 2px;
+  flex-shrink: 0;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid #e7ecf1;
 }
-.fp-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+#account-form > .dialog-actions button,
+#new-proxy-form > .dialog-actions button {
+  min-height: 34px;
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 12px;
 }
-.fp-gpu-preset {
-  grid-column: span 2;
+.account-dialog:has(#new-proxy-form:not([hidden])) {
+  width: 520px;
+  padding: 20px;
 }
-.fp-gpu-manual summary {
+#new-proxy-form label {
+  margin: 12px 0 5px;
+  font-size: 12px;
+}
+#new-proxy-form .muted,
+#new-proxy-form .error {
+  margin: 9px 0;
   font-size: 11px;
-  color: #8290a0;
-  cursor: pointer;
+  line-height: 1.6;
 }
-.fp-gpu-manual .fp-grid {
-  grid-template-columns: 1fr 1fr;
-  padding-top: 10px;
+#new-proxy-form > .dialog-actions {
+  margin-top: 14px;
 }
-@media (max-width: 600px) {
-  .fp-grid {
+@media (max-width: 760px) {
+  .account-dialog:has(#account-form:not([hidden])) {
+    padding: 16px;
+  }
+  .account-form-body {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .account-basics {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .account-connection,
+  .fingerprint-card {
+    padding: 12px;
+  }
+  .fp-checks {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .fp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .fp-gpu-preset {
     grid-column: auto;
   }
-  .account-basics {
+  .fp-gpu-manual .fp-grid,
+  .account-basics,
+  .fp-checks {
     grid-template-columns: 1fr;
-    gap: 0;
+  }
+  .fp-heading {
+    align-items: flex-start;
   }
 }

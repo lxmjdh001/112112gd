@@ -35,7 +35,7 @@ export function mountFingerprintForm(host: HTMLElement) {
   let profile = { ...base };
   let custom = false;
   host.className = "fingerprint-card";
-  host.innerHTML = `<div class="fp-heading"><div><h3>指纹配置</h3><span class="fp-status">当前电脑配置</span></div><div class="fp-actions"><button type="button" data-fp-current>使用当前电脑</button><button type="button" data-fp-random>↻ 随机生成</button></div></div>
+  host.innerHTML = `<div class="fp-heading"><div class="fp-title"><h3>指纹配置</h3><span class="fp-status">当前电脑配置</span></div><div class="fp-actions"><button type="button" data-fp-current>使用当前电脑</button><button type="button" data-fp-random>↻ 随机生成</button></div></div>
     <p class="fp-help">可手动修改或随机生成。自定义配置随账号保存，重启保持不变。</p>
     <div class="fp-grid">
     <label>操作系统<select data-fp="os"><option value="windows">Windows</option><option value="macos">macOS</option><option value="linux">Linux</option></select></label>

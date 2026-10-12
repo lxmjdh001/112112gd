@@ -47,6 +47,9 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
         </div>
         <form id="account-form" hidden>
           <p class="muted">在本机打开官方登录页面，扫码或按平台提示登录后开始聊天。</p>
+          <div class="account-form-body">
+          <section class="account-connection" aria-label="账号与网络">
+          <h3 class="account-section-title">账号与网络</h3>
           <div class="network-summary"><span id="network-summary"></span><button class="text-btn" type="button" id="change-network">更改</button></div>
           <div class="account-basics"><div><label for="account-platform">平台</label><select id="account-platform" required>${options.platforms.map((p) => `<option value="${escape(p.id)}">${escape(p.name)}</option>`).join("")}</select>
           </div><div><label for="account-label">账号名称</label><input id="account-label" placeholder="例如：客服账号 01" maxlength="100" value="${escape(options.platforms[0]?.name || "平台账号")} ${getState().accounts.length + 1}" required /></div></div>
@@ -55,8 +58,10 @@ export function createAccountForm(getState: () => ViewState, showError: (text: s
             <p class="muted" id="proxy-empty"></p>
             <p class="error" id="proxy-limit-error"></p>
           </div>
-          <section id="account-fingerprint"></section>
           ${!options.platforms.length ? '<p class="error">当前登录码没有可用平台，请联系管理员在登录码设置中勾选。</p>' : ""}
+          </section>
+          <section id="account-fingerprint" aria-label="指纹配置"></section>
+          </div>
           <p class="error" role="alert" id="account-error"></p>
           <div class="dialog-actions"><button class="secondary" type="button" data-cancel>取消</button><button class="primary" type="submit">添加并登录</button></div>
         </form>
