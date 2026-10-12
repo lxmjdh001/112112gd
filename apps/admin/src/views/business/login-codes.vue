@@ -29,6 +29,12 @@ const rows = ref<LoginCode[]>([]);
 const platforms = ref<PlatformOption[]>([]);
 const editing = ref<LoginCode>();
 const platformName = (id: string) => platforms.value.find((p) => p.id === id)?.name || id;
+const platformPresentation: Record<string, { icon: string; detail: string }> = {
+  whatsapp: { icon: "whatsapp.svg", detail: "扫码登录" },
+  whatsapp_cloud: { icon: "whatsapp.svg", detail: "官方 API 接入" },
+  line: { icon: "line.png", detail: "客户端登录" },
+  telegram: { icon: "telegram.svg", detail: "客户端登录" },
+};
 const loading = ref(false);
 const saving = ref(false);
 const show = ref(false);
@@ -65,6 +71,11 @@ const form = reactive({
   groupId: "",
   expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
 });
+const longTermExpiry = "2099-12-31T23:59:59+08:00";
+const longTermSelected = computed(() => Date.parse(form.expiresAt) === Date.parse(longTermExpiry));
+function setLongTerm() {
+  form.expiresAt = longTermExpiry;
+}
 interface Device {
   id: string;
   name: string;
@@ -395,7 +406,7 @@ onMounted(load);
     <ElDialog
       v-model="show"
       :title="editing ? '编辑登录码' : '创建长期登录码'"
-      width="560px"
+      width="min(560px, calc(100vw - 32px))"
       :close-on-click-modal="false"
       :show-close="!saving"
       :close-on-press-escape="!saving"
@@ -423,10 +434,10 @@ onMounted(load);
           </div>
         </div>
         <div class="field">
-          <span
-            >客户端可用平台
-            <span v-if="!editing" style="color: var(--el-color-danger)">*</span></span
-          >
+          <div class="field-heading">
+            <span>客户端可用平台 <span v-if="!editing" class="required-mark">*</span></span>
+            <span class="selection-count">已选 {{ form.allowedPlatforms.length }} 项</span>
+          </div>
           <ElCheckboxGroup
             v-model="form.allowedPlatforms"
             aria-label="客户端可用平台"
@@ -438,12 +449,29 @@ onMounted(load);
               :key="platform.id"
               :value="platform.id"
               :disabled="!platform.available"
-              border
-              >{{ platform.name
-              }}<span v-if="!platform.available" class="muted"> · 待开放</span></ElCheckbox
+              :aria-label="platform.name"
+              class="platform-card"
             >
+              <span class="platform-card-content">
+                <span class="platform-logo" aria-hidden="true">
+                  <img
+                    v-if="platformPresentation[platform.id]"
+                    :src="`/platforms/${platformPresentation[platform.id]!.icon}`"
+                    alt=""
+                  />
+                  <span v-else>{{ platform.name.slice(0, 1) }}</span>
+                  <span v-if="platform.id === 'whatsapp_cloud'" class="platform-api-badge">API</span>
+                </span>
+                <span class="platform-copy">
+                  <span class="platform-title">{{ platform.name }}</span>
+                  <span class="platform-detail">{{
+                    !platform.available ? "待开放" : platformPresentation[platform.id]?.detail || "客户端登录"
+                  }}</span>
+                </span>
+              </span>
+            </ElCheckbox>
           </ElCheckboxGroup>
-          <small>客户端只能添加和打开已勾选的平台，平台账号由使用者在客户端登录。</small>
+          <small>选中的平台可在客户端添加账号。</small>
           <small v-if="editing"
             >取消授权后，已打开的对应平台会在客户端下次同步时暂停，本地登录资料保留。</small
           >
@@ -458,14 +486,29 @@ onMounted(load);
             :closable="false"
           />
         </div>
-        <label class="field"
-          >有效期至<ElDatePicker
-            v-model="form.expiresAt"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm:ssZ"
-            style="width: 100%"
-            :clearable="false" /></label
-        ><ElButton
+        <div class="field">
+          <span>有效期至</span>
+          <div class="expiry-row">
+            <ElDatePicker
+              v-model="form.expiresAt"
+              aria-label="有效期至"
+              type="datetime"
+              format="YYYY-MM-DD HH:mm:ss"
+              value-format="YYYY-MM-DDTHH:mm:ssZ"
+              :disabled="saving"
+              :clearable="false"
+            />
+            <ElButton
+              :type="longTermSelected ? 'primary' : 'default'"
+              :plain="longTermSelected"
+              :aria-pressed="longTermSelected"
+              :disabled="saving"
+              title="设置为 2099 年 12 月 31 日"
+              @click="setLongTerm"
+            >长期</ElButton>
+          </div>
+        </div>
+        <ElButton
           native-type="submit"
           type="primary"
           :loading="saving"
@@ -568,11 +611,119 @@ onMounted(load);
   white-space: nowrap;
 }
 .platform-choices {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
-.platform-choices .el-checkbox {
+.field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.required-mark {
+  color: var(--el-color-danger);
+}
+.selection-count {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.platform-choices .platform-card {
+  margin: 0;
+  min-width: 0;
+  height: 74px;
+  padding: 12px;
+  gap: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-blank);
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+.platform-card:not(.is-disabled):hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+.platform-choices .platform-card.is-checked {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+.platform-card:focus-within {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.platform-card.is-disabled {
+  opacity: 0.55;
+}
+.platform-card :deep(.el-checkbox__input) {
+  order: 2;
+  flex: 0 0 auto;
+}
+.platform-card :deep(.el-checkbox__label) {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.platform-card-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.platform-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+}
+.platform-logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 7px;
+}
+.platform-api-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  padding: 0 3px;
+  border: 1px solid var(--el-bg-color);
+  border-radius: 4px;
+  background: #13976b;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 13px;
+}
+.platform-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.platform-title {
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.platform-detail {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}
+.expiry-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.expiry-row :deep(.el-date-editor) {
+  width: 0;
+  min-width: 0;
+  flex: 1;
+}
+.expiry-row > .el-button {
+  flex: 0 0 70px;
   margin: 0;
 }
 .group-select-row {
@@ -582,5 +733,13 @@ onMounted(load);
 .group-select-row .el-select {
   flex: 1;
   min-width: 0;
+}
+@media (max-width: 480px) {
+  .platform-choices {
+    grid-template-columns: 1fr;
+  }
+  .platform-choices .platform-card {
+    height: 62px;
+  }
 }
 </style>
