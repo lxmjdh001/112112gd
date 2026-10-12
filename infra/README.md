@@ -33,10 +33,17 @@ bash scripts/package-server.sh
 
 升级先执行 `/usr/local/sbin/d1-backup`，记录旧 current 指向。新版本上线后检查 `/healthz` 和业务接口。迁移在事务中串行执行；跨数据库变更回滚时，核对兼容性或恢复对应数据库快照和密钥，不能只退回二进制。恢复前再次备份现有数据，并确定切换期间新增数据的处理方式。
 
+## 正式域名
+
+- `d1scrm.com` 与 `d1gd.com` 同时提供网站和后台，使用同一个数据库。网站调用各自同域的 `/api/v1`，不需要跨域授权。
+- `api.d1scrm.com` 用于客户端 API、Meta Webhook 与健康检查，不提供管理网站。`GONGDAN_PUBLIC_URL` 设为 `https://api.d1scrm.com`。
+- 两个域名必须先在注册商处切换到各自 Cloudflare 分配的 Nameservers。Cloudflare 的 `@` / `api` A 记录指向 `187.77.129.250`；仅在 CF 面板添加记录并不会改变注册商的 NS。
+- 生产采用 `infra/d1.caddy`，兼容 Cloudflare 的 HTTPS 和 HTTP 回源；API 响应禁止缓存。DNS 生效后必须验证三个域名的公网 HTTPS、源站证书和登录。
+
 ## 客户端地址
 
 ```sh
-GONGDAN_API_URL=https://scrm.chuhai7.com pnpm build:desktop
+GONGDAN_API_URL=https://api.d1scrm.com pnpm build:desktop
 ```
 
 构建可以通过 `GONGDAN_DESKTOP_OUTPUT_DIR` 指定独立输出目录，避免覆盖本机开发版本。当前已提供本机线上客户端入口，见 `docs/服务器发布状态.md`。这不代表已生成正式签名安装包；普通开发命令默认仍连接 `127.0.0.1:18080`。

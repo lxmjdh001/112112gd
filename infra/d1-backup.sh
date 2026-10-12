@@ -15,7 +15,8 @@ runuser -u postgres -- pg_dump --format=custom --dbname=d1scrm > "$work/database
 pg_restore --list "$work/database.dump" > /dev/null
 install -m 0600 /etc/d1scrm/api.env "$work/api.env"
 install -d -m 0700 "$work/config"
-for file in /etc/caddy/Caddyfile /etc/caddy/sites/scrm.caddy \
+for file in /etc/caddy/Caddyfile /etc/caddy/sites/d1.caddy \
+  /etc/caddy/sites/retired.caddy /etc/caddy/sites/t1go.caddy \
   /etc/systemd/system/d1-api.service /etc/systemd/system/d1-backup.service \
   /etc/systemd/system/d1-backup.timer /usr/local/sbin/d1-backup; do
     if [[ -f "$file" ]]; then

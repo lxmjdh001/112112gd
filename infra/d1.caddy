@@ -1,34 +1,110 @@
-# Merge this site block into the existing Caddy configuration only after a
-# backup. Do not replace a shared Caddyfile or overwrite unrelated site blocks.
-# If a CDN forwards HTTPS visitors over HTTP, preserve the existing verified
-# CDN routing instead of enabling a redirect loop; inspect the live config first.
-scrm.chuhai7.com {
-    encode gzip zstd
-    header {
-        -Server
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-    }
-    @api path /api/* /healthz
-    handle @api {
-        reverse_proxy 127.0.0.1:18080 {
-            # Never pass through a visitor-supplied X-Real-IP header.
-            header_up X-Real-IP {remote_host}
-        }
-    }
-    # Retired endpoints must not return the SPA or reach the old backend.
-    @retired path /web-api/* /updates/* /downloads/*
-    handle @retired {
-        respond "This version has been retired." 410
-    }
-    handle {
-        root * /opt/d1scrm/current/web
-        @html path / /index.html
-        header @html Cache-Control "no-cache"
-        @assets path /assets/*
-        header @assets Cache-Control "public, max-age=31536000, immutable"
-        try_files {path} /index.html
-        file_server
-    }
+# Production sites. Import from the existing Caddyfile; do not overwrite other sites.
+# Cloudflare ranges verified 2026-10-12 using https://api.cloudflare.com/client/v4/ips.
+# Recompute the inline-script CSP hash when publishing a changed index.html.
+(d1_headers) {
+	encode gzip zstd
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-D0zjeL09Wl1uabdblZ6eJG8rvc7MycJDp4yiL0juu3M='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; connect-src 'self' https://cloudflareinsights.com https://api.iconify.design https://api.unisvg.com https://api.simplesvg.com; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+}
+
+(d1_tls) {
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+			timeout 30s
+		}
+	}
+}
+
+(d1_api) {
+	@cloudflare_api {
+		path /api/* /healthz
+		remote_ip 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+	}
+	handle @cloudflare_api {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:18080 {
+			header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+		}
+	}
+	@api path /api/* /healthz
+	handle @api {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:18080 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
+
+(d1_web) {
+	import d1_headers
+	route {
+		import d1_api
+		@retired path /web-api /web-api/* /updates/* /downloads/*
+		handle @retired {
+			respond "This version has been retired." 410
+		}
+		@old_admin path /admin /admin/*
+		handle @old_admin {
+			redir /#/auth/login 302
+		}
+		@assets path /assets/* /js/* /jse/* /css/* /fonts/*
+		handle @assets {
+			root * /opt/d1scrm/current/web
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+		handle {
+			root * /opt/d1scrm/current/web
+			header Cache-Control no-cache
+			try_files {path} /index.html
+			file_server
+		}
+	}
+}
+
+(d1_api_only) {
+	import d1_headers
+	route {
+		import d1_api
+		handle {
+			header Cache-Control "no-store"
+			respond "D1 Scrm API" 404
+		}
+	}
+}
+
+# Support Cloudflare Flexible as well as Full/Strict without an HTTPS redirect loop.
+(d1_http) {
+	@https_from_cloudflare {
+		remote_ip 127.0.0.1/32 ::1/128 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		header X-Forwarded-Proto https
+	}
+	handle @https_from_cloudflare {
+		import {args[0]}
+	}
+	handle {
+		redir https://{host}{uri} 308
+	}
+}
+
+https://d1scrm.com, https://d1gd.com {
+	import d1_tls
+	import d1_web
+}
+http://d1scrm.com, http://d1gd.com {
+	import d1_http d1_web
+}
+https://api.d1scrm.com {
+	import d1_tls
+	import d1_api_only
+}
+http://api.d1scrm.com {
+	import d1_http d1_api_only
 }
