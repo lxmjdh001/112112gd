@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 const require = createRequire(import.meta.url);
+const outputDir = process.env.GONGDAN_DESKTOP_OUTPUT_DIR || "dist";
 const electronDir = path.dirname(require.resolve("electron"));
 if (!existsSync(path.join(electronDir, "path.txt"))) {
   const install = spawnSync(process.execPath, [path.join(electronDir, "install.js")], {
@@ -12,10 +13,10 @@ if (!existsSync(path.join(electronDir, "path.txt"))) {
   });
   if (install.status !== 0) throw new Error("Electron runtime installation failed");
 }
-await mkdir("dist", { recursive: true });
+await mkdir(outputDir, { recursive: true });
 await build({
   entryPoints: ["src/main/index.ts"],
-  outfile: "dist/main.cjs",
+  outfile: path.join(outputDir, "main.cjs"),
   platform: "node",
   format: "cjs",
   target: "node24",
@@ -29,7 +30,7 @@ await build({
 for (const name of ["shell", "whatsapp", "telegram", "line"])
   await build({
     entryPoints: [`src/preload/${name}.ts`],
-    outfile: `dist/${name}-preload.cjs`,
+    outfile: path.join(outputDir, `${name}-preload.cjs`),
     platform: "node",
     format: "cjs",
     bundle: true,
@@ -38,18 +39,18 @@ for (const name of ["shell", "whatsapp", "telegram", "line"])
   });
 await build({
   entryPoints: ["src/renderer/index.ts"],
-  outfile: "dist/renderer.js",
+  outfile: path.join(outputDir, "renderer.js"),
   platform: "browser",
   format: "iife",
   bundle: true,
   target: "chrome140",
 });
-await copyFile("src/renderer/index.html", "dist/index.html");
-await copyFile("src/renderer/style.css", "dist/style.css");
-await copyFile("src/renderer/account-sidebar.css", "dist/account-sidebar.css");
-await copyFile("../../packages/cloud-chat/style.css", "dist/cloud-chat.css");
-await mkdir("dist/assets", { recursive: true });
+await copyFile("src/renderer/index.html", path.join(outputDir, "index.html"));
+await copyFile("src/renderer/style.css", path.join(outputDir, "style.css"));
+await copyFile("src/renderer/account-sidebar.css", path.join(outputDir, "account-sidebar.css"));
+await copyFile("../../packages/cloud-chat/style.css", path.join(outputDir, "cloud-chat.css"));
+await mkdir(path.join(outputDir, "assets"), { recursive: true });
 for (const file of await readdir("src/renderer/assets")) {
   if (!file.startsWith("._") && /\.(svg|ico|png|webp)$/.test(file))
-    await copyFile(`src/renderer/assets/${file}`, `dist/assets/${file}`);
+    await copyFile(`src/renderer/assets/${file}`, path.join(outputDir, "assets", file));
 }

@@ -45,6 +45,6 @@ for (const p of (await files(root)).sort()) {
 }
 await writeFile(path.join(root, 'SHA256SUMS'), sums.join('\n') + '\n');
 JS
-COPYFILE_DISABLE=1 tar -czf "$D1_RELEASE_DIR.tar.gz" -C "$D1_RELEASE_DIR" .
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "$D1_RELEASE_DIR.tar.gz" -C "$D1_RELEASE_DIR" .
 shasum -a 256 "$D1_RELEASE_DIR.tar.gz" > "$D1_RELEASE_DIR.tar.gz.sha256"
 printf 'Release: %s\n' "$D1_RELEASE_DIR.tar.gz"

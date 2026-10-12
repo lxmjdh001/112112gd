@@ -19,7 +19,7 @@ bash scripts/package-server.sh
 
 1. 核对旧部署。历史记录是 `187.77.129.250`、`scrm.chuhai7.com`、`/opt/scrm-web/current`，旧服务 `scrm-web` 和 `omnichat`。配置和其他域名可能已变动，必须读取现状。不要停止整台服务器或覆盖共享 Caddyfile。
 2. 备份旧程序、systemd / Caddy 配置、环境密钥、SQLite 和媒体 / 会话目录。运行中的 SQLite 使用 `.backup` / 在线备份 API 获得一致快照；需要整体复制时短暂停止对应写入服务。确认备份完整、记录服务启用状态后再切换。旧副本保留到用户确认可以清理。
-3. 确认使用全新的生产数据还是迁移本机 D1 数据。旧版 SQLite 不能直接导入新版 PostgreSQL，不自动把测试账号或业务数据导入生产。
+3. 本次首次部署使用独立的新生产数据库，旧版和本机数据不自动导入。后续如需迁移，先确定数据来源并备份；旧版 SQLite 不能直接导入新版 PostgreSQL。
 4. 安装 PostgreSQL（已有实例则复用并新建独立角色 / 数据库），创建系统用户 `d1scrm`；创建同名 PostgreSQL 非超级用户和同名数据库，数据库由该角色拥有。只允许本机 Unix socket / 回环访问。环境示例通过系统用户 `d1scrm` 的 peer 认证连接。
 5. 发布到 `/opt/d1scrm/releases/<版本>/`，程序和静态文件由 root 拥有，目录可读可遍历、API 可执行；`/opt/d1scrm/current` 指向该版本。密钥不能放在 `web/`。检查 Caddy 用户可读取静态文件。
 6. 将 `api.env.example` 复制到 `/etc/d1scrm/api.env`（root / 0600），设置独立的 32 字节随机主密钥、随机管理员密码、正式 HTTPS 地址。禁止复用示例值，凭据交付到用户受保护的本地文件。迁移加密数据必须同时迁移匹配的主密钥。
@@ -39,7 +39,7 @@ bash scripts/package-server.sh
 GONGDAN_API_URL=https://scrm.chuhai7.com pnpm build:desktop
 ```
 
-这是代码构建，不代表已生成签名安装包。本机开发客户端默认仍连接 `127.0.0.1:18080`；网站部署不会自动改变客户端服务地址。
+构建可以通过 `GONGDAN_DESKTOP_OUTPUT_DIR` 指定独立输出目录，避免覆盖本机开发版本。当前已提供本机线上客户端入口，见 `docs/服务器发布状态.md`。这不代表已生成正式签名安装包；普通开发命令默认仍连接 `127.0.0.1:18080`。
 
 ## 同码多电脑
 
