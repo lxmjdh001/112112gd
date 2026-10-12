@@ -68,6 +68,7 @@ export const states: Record<string, string> = {
 };
 export const events: Record<string, string> = {
   registration_gift: "注册赠送",
+  test_credit: "测试赠送",
   account_day: "账号按日扣点",
   recharge: "充值入账",
   refund: "充值退款",

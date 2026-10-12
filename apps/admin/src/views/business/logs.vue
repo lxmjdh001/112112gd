@@ -21,6 +21,7 @@ const names: Record<string, string> = {
   "recharge.request": "提交充值申请",
   "recharge.cancel": "取消充值申请",
   "recharge.credit": "确认充值到账",
+  "points.test_credit": "测试点数赠送",
   "recharge.reject": "拒绝充值申请",
   "recharge.refund": "充值退款冲正",
   "promotion.link.update": "更新推广链接",

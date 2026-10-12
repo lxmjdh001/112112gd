@@ -460,12 +460,16 @@ onMounted(load);
                     alt=""
                   />
                   <span v-else>{{ platform.name.slice(0, 1) }}</span>
-                  <span v-if="platform.id === 'whatsapp_cloud'" class="platform-api-badge">API</span>
+                  <span v-if="platform.id === 'whatsapp_cloud'" class="platform-api-badge"
+                    >API</span
+                  >
                 </span>
                 <span class="platform-copy">
                   <span class="platform-title">{{ platform.name }}</span>
                   <span class="platform-detail">{{
-                    !platform.available ? "待开放" : platformPresentation[platform.id]?.detail || "客户端登录"
+                    !platform.available
+                      ? "待开放"
+                      : platformPresentation[platform.id]?.detail || "客户端登录"
                   }}</span>
                 </span>
               </span>
@@ -505,7 +509,8 @@ onMounted(load);
               :disabled="saving"
               title="设置为 2099 年 12 月 31 日"
               @click="setLongTerm"
-            >长期</ElButton>
+              >长期</ElButton
+            >
           </div>
         </div>
         <ElButton
@@ -637,7 +642,10 @@ onMounted(load);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 10px;
   background: var(--el-fill-color-blank);
-  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    box-shadow 0.15s;
 }
 .platform-card:not(.is-disabled):hover {
   border-color: var(--el-color-primary-light-5);
