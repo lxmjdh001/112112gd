@@ -123,6 +123,8 @@ interface Runtime {
   status: string;
 }
 const runtimes = new Map<string, Runtime>();
+const runtimeClosures = new WeakMap<Runtime, Promise<void>>();
+const closingAccounts = new Map<string, Promise<void>>();
 // Reopening an account must reuse its outbox while an earlier upload is finishing.
 const inboundQueues = new Map<string, InboundQueue>();
 const historyFile = (tenant: string, account: string) =>
@@ -268,19 +270,33 @@ function persistSession() {
     }
   });
 }
-async function closeRuntime(runtime: Runtime) {
-  runtimes.delete(runtime.id);
-  runtime.translator.clear();
-  if (!runtime.view.webContents.isDestroyed()) runtime.view.webContents.close();
-  runtime.fingerprintCleanup?.();
-  await runtime.history.close().catch(() => {});
-  await runtime.ses.setProxy({
-    mode: "fixed_servers",
-    proxyRules: "http://127.0.0.1:9",
-    proxyBypassRules: "<-loopback>",
+function closeRuntime(runtime: Runtime): Promise<void> {
+  const previous = runtimeClosures.get(runtime);
+  if (previous) return previous;
+  const current = runtimes.get(runtime.id);
+  if (current && current !== runtime) return Promise.resolve();
+  const closing = (async () => {
+    runtimes.delete(runtime.id);
+    runtime.translator.clear();
+    if (!runtime.view.webContents.isDestroyed()) {
+      runtime.view.webContents.stop();
+      runtime.view.webContents.close();
+    }
+    runtime.fingerprintCleanup?.();
+    await runtime.history.close().catch(() => {});
+    await runtime.ses.setProxy({
+      mode: "fixed_servers",
+      proxyRules: "http://127.0.0.1:9",
+      proxyBypassRules: "<-loopback>",
+    });
+    await runtime.ses.closeAllConnections();
+    await runtime.bridge?.close();
+  })().finally(() => {
+    if (closingAccounts.get(runtime.id) === closing) closingAccounts.delete(runtime.id);
   });
-  await runtime.ses.closeAllConnections();
-  await runtime.bridge?.close();
+  runtimeClosures.set(runtime, closing);
+  closingAccounts.set(runtime.id, closing);
+  return closing;
 }
 async function terminate(message: string) {
   epoch++;
@@ -453,7 +469,8 @@ async function login(code: string, remember: boolean) {
   }
 }
 async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
-  if (!runtimes.has(runtime.id) || !auth) return;
+  if (runtimes.get(runtime.id) !== runtime || !auth) return;
+  const generation = epoch;
   if (status === "ready" && !validAccountIdentity(runtime.platform, identifier)) {
     runtime.owner = undefined;
     runtime.status = "identity_pending";
@@ -473,8 +490,10 @@ async function updateStatus(runtime: Runtime, status: string, identifier?: strin
       identifier,
     });
   } catch (error) {
-    if (auth && status === "ready" && String(error).includes("公司累计 3 天缓冲已用完")) {
+    if (auth && generation === epoch && runtimes.get(runtime.id) === runtime &&
+      status === "ready" && String(error).includes("公司累计 3 天缓冲已用完")) {
       await request(`/client/accounts/${runtime.id}/close`, {}).catch(() => {});
+      if (!auth || generation !== epoch || runtimes.get(runtime.id) !== runtime) return;
       await closeRuntime(runtime);
       if (state.activeId === runtime.id) state.activeId = "";
       state.message = (error as Error).message;
@@ -526,6 +545,9 @@ async function openAccount(id: string) {
   let bridge: Bridge | undefined;
   let runtime: Runtime | undefined;
   try {
+    // A previous view may still be releasing this partition's proxy/connections.
+    await closingAccounts.get(id);
+    if (generation !== epoch || !auth) return;
     let lineDirectory: string | undefined;
     if (account.platform === "line") {
       state.message = "正在准备 LINE 登录组件，首次打开可能需要下载…";
@@ -689,7 +711,7 @@ async function openAccount(id: string) {
         fingerprint,
         adapter.allowedOrigins,
         () => {
-          if (!runtimes.has(id)) return;
+          if (runtimes.get(id) !== current || generation !== epoch || !auth) return;
           state.message = "账号指纹配置已中断，请重新打开账号以恢复配置。";
           void closeRuntime(current).then(() => {
             if (state.activeId === id) state.activeId = "";
@@ -698,19 +720,29 @@ async function openAccount(id: string) {
           });
         },
       );
-      if (!runtimes.has(id) || generation !== epoch || !auth) {
+      if (runtimes.get(id) !== current || generation !== epoch || !auth) {
         current.fingerprintCleanup();
         return;
       }
     }
-    await wc.loadURL(adapter.homeURL);
+    // A stalled page must never hold the account-operation lock. Setup is done;
+    // navigation continues independently and the user can switch, reload or close.
+    void wc.loadURL(adapter.homeURL).catch((error) => {
+      if (runtimes.get(id) !== current || generation !== epoch || !auth || wc.isDestroyed()) return;
+      if (error?.code === "ERR_ABORTED" || error?.errno === -3) return;
+      void updateStatus(current, "network_error");
+      if (state.activeId === id) {
+        state.message = "账号页面加载失败，可重新加载或关闭账号后重试";
+        emit();
+      }
+    });
   } catch (error) {
     if (runtime && runtimes.get(id) === runtime) {
       await updateStatus(runtime, "network_error");
       await closeRuntime(runtime);
     } else await bridge?.close();
     if (generation !== epoch || !auth) return;
-    state.activeId = "";
+    if (state.activeId === id) state.activeId = "";
     bounds();
     state.message =
       error instanceof LineComponentError || error instanceof FingerprintError
@@ -859,7 +891,21 @@ app.whenReady().then(async () => {
     const generation = epoch,
       identity = { ...auth };
     changingAccount = true;
+    let stoppedLocally = false;
     try {
+      if (!remove && account.connectionType !== "cloud") {
+        // Stop a stuck page immediately, even if the management API is slow.
+        const runtime = runtimes.get(id);
+        const closing = runtime ? closeRuntime(runtime) : closingAccounts.get(id);
+        stoppedLocally = true;
+        state.statuses[id] = "closed";
+        if (state.activeId === id) state.activeId = "";
+        if (restoringAccount === id) restoringAccount = "";
+        bounds();
+        persistSession();
+        emit();
+        await closing;
+      }
       if (refreshing?.epoch === epoch) await refreshing.promise;
       if (!auth || epoch !== generation) throw Error("登录状态已变化");
       account = state.accounts.find((a) => a.id === id);
@@ -892,6 +938,10 @@ app.whenReady().then(async () => {
       await saveAuth();
       bounds();
       emit();
+    } catch (error) {
+      if (stoppedLocally && auth && generation === epoch)
+        throw Error(`本机聊天页面已关闭，退出状态暂未同步，请重试：${(error as Error).message}`);
+      throw error;
     } finally {
       changingAccount = false;
       bounds();
