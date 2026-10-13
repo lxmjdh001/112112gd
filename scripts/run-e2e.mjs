@@ -3,15 +3,19 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 const schema = "gd007_e2e_" + randomBytes(5).toString("hex");
+const nativeToolsOnly = process.argv.includes("--native-tools-only");
 const ordersOnly = process.argv.includes("--work-orders-only");
 const adminOnly = process.argv.includes("--admin-only") || ordersOnly;
 const desktopOnly = process.argv.includes("--desktop-only");
 const sessionOnly = process.argv.includes("--session-only");
 const lifecycleOnly = process.argv.includes("--lifecycle-only");
 const proxyOnly = process.argv.includes("--proxy-only");
-if ([adminOnly, desktopOnly, sessionOnly, lifecycleOnly, proxyOnly].filter(Boolean).length > 1)
+if (
+  [adminOnly, desktopOnly, sessionOnly, lifecycleOnly, proxyOnly, nativeToolsOnly].filter(Boolean)
+    .length > 1
+)
   throw Error("Choose only one focused suite");
-const withAdmin = !desktopOnly && !sessionOnly && !lifecycleOnly && !proxyOnly;
+const withAdmin = !nativeToolsOnly && !desktopOnly && !sessionOnly && !lifecycleOnly && !proxyOnly;
 const pg = process.env.GONGDAN_PG_BIN || "/opt/homebrew/opt/postgresql@17/bin";
 const database =
   process.env.TEST_DATABASE_URL || "postgres://127.0.0.1:55437/gongdan007?sslmode=disable";
@@ -102,7 +106,8 @@ try {
     if (ordersOnly) await run(process.execPath, ["scripts/check-work-order-native.mjs"]);
   }
   if (!adminOnly) {
-    if (proxyOnly) await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
+    if (nativeToolsOnly) await run(process.execPath, ["scripts/check-native-tools.mjs"]);
+    else if (proxyOnly) await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
     else if (lifecycleOnly) await run(process.execPath, ["scripts/check-account-lifecycle.mjs"]);
     else {
       if (!sessionOnly) {

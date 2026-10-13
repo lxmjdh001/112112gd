@@ -142,7 +142,7 @@ async function start() {
     executablePath: path.resolve(
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
     ),
-    args: [path.resolve("apps/desktop")],
+    args: [path.resolve("apps/desktop"), "--use-mock-keychain"],
     env: {
       ...process.env,
       GONGDAN_API_URL: `http://127.0.0.1:${server.address().port}`,
@@ -186,6 +186,16 @@ try {
   await page.locator("[data-fp-random]").click();
   assert.match(await page.locator(".fp-status").innerText(), /自定义/);
   const set = async (key, value) => page.locator(`[data-fp="${key}"]`).fill(String(value));
+  await page.locator('[data-fp="os"]').selectOption("windows");
+  await set("screenWidth", 2560);
+
+  const originalUA = await page.locator('[data-fp="userAgent"]').inputValue();
+  await set("userAgent", originalUA.replace(/Chrome\/[\d.]+/, "Chrome/99.0.0.0"));
+  await page.locator('#account-form button[type="submit"]').click();
+  assert.equal(rows.length, 0);
+  assert.match(await page.locator("#account-error").innerText(), /浏览器版本/);
+  await page.locator("[data-fp-random]").click();
+  assert.match(await page.locator('[data-fp="userAgent"]').inputValue(), /Chrome\/152\./);
   await page.locator('[data-fp="os"]').selectOption("windows");
   await set("screenWidth", 2560);
   await set("screenHeight", 1440);
@@ -266,6 +276,12 @@ try {
   await waitClientState(page, (s) => s.loggedIn && s.activeId === id);
   assert.deepEqual((await snapshot(id)).now, first.now, "application restart preserves settings");
   assert.deepEqual(rows[0].fingerprint, saved);
+  await page.evaluate((id) => window.gongdan.closeAccount(id), id);
+  rows[0].fingerprint.userAgent = saved.userAgent.replace(/Chrome\/[\d.]+/, "Chrome/99.0.0.0");
+  await page.evaluate((id) => window.gongdan.open(id), id);
+  const repaired = await snapshot(id);
+  assert.match(repaired.now.ua, /Chrome\/152\./);
+  assert.equal(repaired.now.canvas, first.now.canvas, "legacy repair preserves account seed");
   assert.deepEqual(unexpected, []);
   console.log(
     "PASS: manual/random/current UI, invalid setting rejection, first-script UA/CH/platform/screen/timezone/language/CPU/memory/GPU/WebRTC, stable Canvas/audio, HTTP headers, native isolation and restart persistence.",

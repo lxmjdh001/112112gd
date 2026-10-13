@@ -105,7 +105,7 @@ async function start() {
     executablePath: path.resolve(
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
     ),
-    args: [path.resolve("apps/desktop")],
+    args: [path.resolve("apps/desktop"), "--use-mock-keychain"],
     env: {
       ...process.env,
       GONGDAN_API_URL: `http://127.0.0.1:${server.address().port}`,
@@ -174,8 +174,8 @@ try {
   await page.evaluate(() => window.gongdan.reload());
   await waitClientState(page, (s) => s.statuses[tg1] === "ready");
   assert.equal(await nativeStorage("123456781"), "saved", "reload stays on Telegram");
-  assert.equal(await page.locator(".ct-scroll").isHidden(), true);
-  assert.match(await page.locator(".ct-customer").innerText(), /选中文字后右键/);
+  assert.equal(await page.locator(".ct-scroll").isVisible(), true);
+  assert.match(await page.locator(".ct-customer").innerText(), /尚未选择客户/);
   await app.evaluate(({ BrowserWindow }) => {
     const view = BrowserWindow.getAllWindows()[0].contentView.children.find((v) =>
       v.webContents?.getURL().startsWith("https://web.telegram.org/k/"),
@@ -214,8 +214,8 @@ try {
   assert.equal(lineState.hasPassword, true);
   assert.equal(lineState.hasQR, true);
   assert.equal(lineState.node, "undefined");
-  assert.equal(await page.locator(".ct-scroll").isHidden(), true);
-  assert.match(await page.locator(".ct-customer strong").innerText(), /LINE/);
+  assert.equal(await page.locator(".ct-scroll").isVisible(), true);
+  assert.match(await page.locator(".ct-customer strong").innerText(), /尚未选择客户/);
   const screenshot = await app.evaluate(async ({ BrowserWindow }) => {
     const view = BrowserWindow.getAllWindows()[0].contentView.children.find((v) =>
       v.webContents?.getURL().startsWith("chrome-extension://ophjlpahpchlmihnnnihgmmeilfjmjjc/"),

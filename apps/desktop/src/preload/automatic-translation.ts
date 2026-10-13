@@ -1,3 +1,4 @@
+import type { ChatAdapter, ChatMessage } from "./chat-adapter.ts";
 import {
   currentWhatsAppCustomer,
   customerFromMessageIds,
@@ -14,10 +15,15 @@ interface Transport {
   saveOriginal(id: string, value: Original): Promise<void>;
 }
 const composerSelector = '#main footer [contenteditable="true"][role="textbox"]';
-const clean = (el: HTMLElement) => el.innerText.replace(/\u00a0/g, " ").trim();
 const errorText = (e: unknown) =>
   String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': Error: /, "");
-export function installAutomaticTranslation(doc: Document, transport: Transport) {
+export function installAutomaticTranslation(
+  doc: Document,
+  transport: Transport,
+  adapter?: ChatAdapter,
+) {
+  const clean = (el: HTMLElement) =>
+    adapter ? adapter.read(el) : el.innerText.replace(/\u00a0/g, " ").trim();
   const win = doc.defaultView!;
   const translator = new AutomaticTranslator(transport.translate);
   const languages = new Map<string, string>();
@@ -44,9 +50,12 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
   let prepared: { peer: string; source: string; text: string; target: string } | undefined;
   let composerAfterSend: typeof prepared;
   const notes = new WeakMap<HTMLElement, { text: HTMLElement; retry: HTMLButtonElement }>();
-  const editor = () => doc.querySelector<HTMLElement>(composerSelector);
-  const currentPeer = () => currentWhatsAppCustomer(doc) || "";
+  const editor = () =>
+    adapter ? adapter.editor() : doc.querySelector<HTMLElement>(composerSelector);
+  const currentPeer = () =>
+    (adapter ? adapter.customer()?.identifier : currentWhatsAppCustomer(doc)) || "";
   const sendButton = () => {
+    if (adapter) return adapter.sendButton();
     const icon = doc.querySelector<HTMLElement>(
       '#main footer [data-icon="send"], #main footer [data-testid="send"], #main footer [aria-label="发送"], #main footer [aria-label="Send"]',
     );
@@ -56,7 +65,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     if (preview && preview.textContent !== text) preview.textContent = text;
   }
   function mountPreview() {
-    const footer = doc.querySelector<HTMLElement>("#main footer");
+    const footer = adapter ? adapter.footer() : doc.querySelector<HTMLElement>("#main footer");
     if (!footer || footerHost?.parentElement === footer) return;
     footerHost?.remove();
     footerHost = doc.createElement("div");
@@ -130,6 +139,26 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
       scan();
     };
   }
+  function messages(): ChatMessage[] {
+    if (adapter) return adapter.messages();
+    const identifier = currentPeer();
+    return [...doc.querySelectorAll<HTMLElement>("#main [data-id]")].slice(-100).flatMap((row) => {
+      const id = row.dataset.id || "";
+      if (customerFromMessageIds([id]) !== identifier) return [];
+      const textNode = [
+        ...row.querySelectorAll<HTMLElement>(
+          '.selectable-text.copyable-text, [data-testid="msg-text"], .selectable-text',
+        ),
+      ].find(
+        (el) =>
+          !el.closest('[data-testid="quoted-message"], [data-testid="quoted-message-container"]') &&
+          el.closest("[data-id]") === row,
+      );
+      return textNode
+        ? [{ row, textNode, id, text: clean(textNode), outgoing: id.startsWith("true_") }]
+        : [];
+    });
+  }
   function scan() {
     if (disposed) return;
     const identifier = currentPeer();
@@ -150,23 +179,9 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     }
     mountPreview();
     if (!identifier) return;
-    const rows = [...doc.querySelectorAll<HTMLElement>("#main [data-id]")].slice(-100).reverse();
-    for (const row of rows) {
-      const id = row.dataset.id || "";
-      if (customerFromMessageIds([id]) !== identifier) continue;
-      const textNode = [
-        ...row.querySelectorAll<HTMLElement>(
-          '.selectable-text.copyable-text, [data-testid="msg-text"], .selectable-text',
-        ),
-      ].find(
-        (el) =>
-          !el.closest('[data-testid="quoted-message"], [data-testid="quoted-message-container"]') &&
-          el.closest("[data-id]") === row,
-      );
-      if (!textNode) continue;
-      const source = clean(textNode);
+    for (const { row, textNode, id, text: source, outgoing } of messages().reverse()) {
       if (!source) continue;
-      if (id.startsWith("true_") && !originals.has(id)) {
+      if (outgoing && !originals.has(id)) {
         const at = pending.findIndex(
           (p) =>
             p.identifier === identifier &&
@@ -232,11 +247,14 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     replacing = true;
     try {
       box.focus();
-      const range = doc.createRange();
-      range.selectNodeContents(box);
-      const selection = win.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
+      if (box instanceof HTMLTextAreaElement) box.select();
+      else {
+        const range = doc.createRange();
+        range.selectNodeContents(box);
+        const selection = win.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
       if (!doc.execCommand("insertText", false, text) || clean(box) !== text.trim())
         throw Error("无法更新官方输入框，消息未发送");
     } finally {
@@ -278,10 +296,9 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
         peerVersion === ticket &&
         languages.get(identifier) === target;
       if (!unchanged() || clean(box) !== input) throw Error("客户、语言或草稿已变化，本次未发送");
-      if (!sendButton()) throw Error("未找到官方发送按钮，原文已保留");
-      const before = new Set(
-        [...doc.querySelectorAll<HTMLElement>("#main [data-id]")].map((el) => el.dataset.id || ""),
-      );
+      if (adapter ? !adapter.canSend() : !sendButton())
+        throw Error("未找到官方发送入口，原文已保留");
+      const before = new Set(messages().map((m) => m.id));
       replaceDraft(box, text);
       swapped = text.trim();
       composerAfterSend = { peer: identifier, source, text, target };
@@ -289,8 +306,8 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
       if (!unchanged() || clean(box) !== text.trim()) throw Error("聊天内容已变化，本次未发送");
       const send = sendButton();
       if (
-        !send ||
-        send.getAttribute("aria-disabled") === "true" ||
+        (adapter ? !adapter.canSend() : !send) ||
+        send?.getAttribute("aria-disabled") === "true" ||
         (send instanceof HTMLButtonElement && send.disabled)
       )
         throw Error("官方发送按钮暂不可用，请稍后重试");
@@ -299,12 +316,13 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
       // Exactly one click after the user's own send action; no retry on ambiguous delivery.
       bypass = true;
       try {
-        send.click();
+        if (adapter) adapter.send();
+        else send!.click();
         handedOff = true;
       } finally {
         bypass = false;
       }
-      show("已交给 WhatsApp 发送，请以消息旁的发送状态为准");
+      show(`已交给 ${adapter?.name || "WhatsApp"} 发送，请以消息旁的发送状态为准`);
       await new Promise((resolve) => setTimeout(resolve, 500));
       scan();
     } catch (e) {
@@ -335,15 +353,32 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     void sendTranslated();
   };
   const keydown = (e: KeyboardEvent) => {
-    if (bypass || e.key !== "Enter" || e.shiftKey || e.altKey || e.isComposing || e.keyCode === 229)
+    if (
+      bypass ||
+      (adapter
+        ? !adapter.isSendKey(e)
+        : e.key !== "Enter" || e.shiftKey || e.altKey || e.isComposing || e.keyCode === 229)
+    )
       return;
     const box = editor();
-    if (!box || !(e.target instanceof Node) || !box.contains(e.target) || !clean(box)) return;
+    if (
+      !box ||
+      (adapter
+        ? !adapter.isComposerEvent(e)
+        : !(e.target instanceof Node) || !box.contains(e.target)) ||
+      !clean(box)
+    )
+      return;
     stop(e);
     if (!e.repeat) void sendTranslated();
   };
   const input = (e: Event) => {
-    if (e.target instanceof Element && e.target.closest(composerSelector)) schedulePreview();
+    if (
+      adapter
+        ? adapter.isComposerEvent(e)
+        : e.target instanceof Element && e.target.closest(composerSelector)
+    )
+      schedulePreview();
   };
   const queueScan = () => {
     clearTimeout(scanTimer);
@@ -355,13 +390,14 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     childList: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ["data-id"],
+    attributeFilter: ["data-id", "data-peer-id", "data-mid", "data-message-id"],
   });
   win.addEventListener("click", click, true);
   win.addEventListener("keydown", keydown, true);
   doc.addEventListener("input", input, true);
   doc.addEventListener("scroll", queueScan, true);
   scan();
+  const polling = adapter ? setInterval(scan, 1000) : undefined;
   return {
     setLanguage(identifier: string, language: string) {
       if (languages.get(identifier) === language) return;
@@ -374,6 +410,7 @@ export function installAutomaticTranslation(doc: Document, transport: Transport)
     dispose() {
       disposed = true;
       observer.disconnect();
+      clearInterval(polling);
       clearTimeout(scanTimer);
       clearTimeout(previewTimer);
       win.removeEventListener("click", click, true);

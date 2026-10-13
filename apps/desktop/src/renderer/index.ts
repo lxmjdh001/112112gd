@@ -54,10 +54,7 @@ function updateTools(state: ViewState) {
   }
   if (!tools.host.isConnected) container.querySelector(".workspace")!.append(tools.host);
   const context = cloudCustomer?.accountId === state.activeId ? cloudCustomer : state.customer;
-  const platform = state.accounts.find((account) => account.id === state.activeId)?.platform;
-  const nativeOnly =
-    platform === "line" ? "LINE" : platform === "telegram" ? "Telegram" : undefined;
-  tools.widget.update(context, state.toolsCollapsed === true, nativeOnly);
+  tools.widget.update(context, state.toolsCollapsed === true);
 }
 
 let cloud: { id: string; host: HTMLElement; widget: ReturnType<typeof mountCloudChat> } | undefined;

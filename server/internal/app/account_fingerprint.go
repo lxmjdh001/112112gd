@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -31,7 +32,7 @@ type accountFingerprint struct {
 
 var fingerprintSeed = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var fingerprintUA = regexp.MustCompile(`^[\x20-\x7e]+$`)
-var fingerprintChrome = regexp.MustCompile(`Chrome/[0-9]+(?:\.[0-9]+){3}`)
+var fingerprintChrome = regexp.MustCompile(`(?:^| )Chrome/([0-9]+)(?:\.[0-9]+){3}(?: |$)`)
 var fingerprintLanguage = regexp.MustCompile(`^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$`)
 var fingerprintControl = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 
@@ -44,6 +45,16 @@ func validateAccountFingerprint(p *accountFingerprint) error {
 	system, ok := systems[p.OS]
 	if !ok || p.Version != 1 || !fingerprintSeed.MatchString(p.Seed) || len(p.UserAgent) > 512 || !fingerprintUA.MatchString(p.UserAgent) || !fingerprintChrome.MatchString(p.UserAgent) || !strings.Contains(p.UserAgent, system) {
 		return invalid
+	}
+	// Keep in step with the bundled desktop Chromium and the client form.
+	major, _ := strconv.Atoi(fingerprintChrome.FindStringSubmatch(p.UserAgent)[1])
+	if major < 120 || major > 152 {
+		return errors.New("浏览器版本须在 Chrome 120–152 之间，请使用当前内核版本或重新随机生成")
+	}
+	for _, marker := range []string{"Electron/", "HeadlessChrome/", "Edg/", "OPR/"} {
+		if strings.Contains(p.UserAgent, marker) {
+			return invalid
+		}
 	}
 	for _, value := range []string{p.GPUVendor, p.GPURenderer} {
 		if utf8.RuneCountInString(value) > 240 || fingerprintControl.MatchString(value) {

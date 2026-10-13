@@ -1,3 +1,4 @@
+import { installNativeChat } from "./native-chat.ts";
 import { installInboundStats } from "./inbound-stats.ts";
 import { ipcRenderer } from "electron";
 import {
@@ -8,6 +9,7 @@ import { installNativeTranslation } from "./native-translation.ts";
 window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.telegram.org") return;
   installNativeTranslation();
+  installNativeChat("telegram");
   installInboundStats("telegram");
   function report() {
     const status = observeTelegram(document, navigator.onLine);

@@ -1,3 +1,4 @@
+import { validCustomerIdentity } from "../shared/customer-identity.ts";
 import { InboundQueue, type InboundBatch } from "./inbound-queue.ts";
 import { TranslationHistory } from "./translation-history.ts";
 import type { CustomerContext, AssetContent } from "../shared/customer-tools.ts";
@@ -48,7 +49,11 @@ import {
 } from "../../../../packages/platform/registry.ts";
 import { LINE_EXTENSION_ID } from "../../../../packages/platform/line/index.ts";
 import { ensureLineComponent, LineComponentError } from "./line-component.ts";
-import { validateFingerprint, type Fingerprint } from "../shared/fingerprint.ts";
+import {
+  compatibleFingerprint,
+  validateFingerprint,
+  type Fingerprint,
+} from "../shared/fingerprint.ts";
 import { applyFingerprint, FingerprintError } from "./fingerprint.ts";
 
 // Keep the existing profile when the display name changes, including saved logins.
@@ -507,7 +512,7 @@ async function openAccount(id: string) {
     accountsRevision++;
     for (const row of state.accounts) if (row.id === id) row.paused = false;
     const p = settings.proxy;
-    const fingerprint = validateFingerprint(settings.fingerprint);
+    const fingerprint = compatibleFingerprint(settings.fingerprint, process.versions.chrome);
     const ses = session.fromPartition(`persist:gd7-${settings.tenantId}-${id}`);
     if (lineDirectory && !ses.extensions.getExtension(LINE_EXTENSION_ID)) {
       const extension = await ses.extensions.loadExtension(lineDirectory);
@@ -917,7 +922,7 @@ app.whenReady().then(async () => {
     )
       throw Error("请填写账号名称并选择平台");
     getPlatform(input.platform);
-    const fingerprint = validateFingerprint(input.fingerprint);
+    const fingerprint = validateFingerprint(input.fingerprint, process.versions.chrome);
     const generation = epoch;
     creatingAccount = true;
     try {
@@ -1100,8 +1105,7 @@ app.whenReady().then(async () => {
         typeof payload?.identifier !== "string" ||
         typeof payload.name !== "string" ||
         payload.name.length > 150 ||
-        (payload.identifier !== "" &&
-          !/^(?:[1-9][0-9]{6,14}|[0-9]{5,30}@lid)$/.test(payload.identifier))
+        (payload.identifier !== "" && !validCustomerIdentity(runtime.platform, payload.identifier))
       )
         return;
       runtime.customer = payload.identifier
@@ -1126,18 +1130,23 @@ app.whenReady().then(async () => {
     const runtime = requireRuntime(event);
     if (
       typeof payload?.identifier !== "string" ||
-      !/^(?:[1-9][0-9]{6,14}|[0-9]{5,30}@lid)$/.test(payload.identifier)
+      !validCustomerIdentity(runtime.platform, payload.identifier)
     )
       throw Error("客户参数无效");
     if (payload.id === undefined) return runtime.history.list(payload.identifier);
-    const match = /^true_([^_]+)_[^\s]{1,200}$/.exec(payload.id);
+    const match =
+      typeof payload.id === "string" ? /^true_([^_]+)_[^\s]{1,200}$/.exec(payload.id) : null;
     const expectedPeer = payload.identifier.endsWith("@lid")
       ? payload.identifier
       : payload.identifier + "@s.whatsapp.net";
     const actualPeer = match?.[1]?.replace(/:[0-9]+@/, "@").replace(/@c\.us$/, "@s.whatsapp.net");
+    const nativeMessage =
+      typeof payload.id === "string" &&
+      payload.id.startsWith(`${runtime.platform}:${payload.identifier}:`) &&
+      /^-?\d{1,30}$/.test(payload.id.slice(`${runtime.platform}:${payload.identifier}:`.length));
     if (
       typeof payload.id !== "string" ||
-      actualPeer !== expectedPeer ||
+      (runtime.platform === "whatsapp" ? actualPeer !== expectedPeer : !nativeMessage) ||
       typeof payload.source !== "string" ||
       typeof payload.text !== "string" ||
       !payload.source.trim() ||

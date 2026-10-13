@@ -10,3 +10,13 @@ test("preserves actual Chromium version and removes scoped application marker", 
     "Mozilla/5.0 Chrome/152.0.7977.130 Safari/537.36",
   );
 });
+
+test("display-name compaction cannot leave an unsupported D1 product token", () => {
+  assert.equal(
+    chromiumUserAgent(
+      "Mozilla/5.0 D1Scrm/0.1.3 Chrome/152.0.7977.130 Electron/44.7.0 Safari/537.36",
+      "D1 Scrm",
+    ),
+    "Mozilla/5.0 Chrome/152.0.7977.130 Safari/537.36",
+  );
+});

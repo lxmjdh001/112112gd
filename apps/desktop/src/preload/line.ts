@@ -1,3 +1,4 @@
+import { installNativeChat } from "./native-chat.ts";
 import { installInboundStats } from "./inbound-stats.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import { LINE_ORIGIN, readLineOwner } from "../../../../packages/platform/line/index.ts";
@@ -58,6 +59,7 @@ if (location.href.startsWith(LINE_ORIGIN + "/") && window.top === window) {
   });
   window.addEventListener("DOMContentLoaded", () => {
     installNativeTranslation();
+    installNativeChat("line");
     installInboundStats("line");
     function report() {
       try {

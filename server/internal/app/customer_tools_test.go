@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/png"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -162,5 +163,34 @@ func TestCustomerToolsCloudAccountScope(t *testing.T) {
 	h.commerceCall(t, "PUT", "/whatsapp-cloud/numbers/"+number+"/assignments", h.admin, gin.H{"codeIds": []string{}})
 	if s, _ := h.call("POST", "/client/tools/customer", token, body); s != 404 {
 		t.Fatal("revoked assignment retained access", s)
+	}
+}
+
+func TestCustomerToolsNativePlatforms(t *testing.T) {
+	h := setup(t)
+	code := h.commerceCall(t, "POST", "/login-codes", h.admin, gin.H{"label": "多平台工具", "allowedPlatforms": []string{"line", "telegram", "whatsapp"}, "expiresAt": time.Now().Add(time.Hour)})
+	_, login := h.login(code["code"].(string), "native-tools")
+	token := login["data"].(map[string]any)["accessToken"].(string)
+	tag := h.commerceCall(t, "POST", "/client/tools/tags", token, gin.H{"name": "重点客户"})["id"].(string)
+	for i, platform := range []string{"line", "telegram", "whatsapp"} {
+		account := h.commerceCall(t, "POST", "/client/accounts", token, gin.H{"label": platform, "platform": platform, "proxyId": "", "requestId": key(1580 + i)})["id"].(string)
+		identifier := "447700900001"
+		if platform == "line" {
+			identifier = "u11111111111111111111111111111111"
+		}
+		body := gin.H{"accountId": account, "identifier": identifier, "details": gin.H{"notes": platform + " notes"}, "language": "ja", "version": 0}
+		h.commerceCall(t, "PUT", "/client/tools/customer", token, body)
+		h.commerceCall(t, "PUT", "/client/tools/customer/tag", token, gin.H{"accountId": account, "identifier": identifier, "tagId": tag, "assigned": true})
+		got := h.commerceCall(t, "POST", "/client/tools/customer", token, body)
+		if got["platform"] != platform || got["details"].(map[string]any)["notes"] != platform+" notes" || len(got["tags"].([]any)) != 1 {
+			t.Fatal(got)
+		}
+		if platform == "telegram" {
+			for _, bad := range []string{"-100123", "same display name", "@handle", "0"} {
+				if status, _ := h.call("POST", "/client/tools/customer", token, gin.H{"accountId": account, "identifier": bad}); status != 400 {
+					t.Fatal("unsafe Telegram identity", bad, status)
+				}
+			}
+		}
 	}
 }

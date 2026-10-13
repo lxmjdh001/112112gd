@@ -45,7 +45,13 @@ export function userAgentFor(os: Fingerprint["os"], chromeVersion: string) {
   }[os];
   return `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
 }
-export function validateFingerprint(value: unknown): Fingerprint | null {
+// Product compatibility floor, stricter than individual sites' legacy minimums.
+export const MIN_CHROME_MAJOR = 120;
+export const MAX_CHROME_MAJOR = 152;
+export function chromeVersionOf(ua: string): string | undefined {
+  return /(?:^| )Chrome\/([0-9]+(?:\.[0-9]+){3})(?= |$)/.exec(ua)?.[1];
+}
+export function validateFingerprint(value: unknown, runtimeVersion?: string): Fingerprint | null {
   if (value == null) return null;
   const p = value as Fingerprint;
   const fail = () => {
@@ -65,6 +71,15 @@ export function validateFingerprint(value: unknown): Fingerprint | null {
     !/Chrome\/[0-9]+(?:\.[0-9]+){3}/.test(p.userAgent)
   )
     fail();
+  const version = chromeVersionOf(p.userAgent);
+  const major = Number(version?.split(".")[0]);
+  const maximum = runtimeVersion ? Number(runtimeVersion.split(".")[0]) : MAX_CHROME_MAJOR;
+  if (!version || major < MIN_CHROME_MAJOR || major > maximum)
+    throw Error(
+      `浏览器版本须在 Chrome ${MIN_CHROME_MAJOR}–${maximum} 之间，请使用当前内核版本或重新随机生成`,
+    );
+  if (/(?:Electron|HeadlessChrome|Edg|OPR)\//.test(p.userAgent))
+    throw Error("请使用标准 Chrome 浏览器标识，可点击随机生成重置");
   const osMatches = {
     windows: /Windows NT/,
     macos: /Macintosh; Intel Mac OS X/,
@@ -121,7 +136,22 @@ export function validateFingerprint(value: unknown): Fingerprint | null {
   ) as unknown as Fingerprint;
 }
 
-export function randomFingerprint(base: Fingerprint): Fingerprint {
+// Old saved identities can be outside today's supported range. Repair only
+// the browser version at load time; retain account seed, cookies and other settings.
+export function compatibleFingerprint(value: unknown, runtimeVersion: string): Fingerprint | null {
+  if (value == null) return null;
+  const p = value as Fingerprint;
+  const version = typeof p.userAgent === "string" ? chromeVersionOf(p.userAgent) : undefined;
+  const major = Number(version?.split(".")[0]);
+  const maximum = Number(runtimeVersion.split(".")[0]);
+  const repaired =
+    version && (major < MIN_CHROME_MAJOR || major > maximum)
+      ? { ...p, userAgent: p.userAgent.replace(`Chrome/${version}`, `Chrome/${runtimeVersion}`) }
+      : p;
+  return validateFingerprint(repaired, runtimeVersion);
+}
+
+export function randomFingerprint(base: Fingerprint, runtimeVersion: string): Fingerprint {
   const pick = <T>(items: readonly T[]) =>
     items[crypto.getRandomValues(new Uint32Array(1))[0]! % items.length]!;
   const os = pick(["windows", "macos", "linux"] as const);
@@ -137,7 +167,7 @@ export function randomFingerprint(base: Fingerprint): Fingerprint {
     version: 1,
     seed: crypto.randomUUID().replaceAll("-", ""),
     os,
-    userAgent: userAgentFor(os, base.userAgent.match(/Chrome\/([\d.]+)/)?.[1] || "144.0.0.0"),
+    userAgent: userAgentFor(os, runtimeVersion),
     gpuVendor,
     gpuRenderer,
     screenWidth,

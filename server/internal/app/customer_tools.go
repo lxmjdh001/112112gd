@@ -9,6 +9,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"net/http"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -31,6 +32,8 @@ func (a *App) customerToolsRoutes(client *gin.RouterGroup) {
 	t.PUT("/customer/tag", a.assignToolTag)
 }
 
+var telegramCustomerIdentity = regexp.MustCompile(`^[1-9][0-9]{0,15}$`)
+
 // Resolve the platform from an authorized account, including assigned Cloud numbers.
 func (a *App) toolCustomerIdentity(c *gin.Context, account, identifier string) (string, string, bool) {
 	id := identity(c)
@@ -47,7 +50,14 @@ func (a *App) toolCustomerIdentity(c *gin.Context, account, identifier string) (
 		dbError(c, err)
 		return "", "", false
 	}
-	normalized, _, err := normalizeCustomer(platform, identifier, "")
+	normalized := strings.TrimSpace(identifier)
+	if platform == "telegram" {
+		if !telegramCustomerIdentity.MatchString(normalized) {
+			err = errors.New("invalid Telegram user ID")
+		}
+	} else {
+		normalized, _, err = normalizeCustomer(platform, identifier, "")
+	}
 	if err != nil || normalized == "" {
 		fail(c, 400, "请先选择可识别的客户聊天")
 		return "", "", false

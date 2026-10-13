@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,5 +56,27 @@ func TestAccountFingerprintPersistenceValidationAndRetry(t *testing.T) {
 	otherToken := other["data"].(map[string]any)["accessToken"].(string)
 	if status, _ := h.call("POST", "/client/accounts/"+id+"/open", otherToken, gin.H{}); status != 404 {
 		t.Fatal("fingerprint exposed to another login code", status)
+	}
+}
+
+func TestFingerprintBrowserVersionBoundaries(t *testing.T) {
+	for _, version := range []string{"99.0.0.0", "119.0.0.0", "153.0.0.0", "999.0.0.0"} {
+		p := fingerprintFixture()
+		p.UserAgent = fingerprintChrome.ReplaceAllString(p.UserAgent, " Chrome/"+version+" ")
+		if err := validateAccountFingerprint(p); err == nil {
+			t.Fatalf("unsafe version %s accepted", version)
+		}
+	}
+	for _, version := range []string{"120.0.0.0", "152.0.7977.130"} {
+		p := fingerprintFixture()
+		p.UserAgent = fingerprintChrome.ReplaceAllString(p.UserAgent, " Chrome/"+version+" ")
+		if err := validateAccountFingerprint(p); err != nil {
+			t.Fatal(version, err)
+		}
+	}
+	p := fingerprintFixture()
+	p.UserAgent = strings.TrimSpace(p.UserAgent) + " Electron/44.7.0"
+	if err := validateAccountFingerprint(p); err == nil {
+		t.Fatal("custom browser product accepted")
 	}
 }

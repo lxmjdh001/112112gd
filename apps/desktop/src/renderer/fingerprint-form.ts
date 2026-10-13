@@ -1,5 +1,7 @@
 import {
   gpuPresets,
+  MIN_CHROME_MAJOR,
+  MAX_CHROME_MAJOR,
   randomFingerprint,
   userAgentFor,
   validateFingerprint,
@@ -7,7 +9,8 @@ import {
 } from "../shared/fingerprint.ts";
 
 export function mountFingerprintForm(host: HTMLElement) {
-  const chromeVersion = navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] || "144.0.0.0";
+  const chromeVersion =
+    navigator.userAgent.match(/Chrome\/([\d.]+)/)?.[1] || `${MAX_CHROME_MAJOR}.0.0.0`;
   const os = /Windows/.test(navigator.userAgent)
     ? "windows"
     : /Macintosh/.test(navigator.userAgent)
@@ -36,7 +39,7 @@ export function mountFingerprintForm(host: HTMLElement) {
   let custom = false;
   host.className = "fingerprint-card";
   host.innerHTML = `<div class="fp-heading"><div class="fp-title"><h3>指纹配置</h3><span class="fp-status">当前电脑配置</span></div><div class="fp-actions"><button type="button" data-fp-current>使用当前电脑</button><button type="button" data-fp-random>↻ 随机生成</button></div></div>
-    <p class="fp-help">可手动修改或随机生成。自定义配置随账号保存，重启保持不变。</p>
+    <p class="fp-help">随机生成使用当前 Chrome ${chromeVersion.split(".")[0]} 内核；手动版本范围 ${MIN_CHROME_MAJOR}–${chromeVersion.split(".")[0]}。配置随账号保存。</p>
     <div class="fp-grid">
     <label>操作系统<select data-fp="os"><option value="windows">Windows</option><option value="macos">macOS</option><option value="linux">Linux</option></select></label>
     <label class="fp-gpu-preset">GPU 预设<select data-fp-preset><option value="">当前电脑 / 自定义</option></select></label>
@@ -112,10 +115,10 @@ export function mountFingerprintForm(host: HTMLElement) {
     render();
   });
   host.querySelector("[data-fp-random]")!.addEventListener("click", () => {
-    profile = randomFingerprint(profile);
+    profile = randomFingerprint(profile, chromeVersion);
     custom = true;
     render();
   });
   render();
-  return { value: () => (custom ? validateFingerprint(profile) : null) };
+  return { value: () => (custom ? validateFingerprint(profile, chromeVersion) : null) };
 }
