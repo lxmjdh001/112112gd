@@ -118,7 +118,7 @@ function render(state: ViewState) {
     const error = form.querySelector<HTMLElement>(".error")!;
     const showError = (err: unknown) => {
       error.textContent = String((err as Error).message).replace(
-        /^Error invoking remote method '[^']+': Error: /,
+        /^Error invoking remote method '[^']+': (?:\w*Error: )?/,
         "",
       );
     };

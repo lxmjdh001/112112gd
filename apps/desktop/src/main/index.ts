@@ -35,6 +35,7 @@ import type {
   ViewState,
 } from "../shared/types.ts";
 import { serviceAddress } from "./service-address.ts";
+import { readServiceResult, serviceConnectionError } from "./service-response.ts";
 import { AccountCleanup } from "./account-cleanup.ts";
 
 declare const __GONGDAN_API_URL__: string;
@@ -199,21 +200,29 @@ async function request<T>(
   method = body === undefined ? "GET" : "POST",
 ): Promise<T> {
   const requestAuth = auth;
-  const res = await fetch(apiURL + "/api/v1" + route, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": `D1scrm-desktop/${app.getVersion()} (${process.platform}; ${process.arch})`,
-      ...(requestAuth ? { Authorization: "Bearer " + requestAuth.accessToken } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(route.includes("/whatsapp-cloud/") ? 30000 : 10000),
-    redirect: "error",
-  });
+  // Chromium follows the OS proxy and certificate settings, unlike Node's fetch.
+  // Account-specific proxies live in separate sessions and must not affect login.
+  const res = await net
+    .fetch(apiURL + "/api/v1" + route, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": `D1scrm-desktop/${app.getVersion()} (${process.platform}; ${process.arch})`,
+        ...(requestAuth ? { Authorization: "Bearer " + requestAuth.accessToken } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(route.includes("/whatsapp-cloud/") ? 30000 : 10000),
+      redirect: "error",
+      credentials: "omit",
+      cache: "no-store",
+    })
+    .catch((error) => {
+      throw serviceConnectionError(error, apiURL);
+    });
   // A confirmed revocation is different from an unreachable management service.
   if (res.status === 401 && auth && auth === requestAuth)
     await terminate("登录权限已失效，请联系管理员或重新输入登录码");
-  const result = (await res.json()) as { code: number; data: T; message?: string };
+  const result = await readServiceResult<T>(res);
   if (res.status === 402 && auth && auth === requestAuth)
     await terminate(result.message || "点数不足且缓冲已到期，请联系平台充值后重新登录");
   if (!res.ok) {

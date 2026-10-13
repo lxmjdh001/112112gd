@@ -65,7 +65,8 @@ const relay = http.createServer(async (req, res) => {
     }
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    const result = await fetch(backend + req.url, {
+    const requested = new URL(req.url, backend);
+    const result = await fetch(backend + requested.pathname + requested.search, {
       method: req.method,
       headers: {
         "Content-Type": "application/json",
@@ -91,7 +92,7 @@ const credentials = path.join(userData, "authorization.bin");
 const preferences = path.join(userData, "login-preferences.json");
 let app, page;
 const errors = [];
-async function launch() {
+async function launch(apiAddress = address) {
   app = await electron.launch({
     executablePath: path.resolve(
       "apps/desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
@@ -100,7 +101,7 @@ async function launch() {
     env: {
       ...process.env,
       GONGDAN_USER_DATA: userData,
-      GONGDAN_API_URL: address,
+      GONGDAN_API_URL: apiAddress,
       GONGDAN_E2E: "1",
     },
     timeout: 30000,
@@ -139,10 +140,48 @@ async function login() {
   await page.getByRole("button", { name: "进入工作台", exact: true }).click();
 }
 try {
+  // The API is reachable only through a proxy. Node fetch fails, while the actual
+  // login must use Chromium's configured proxy and reach the backend unchanged.
+  const closedPort = http.createServer();
+  closedPort.listen(0, "127.0.0.1");
+  await once(closedPort, "listening");
+  const proxyOnlyAddress = `http://127.0.0.1:${closedPort.address().port}`;
+  await new Promise((resolve) => closedPort.close(resolve));
+  await launch(proxyOnlyAddress);
+  await page.locator("#login-code").waitFor();
+  await app.evaluate(async ({ session }, proxy) => {
+    await session.defaultSession.setProxy({
+      mode: "fixed_servers",
+      proxyRules: proxy,
+      proxyBypassRules: "<-loopback>",
+    });
+  }, address);
+  const oldTransport = await app.evaluate(async (_, target) => {
+    try {
+      await fetch(target + "/api/v1/client/auth", { signal: AbortSignal.timeout(2000) });
+      return "unexpected success";
+    } catch (error) {
+      return error.message;
+    }
+  }, proxyOnlyAddress);
+  assert.equal(oldTransport, "fetch failed");
+  await page.locator("#login-code").fill("GD7-proxy-compatibility-invalid");
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "登录码无效" }).waitFor();
+  assert.equal(authCount, 1, "Login must reach the API through the proxy exactly once");
+  await app.close();
+  authCount = 0;
   await launch();
   await page.locator("#login-code").waitFor();
   await checkWindow(false);
   assert.equal(await page.getByLabel("记住登录码", { exact: true }).isChecked(), true);
+  mode = "offline";
+  await page.locator("#login-code").fill("GD7-offline-network-invalid");
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "无法连接服务器" }).waitFor();
+  assert(!/fetch failed|Error invoking|TypeError/.test(await page.getByRole("alert").innerText()));
+  assert.equal(await page.locator(".login-submit").isEnabled(), true);
+  authCount = 0;
   mode = "slow-auth";
   await page.locator("#login-code").fill("GD7-invalid-window-test");
   await page.getByRole("button", { name: "进入工作台", exact: true }).click();
