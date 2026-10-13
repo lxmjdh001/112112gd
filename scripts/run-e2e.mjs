@@ -97,6 +97,7 @@ try {
       { GONGDAN_API_TARGET: "http://127.0.0.1:18081" },
     );
     await ready("http://127.0.0.1:5779");
+    await run(process.execPath, ["scripts/check-login-navigation.mjs"]);
     if (!ordersOnly) {
       await run(process.execPath, ["scripts/check-admin.mjs"]);
       await run(process.execPath, ["scripts/check-commerce.mjs"]);
