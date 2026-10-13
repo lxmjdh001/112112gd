@@ -1,4 +1,5 @@
 import { validCustomerIdentity } from "../shared/customer-identity.ts";
+import { RememberedLogin } from "./remembered-login.ts";
 import { InboundQueue, type InboundBatch } from "./inbound-queue.ts";
 import { TranslationHistory } from "./translation-history.ts";
 import type { CustomerContext, AssetContent } from "../shared/customer-tools.ts";
@@ -74,6 +75,8 @@ const baseDir = __dirname;
 const shellFile = path.join(baseDir, "index.html");
 let win: BrowserWindow;
 let auth: ClientAuth | undefined;
+let rememberedLogin: RememberedLogin;
+let loginPending = false;
 let deviceIdentity = "";
 let epoch = 0;
 let opening = false;
@@ -400,10 +403,11 @@ async function reconnect() {
     void openAccount(id).catch(() => {});
   }
 }
-async function login(code: string) {
+async function login(code: string, remember: boolean) {
   if (opening) throw new Error("正在处理连接，请稍后");
   if (typeof code !== "string" || code.length < 10 || code.length > 100)
     throw new Error("请输入完整登录码");
+  if (!remember) await rememberedLogin.save(null);
   await terminate("");
   const generation = epoch;
   const result = await request<ClientAuth>("/client/auth", {
@@ -412,6 +416,15 @@ async function login(code: string) {
     deviceName: hostname(),
   });
   if (epoch !== generation) return;
+  let rememberWarning = "";
+  if (remember) {
+    try {
+      await rememberedLogin.save(code.trim());
+    } catch {
+      rememberWarning = "登录成功，但登录码未能保存到本机，请检查系统加密存储和磁盘空间";
+    }
+  }
+  if (epoch !== generation) return;
   auth = result;
   state.label = result.label;
   state.connection = "connecting";
@@ -419,6 +432,10 @@ async function login(code: string) {
   persistSession();
   emit();
   await heartbeat();
+  if (rememberWarning && auth && epoch === generation) {
+    state.message = rememberWarning;
+    emit();
+  }
 }
 async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
   if (!runtimes.has(runtime.id) || !auth) return;
@@ -690,6 +707,15 @@ async function openAccount(id: string) {
 
 app.whenReady().then(async () => {
   await mkdir(app.getPath("userData"), { recursive: true });
+  rememberedLogin = new RememberedLogin(
+    path.join(app.getPath("userData"), "login-preferences.json"),
+    apiURL,
+    (value) => {
+      if (!safeStorage.isEncryptionAvailable()) throw Error("本机加密存储不可用");
+      return safeStorage.encryptString(value);
+    },
+    (value) => safeStorage.decryptString(value),
+  );
   cleanup = new AccountCleanup(
     path.join(app.getPath("userData"), "pending-account-removals.json"),
     async (tenant, id) => {
@@ -778,9 +804,25 @@ app.whenReady().then(async () => {
     if (!auth || generation !== epoch) throw Error("登录状态已变化");
     return result;
   });
-  ipcMain.handle("shell:login", async (event, code) => {
+  ipcMain.handle("shell:login-preference", (event) => {
     requireShell(event);
-    await login(code);
+    return rememberedLogin.read();
+  });
+  ipcMain.handle("shell:forget-login-code", (event) => {
+    requireShell(event);
+    if (loginPending) throw Error("正在登录，请稍后重试");
+    return rememberedLogin.save(null);
+  });
+  ipcMain.handle("shell:login", async (event, code, remember = false) => {
+    requireShell(event);
+    if (typeof remember !== "boolean") throw Error("参数无效");
+    if (loginPending) throw Error("正在登录，请稍后");
+    loginPending = true;
+    try {
+      await login(code, remember);
+    } finally {
+      loginPending = false;
+    }
   });
   ipcMain.handle("shell:logout", async (event) => {
     requireShell(event);
@@ -1281,7 +1323,11 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   quitting = true;
   // Finish the local encrypted snapshot before closing; quitting is not a logout.
-  void Promise.all([saveAuth(), ...[...inboundQueues.values()].map((queue) => queue.close())])
+  void Promise.allSettled([
+    saveAuth(),
+    rememberedLogin?.flush(),
+    ...[...inboundQueues.values()].map((queue) => queue.close()),
+  ])
     .catch(() => {})
     .finally(() => {
       for (const r of runtimes.values()) {

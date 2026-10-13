@@ -103,7 +103,97 @@ input:focus {
 }
 .login .primary {
   width: 100%;
-  margin-top: 24px;
+  margin-top: 18px;
+}
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: #52617b;
+  cursor: pointer;
+}
+.login-remember input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: #4d6cf5;
+  cursor: pointer;
+}
+.login-remember small {
+  margin-left: auto;
+  color: #97a1b2;
+  font-size: 11px;
+}
+.login-submit {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+.login-submit:hover:not(:disabled) {
+  background: #405ee7;
+  box-shadow: 0 5px 16px #4d6cf52b;
+}
+.login-submit:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.login-submit.is-loading {
+  opacity: 1;
+  cursor: wait;
+  background: #526ff0;
+}
+.login-submit.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 20%, #ffffff24 50%, transparent 80%);
+  animation: login-sheen 1.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.login-spinner {
+  display: none;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #ffffff55;
+  border-top-color: white;
+  border-radius: 50%;
+}
+.is-loading .login-spinner {
+  display: block;
+  animation: login-spin 0.75s linear infinite;
+}
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes login-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-submit {
+    transition: none;
+  }
+  .login-submit.is-loading::after {
+    display: none;
+  }
+  .is-loading .login-spinner {
+    animation: none;
+  }
 }
 .error {
   color: #b54735;

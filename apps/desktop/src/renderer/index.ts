@@ -111,26 +111,62 @@ function render(state: ViewState) {
       error.textContent = state.message;
       return;
     }
-    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">D1</span>D1 Scrm</div><h1>使用登录码开始工作</h1><label for="login-code">登录码</label><input id="login-code" type="password" autocomplete="off" placeholder="GD7-…" required/><button class="primary" type="submit">进入工作台</button><div class="error" role="alert">${escape(state.message)}</div><p class="muted">首次使用请登录网站后台生成登录码。</p></form></main>`;
+    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">D1</span>D1 Scrm</div><h1>使用登录码开始工作</h1><label for="login-code">登录码</label><input id="login-code" type="password" autocomplete="off" placeholder="GD7-…" required/><label class="login-remember" for="remember-login"><input id="remember-login" type="checkbox" aria-label="记住登录码" checked/><span>记住登录码</span><small>仅保存在这台电脑</small></label><button class="primary login-submit" type="submit"><span class="login-spinner" aria-hidden="true"></span><span class="login-button-label">进入工作台</span></button><div class="error" role="alert">${escape(state.message)}</div><p class="muted">首次使用请登录网站后台生成登录码。</p></form></main>`;
     const form = container.querySelector("form")!;
+    const codeInput = form.querySelector<HTMLInputElement>("#login-code")!;
+    const remember = form.querySelector<HTMLInputElement>("#remember-login")!;
+    const error = form.querySelector<HTMLElement>(".error")!;
+    const showError = (err: unknown) => {
+      error.textContent = String((err as Error).message).replace(
+        /^Error invoking remote method '[^']+': Error: /,
+        "",
+      );
+    };
+    let codeEdited = false;
+    let preferenceEdited = false;
+    codeInput.addEventListener("input", () => {
+      codeEdited = true;
+    });
+    remember.addEventListener("change", () => {
+      preferenceEdited = true;
+      codeEdited = true;
+      if (!remember.checked) void window.gongdan.forgetLoginCode().catch(showError);
+    });
+    void window.gongdan
+      .loginPreference()
+      .then((saved) => {
+        if (!form.isConnected || busy) return;
+        if (!preferenceEdited) remember.checked = saved.remember;
+        if (!codeEdited) codeInput.value = saved.code;
+      })
+      .catch((err) => {
+        if (form.isConnected && !busy) showError(err);
+      });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (busy) return;
       busy = true;
       const button = form.querySelector("button")!;
+      const label = button.querySelector(".login-button-label")!;
       button.disabled = true;
-      button.textContent = "正在验证…";
+      codeInput.disabled = true;
+      remember.disabled = true;
+      button.classList.add("is-loading");
+      button.setAttribute("aria-busy", "true");
+      label.textContent = "正在登录…";
+      error.textContent = "";
       try {
-        await window.gongdan.login((form.querySelector("#login-code") as HTMLInputElement).value);
+        await window.gongdan.login(codeInput.value, remember.checked);
       } catch (err) {
-        form.querySelector(".error")!.textContent = String((err as Error).message).replace(
-          /^Error invoking remote method '[^']+': Error: /,
-          "",
-        );
+        showError(err);
       } finally {
         busy = false;
         button.disabled = false;
-        button.textContent = "进入工作台";
+        codeInput.disabled = false;
+        remember.disabled = false;
+        button.classList.remove("is-loading");
+        button.setAttribute("aria-busy", "false");
+        label.textContent = "进入工作台";
       }
     });
     return;

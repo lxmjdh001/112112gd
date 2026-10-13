@@ -91,7 +91,9 @@ export interface ShellAPI {
 
   cloudRequest<T>(numberId: string, path: string, body?: unknown): Promise<T>;
   state(): Promise<ViewState>;
-  login(code: string): Promise<void>;
+  loginPreference(): Promise<{ remember: boolean; code: string }>;
+  forgetLoginCode(): Promise<void>;
+  login(code: string, remember?: boolean): Promise<void>;
   logout(): Promise<void>;
   refresh(): Promise<void>;
   reload(): Promise<void>;

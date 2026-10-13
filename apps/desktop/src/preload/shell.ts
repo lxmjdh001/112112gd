@@ -14,7 +14,9 @@ const api: ShellAPI = {
   cloudRequest: (numberId, path, body) =>
     ipcRenderer.invoke("shell:cloud-request", numberId, path, body),
   state: () => ipcRenderer.invoke("shell:state"),
-  login: (code) => ipcRenderer.invoke("shell:login", code),
+  loginPreference: () => ipcRenderer.invoke("shell:login-preference"),
+  forgetLoginCode: () => ipcRenderer.invoke("shell:forget-login-code"),
+  login: (code, remember) => ipcRenderer.invoke("shell:login", code, remember),
   logout: () => ipcRenderer.invoke("shell:logout"),
   refresh: () => ipcRenderer.invoke("shell:refresh"),
   reload: () => ipcRenderer.invoke("shell:reload"),

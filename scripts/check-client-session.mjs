@@ -1,5 +1,5 @@
 import { _electron as electron } from "playwright";
-import { readFile, mkdtemp, access } from "node:fs/promises";
+import { readFile, mkdtemp, access, rm } from "node:fs/promises";
 import http from "node:http";
 import { once } from "node:events";
 import path from "node:path";
@@ -42,9 +42,14 @@ let mode = "online",
   authCount = 0,
   heartbeatCount = 0;
 const sockets = new Set();
+let releaseAuth;
+const authGate = new Promise((resolve) => {
+  releaseAuth = resolve;
+});
 const relay = http.createServer(async (req, res) => {
   try {
     if (req.url.endsWith("/client/auth")) authCount++;
+    if (mode === "slow-auth" && req.url.endsWith("/client/auth")) await authGate;
     if (req.url.endsWith("/client/heartbeat")) heartbeatCount++;
     if (mode === "timeout") return; // Real AbortSignal timeout, not an HTTP error.
     if (mode === "offline") {
@@ -83,6 +88,7 @@ await once(relay, "listening");
 const address = `http://127.0.0.1:${relay.address().port}`;
 const userData = await mkdtemp(path.join(tmpdir(), "gongdan007-session-"));
 const credentials = path.join(userData, "authorization.bin");
+const preferences = path.join(userData, "login-preferences.json");
 let app, page;
 const errors = [];
 async function launch() {
@@ -136,9 +142,25 @@ try {
   await launch();
   await page.locator("#login-code").waitFor();
   await checkWindow(false);
+  assert.equal(await page.getByLabel("记住登录码", { exact: true }).isChecked(), true);
+  mode = "slow-auth";
   await page.locator("#login-code").fill("GD7-invalid-window-test");
   await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  assert.equal(await page.locator(".login-submit").getAttribute("aria-busy"), "true");
+  assert.equal(await page.locator(".login-submit").isDisabled(), true);
+  assert.equal(await page.locator(".login-spinner").isVisible(), true);
+  assert.equal(
+    await page.locator(".login-spinner").evaluate((el) => getComputedStyle(el).animationName),
+    "login-spin",
+  );
+  await page.locator("form.login").evaluate((form) => form.requestSubmit());
+  await page.screenshot({ path: ".runtime/client-remember-loading.png" });
+  releaseAuth();
   await page.getByRole("alert").filter({ hasText: "登录码无效" }).waitFor();
+  assert.equal(authCount, 1, "Repeated submit must not create another authentication request");
+  assert.equal(await page.locator(".login-submit").isEnabled(), true);
+  assert.equal(await page.locator(".login-spinner").isVisible(), false);
+  await assert.rejects(access(preferences));
   await checkWindow(false);
   // Successful authentication followed by failed account sync must retain credentials too.
   mode = "metadata-failure";
@@ -150,6 +172,7 @@ try {
   });
   await waitState("online");
   await checkWindow(true);
+  assert(!(await readFile(preferences, "utf8")).includes(code.code));
   const resized = await app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows()[0];
     win.setSize(1000, 680);
@@ -222,6 +245,10 @@ try {
   await page.getByRole("button", { name: "退出客户端", exact: true }).click();
   await page.locator("#login-code").waitFor();
   await checkWindow(false);
+  await page.waitForFunction(
+    (value) => document.querySelector("#login-code").value === value,
+    code.code,
+  );
   await assert.rejects(access(credentials));
   await app.close();
   app = undefined;
@@ -229,6 +256,11 @@ try {
   await launch();
   await page.locator("#login-code").waitFor();
   await checkWindow(false);
+  await page.waitForFunction(
+    (value) => document.querySelector("#login-code").value === value,
+    code.code,
+  );
+  await page.screenshot({ path: ".runtime/client-remember-restored.png" });
   assert.equal((await page.evaluate(() => window.gongdan.state())).loggedIn, false);
   await login();
   await waitState("online");
@@ -239,12 +271,41 @@ try {
   await page.locator("#login-code").waitFor();
   await checkWindow(false);
   await assert.rejects(access(credentials));
+  // Forget immediately, without submitting the form, and retain that choice across restarts.
+  await page.getByLabel("记住登录码", { exact: true }).uncheck();
+  await page.waitForFunction(async () => !(await window.gongdan.loginPreference()).remember);
+  await app.close();
+  app = undefined;
+  await launch();
+  await page.locator("#login-code").waitFor();
+  await page.waitForFunction(() => !document.querySelector("#remember-login").checked);
+  assert.equal(await page.locator("#login-code").inputValue(), "");
+  const second = await api("/login-codes", { ...policy, label: "记住登录码切换验收" });
+  await page.locator("#login-code").fill(second.code);
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await waitState("online");
+  await page.getByRole("button", { name: "退出客户端", exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector("#remember-login")?.checked);
+  assert.equal(await page.locator("#login-code").inputValue(), "");
+  await page.getByLabel("记住登录码", { exact: true }).check();
+  await page.locator("#login-code").fill(second.code);
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await waitState("online");
+  await page.getByRole("button", { name: "退出客户端", exact: true }).click();
+  await page.waitForFunction(
+    (value) => document.querySelector("#login-code")?.value === value,
+    second.code,
+  );
+  assert.equal((await page.evaluate(() => window.gongdan.loginPreference())).code, second.code);
+  await checkWindow(false);
   assert.deepEqual(errors, []);
   console.log(
-    "Client session checks passed: partial startup failure, 503, timeout, offline restart, cached accounts, automatic reconnect, resume, explicit logout and admin revocation.",
+    "Client session checks passed: partial startup failure, 503, timeout, offline restart, cached accounts, reconnect, logout/revocation, encrypted remembered codes, switch/forget/restart and loading animation/duplicate-submit guard.",
   );
 } finally {
+  releaseAuth();
   if (app) await app.close();
   for (const socket of sockets) socket.destroy();
   relay.close();
+  await rm(userData, { recursive: true, force: true });
 }
