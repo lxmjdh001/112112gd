@@ -13,8 +13,6 @@ import {
   ElAlert,
   ElSelect,
   ElOption,
-  ElCheckbox,
-  ElCheckboxGroup,
 } from "element-plus";
 import {
   api,
@@ -29,11 +27,11 @@ const rows = ref<LoginCode[]>([]);
 const platforms = ref<PlatformOption[]>([]);
 const editing = ref<LoginCode>();
 const platformName = (id: string) => platforms.value.find((p) => p.id === id)?.name || id;
-const platformPresentation: Record<string, { icon: string; detail: string }> = {
-  whatsapp: { icon: "whatsapp.svg", detail: "扫码登录" },
-  whatsapp_cloud: { icon: "whatsapp.svg", detail: "官方 API 接入" },
-  line: { icon: "line.png", detail: "客户端登录" },
-  telegram: { icon: "telegram.svg", detail: "客户端登录" },
+const platformIcons: Record<string, string> = {
+  whatsapp: "whatsapp.svg",
+  whatsapp_cloud: "whatsapp.svg",
+  line: "line.png",
+  telegram: "telegram.svg",
 };
 const loading = ref(false);
 const saving = ref(false);
@@ -71,6 +69,12 @@ const form = reactive({
   groupId: "",
   expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
 });
+function togglePlatform(platform: PlatformOption) {
+  if (saving.value || !platform.available) return;
+  const index = form.allowedPlatforms.indexOf(platform.id);
+  if (index === -1) form.allowedPlatforms.push(platform.id);
+  else form.allowedPlatforms.splice(index, 1);
+}
 const longTermExpiry = "2099-12-31T23:59:59+08:00";
 const longTermSelected = computed(() => Date.parse(form.expiresAt) === Date.parse(longTermExpiry));
 function setLongTerm() {
@@ -298,7 +302,7 @@ onMounted(load);
     <div class="page-head">
       <div>
         <h1>登录码列表</h1>
-        <p class="subtitle">创建时勾选客户端可用平台，按分组管理登录码和有效期。</p>
+        <p class="subtitle">创建时选择客户端可用平台，按分组管理登录码和有效期。</p>
       </div>
       <ElButton type="primary" @click="openCreate">＋ 创建登录码</ElButton>
     </div>
@@ -442,56 +446,35 @@ onMounted(load);
             <span>客户端可用平台 <span v-if="!editing" class="required-mark">*</span></span>
             <span class="selection-count">已选 {{ form.allowedPlatforms.length }} 项</span>
           </div>
-          <ElCheckboxGroup
-            v-model="form.allowedPlatforms"
-            aria-label="客户端可用平台"
-            :disabled="saving"
-            class="platform-choices"
-          >
-            <ElCheckbox
+          <div class="platform-choices" role="group" aria-label="客户端可用平台">
+            <button
               v-for="platform in platforms"
               :key="platform.id"
-              :value="platform.id"
-              :disabled="!platform.available"
-              :aria-label="platform.name"
-              :title="platform.name"
+              type="button"
               class="platform-card"
+              :disabled="saving || !platform.available"
+              :aria-pressed="form.allowedPlatforms.includes(platform.id)"
+              :title="platform.available ? platform.name : `${platform.name}（暂未开放）`"
+              @click="togglePlatform(platform)"
             >
-              <span class="platform-card-content">
-                <span class="platform-logo" aria-hidden="true">
-                  <img
-                    v-if="platformPresentation[platform.id]"
-                    :src="`/platforms/${platformPresentation[platform.id]!.icon}`"
-                    alt=""
-                  />
-                  <span v-else>{{ platform.name.slice(0, 1) }}</span>
-                  <span v-if="platform.id === 'whatsapp_cloud'" class="platform-api-badge"
-                    >API</span
-                  >
-                </span>
-                <span class="platform-copy">
-                  <span class="platform-title">{{ platform.name }}</span>
-                  <span class="platform-detail">{{
-                    !platform.available
-                      ? "待开放"
-                      : platformPresentation[platform.id]?.detail || "客户端登录"
-                  }}</span>
-                </span>
+              <span class="platform-logo" aria-hidden="true">
+                <img
+                  v-if="platformIcons[platform.id]"
+                  :src="`/platforms/${platformIcons[platform.id]}`"
+                  alt=""
+                />
+                <span v-else>{{ platform.name.slice(0, 1) }}</span>
+                <span v-if="platform.id === 'whatsapp_cloud'" class="platform-api-badge">API</span>
               </span>
-            </ElCheckbox>
-          </ElCheckboxGroup>
-          <div class="platform-hints">
-            <small>选中的平台可在客户端添加账号。</small>
-            <small v-if="editing"
-              >取消授权后，已打开的对应平台会在客户端下次同步时暂停，本地登录资料保留。</small
-            >
+              <span class="platform-title">{{ platform.name }}</span>
+            </button>
           </div>
           <ElAlert
             v-if="!form.allowedPlatforms.length"
             :title="
               editing
                 ? '未选择任何平台，客户端将无法添加或打开平台账号。'
-                : '请至少勾选一个已开放的平台。'
+                : '请至少选择一个已开放的平台。'
             "
             type="warning"
             :closable="false"
@@ -683,10 +666,6 @@ onMounted(load);
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
-.platform-hints {
-  display: grid;
-  gap: 3px;
-}
 .field-heading {
   display: flex;
   align-items: center;
@@ -700,58 +679,43 @@ onMounted(load);
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.platform-choices .platform-card {
-  margin: 0;
+.platform-card {
+  display: flex;
+  align-items: center;
+  width: 100%;
   min-width: 0;
-  height: 54px;
+  height: 46px;
   padding: 8px 10px;
-  gap: 8px;
-  --el-checkbox-input-height: 20px;
-  --el-checkbox-input-width: 20px;
-  --el-checkbox-border-radius: 5px;
+  gap: 10px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   transition:
     border-color 0.15s,
     background-color 0.15s,
     box-shadow 0.15s;
 }
-.platform-card:not(.is-disabled):hover {
+.platform-card:not(:disabled):hover {
   border-color: var(--el-color-primary-light-5);
   background: var(--el-color-primary-light-9);
 }
-.platform-choices .platform-card.is-checked {
-  border-color: var(--el-color-primary-light-5);
+.platform-card[aria-pressed="true"] {
+  border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary);
+  color: var(--el-color-primary);
 }
-.platform-card:focus-within {
+.platform-card:focus-visible {
   outline: 2px solid var(--el-color-primary);
   outline-offset: 2px;
 }
-.platform-card.is-disabled {
+.platform-card:disabled {
   opacity: 0.55;
-}
-.platform-card :deep(.el-checkbox__input) {
-  order: 2;
-  flex: 0 0 auto;
-}
-.platform-card :deep(.el-checkbox__inner::after) {
-  width: 4px;
-  height: 8px;
-  border-right-width: 2px;
-  border-bottom-width: 2px;
-}
-.platform-card :deep(.el-checkbox__label) {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-}
-.platform-card-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+  cursor: not-allowed;
 }
 .platform-logo {
   position: relative;
@@ -780,23 +744,12 @@ onMounted(load);
   font-weight: 700;
   line-height: 13px;
 }
-.platform-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
 .platform-title {
-  color: var(--el-text-color-primary);
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.platform-detail {
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
-  line-height: 15px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -841,10 +794,7 @@ onMounted(load);
   .platform-choices {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .platform-card-content {
-    gap: 6px;
-  }
-  .platform-choices .platform-card {
+  .platform-card {
     padding: 8px;
     gap: 6px;
   }
