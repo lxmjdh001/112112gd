@@ -38,6 +38,7 @@ import { serviceAddress } from "./service-address.ts";
 import { readServiceResult, serviceConnectionError } from "./service-response.ts";
 import { AccountCleanup } from "./account-cleanup.ts";
 import { repairAccountStorage } from "./account-repair.ts";
+import { installPlatformPermissions } from "./platform-permissions.ts";
 
 declare const __GONGDAN_API_URL__: string;
 
@@ -606,8 +607,7 @@ async function openAccount(id: string) {
       throw new Error("账号网络配置无效，请刷新后重试");
     }
     await ses.closeAllConnections();
-    ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-    ses.setPermissionCheckHandler(() => false);
+    installPlatformPermissions(ses, adapter.allowedOrigins);
     const view = new WebContentsView({
       webPreferences: {
         session: ses,

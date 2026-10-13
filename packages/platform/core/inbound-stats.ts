@@ -43,10 +43,15 @@ export function collectInbound(platform: string, ack: string[] = [], knownOwner 
   state.ready = false;
   try {
     if (platform === "whatsapp") {
-      const collections = w.require?.("WAWebCollections");
       const owner = knownOwner;
+      // Meta's require can initialize lazy modules. Do not load chat/database
+      // collections during pairing or session restoration, including when a
+      // previous owner's JID is still present in localStorage.
+      if (!/^[1-9][0-9]{6,14}$/.test(owner) || !document.querySelector("#pane-side"))
+        throw Error("not ready");
+      const collections = w.require?.("WAWebCollections");
       const messages = collections?.Msg;
-      if (!/^[0-9]{5,20}$/.test(owner) || !messages?.getModelsArray || !messages?.on)
+      if (!messages?.getModelsArray || !messages?.on)
         throw Error("not ready");
       if (state.owner !== owner) {
         state.cleanup?.();

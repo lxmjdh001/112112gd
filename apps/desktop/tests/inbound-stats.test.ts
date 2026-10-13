@@ -7,6 +7,9 @@ import { join } from "node:path";
 import { collectInbound } from "../../../packages/platform/core/inbound-stats.ts";
 import { InboundQueue } from "../src/main/inbound-queue.ts";
 const sec = Math.floor(Date.now() / 1000) - 5;
+const whatsappChatDocument = {
+  querySelector: (selector: string) => (selector === "#pane-side" ? {} : null),
+};
 function sandbox(window: any, document: any = {}) {
   const context = vm.createContext({ window, document });
   return (platform: string, ack: string[] = [], owner = "8613800000000") =>
@@ -15,6 +18,32 @@ function sandbox(window: any, document: any = {}) {
       context,
     );
 }
+test("WhatsApp does not initialize lazy collections before both owner and chat are ready", () => {
+  let chatReady = false;
+  const calls: string[] = [];
+  const read = sandbox(
+    {
+      require: (name: string) => {
+        calls.push(name);
+        return { Msg: { getModelsArray: () => [], on() {}, off() {} } };
+      },
+    },
+    { querySelector: (selector: string) => (chatReady && selector === "#pane-side" ? {} : null) },
+  );
+  // A stale stored identity on the login page must not initialize collections.
+  assert.equal(read("whatsapp").ready, false);
+  assert.equal(read("whatsapp", [], "").ready, false);
+  assert.equal(calls.length, 0);
+  chatReady = true;
+  for (const owner of ["", "invalid", "12345", "0000000000000", "1234567890123456"])
+    assert.equal(read("whatsapp", [], owner).ready, false);
+  assert.equal(calls.length, 0);
+  assert.equal(read("whatsapp").ready, true);
+  assert.deepEqual(calls, ["WAWebCollections"]);
+  chatReady = false;
+  assert.equal(read("whatsapp").ready, false);
+  assert.deepEqual(calls, ["WAWebCollections"]);
+});
 test("WhatsApp observes unopened personal messages, retries until ack, ignores groups and outgoing", () => {
   const listeners = new Map();
   const messages: any[] = [];
@@ -23,7 +52,7 @@ test("WhatsApp observes unopened personal messages, retries until ack, ignores g
     on: (k: any, f: any) => listeners.set(k, f),
     off: (k: any) => listeners.delete(k),
   };
-  const read = sandbox({ require: () => ({ Msg }) });
+  const read = sandbox({ require: () => ({ Msg }) }, whatsappChatDocument);
   assert.equal(read("whatsapp").ready, true);
   const msg = (id: string, fromMe = false, server = "c.us") => ({
     id: { id, fromMe, remote: { user: "447700900001", server } },
@@ -157,9 +186,10 @@ test("WhatsApp keeps LID stable and includes a resolved phone as an alias", () =
     on() {},
     off() {},
   };
-  const read = sandbox({
-    require: () => ({ Msg, Contact: { get: () => ({ phoneNumber: { user: "447700900001" } }) } }),
-  });
+  const read = sandbox(
+    { require: () => ({ Msg, Contact: { get: () => ({ phoneNumber: { user: "447700900001" } }) } }) },
+    whatsappChatDocument,
+  );
   const event = read("whatsapp").events[0];
   assert.equal(event.customer, "lid:12345678901234");
   assert.equal(event.phone, "447700900001");
