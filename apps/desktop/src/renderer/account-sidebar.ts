@@ -60,7 +60,7 @@ function accountMarkup(account: Account, state: ViewState, platform: Platform) {
       <span class="account-avatar" aria-hidden="true">${escape(initials)}<span class="account-platform-badge">${icon(platform)}</span></span>
       <span class="account-info"><b>${escape(label)}</b><small>${scanning ? escape(account.label) : `<i class="account-status-dot ${ready(account, state) ? "is-ready" : ""}"></i>${escape(status)}`}</small></span>
     </button>
-    ${account.unavailableReason === "other_device" ? "" : `<button class="account-close" type="button" data-close-id="${escape(account.id)}" title="${account.paused ? "移除号位" : "退出账号"}" aria-label="${account.paused ? "移除" : "退出"} ${escape(account.label)}">×</button>`}
+    ${account.unavailableReason === "other_device" ? "" : `<button class="account-close" type="button" data-close-id="${escape(account.id)}" title="${account.paused ? "移除号位" : "退出账号"}" aria-label="${account.paused ? "移除" : "退出"} ${escape(account.label)}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="m2.5 2.5 7 7m0-7-7 7" /></svg></button>`}
   </div>`;
 }
 

@@ -328,8 +328,16 @@
   padding: 0;
   background: #81928a;
   color: white;
-  font-size: 13px;
-  line-height: 1;
+}
+.account-close svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  pointer-events: none;
 }
 .account-close:hover {
   background: #da4b4b;
