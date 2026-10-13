@@ -406,31 +406,35 @@ onMounted(load);
     <ElDialog
       v-model="show"
       :title="editing ? '编辑登录码' : '创建长期登录码'"
-      width="min(560px, calc(100vw - 32px))"
+      class="code-editor"
+      width="min(820px, calc(100vw - 32px))"
+      align-center
       :close-on-click-modal="false"
       :show-close="!saving"
       :close-on-press-escape="!saving"
-      ><form class="form-grid" @submit.prevent="create">
-        <label class="field"
-          >使用者 / 备注名称<ElInput
-            v-model="form.label"
-            maxlength="100"
-            placeholder="例如：客服小林、投手小王"
-            required
-        /></label>
-        <div v-if="!editing" class="field">
-          <span>选择分组</span>
-          <div class="group-select-row">
-            <ElSelect v-model="form.groupId" aria-label="选择分组" filterable>
-              <ElOption label="未分组" value="" />
-              <ElOption
-                v-for="group in groups"
-                :key="group.id"
-                :label="group.name"
-                :value="group.id"
-              />
-            </ElSelect>
-            <ElButton @click="groupsOpen = true">新建分组</ElButton>
+      ><form id="login-code-form" class="form-grid code-form" @submit.prevent="create">
+        <div class="code-basics" :class="{ 'is-editing': editing }">
+          <label class="field"
+            >使用者 / 备注名称<ElInput
+              v-model="form.label"
+              maxlength="100"
+              placeholder="例如：客服小林、投手小王"
+              required
+          /></label>
+          <div v-if="!editing" class="field">
+            <span>选择分组</span>
+            <div class="group-select-row">
+              <ElSelect v-model="form.groupId" aria-label="选择分组" filterable>
+                <ElOption label="未分组" value="" />
+                <ElOption
+                  v-for="group in groups"
+                  :key="group.id"
+                  :label="group.name"
+                  :value="group.id"
+                />
+              </ElSelect>
+              <ElButton @click="groupsOpen = true">新建分组</ElButton>
+            </div>
           </div>
         </div>
         <div class="field">
@@ -450,6 +454,7 @@ onMounted(load);
               :value="platform.id"
               :disabled="!platform.available"
               :aria-label="platform.name"
+              :title="platform.name"
               class="platform-card"
             >
               <span class="platform-card-content">
@@ -475,10 +480,12 @@ onMounted(load);
               </span>
             </ElCheckbox>
           </ElCheckboxGroup>
-          <small>选中的平台可在客户端添加账号。</small>
-          <small v-if="editing"
-            >取消授权后，已打开的对应平台会在客户端下次同步时暂停，本地登录资料保留。</small
-          >
+          <div class="platform-hints">
+            <small>选中的平台可在客户端添加账号。</small>
+            <small v-if="editing"
+              >取消授权后，已打开的对应平台会在客户端下次同步时暂停，本地登录资料保留。</small
+            >
+          </div>
           <ElAlert
             v-if="!form.allowedPlatforms.length"
             :title="
@@ -513,14 +520,18 @@ onMounted(load);
             >
           </div>
         </div>
+      </form>
+      <template #footer>
+        <ElButton :disabled="saving" @click="show = false">取消</ElButton>
         <ElButton
+          form="login-code-form"
           native-type="submit"
           type="primary"
           :loading="saving"
           :disabled="!editing && !form.allowedPlatforms.length"
           >{{ editing ? "保存更改" : "生成登录码" }}</ElButton
         >
-      </form></ElDialog
+      </template></ElDialog
     ><ElDialog
       :model-value="!!secret"
       :title="secretTitle"
@@ -615,10 +626,66 @@ onMounted(load);
   gap: 12px;
   white-space: nowrap;
 }
-.platform-choices {
+:global(.code-editor) {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+}
+:global(.code-editor .el-dialog__header) {
+  flex: none;
+  margin: 0;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+}
+:global(.code-editor .el-dialog__title) {
+  font-size: 17px;
+  font-weight: 600;
+}
+:global(.code-editor .el-dialog__body) {
+  min-height: 0;
+  padding: 18px 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+:global(.code-editor .el-dialog__footer) {
+  flex: none;
+  padding: 12px 22px;
+  border-top: 1px solid var(--el-border-color-extra-light);
+}
+:global(.code-editor .el-dialog__footer .el-button--primary) {
+  min-width: 112px;
+}
+.code-form {
+  gap: 16px;
+}
+.code-form .field {
+  gap: 7px;
+  font-size: 12px;
+}
+.code-basics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 18px;
+}
+.code-basics.is-editing {
+  grid-template-columns: 1fr;
+}
+.platform-choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 246px;
+  padding: 3px;
+  margin: -3px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.platform-hints {
+  display: grid;
+  gap: 3px;
 }
 .field-heading {
   display: flex;
@@ -636,11 +703,14 @@ onMounted(load);
 .platform-choices .platform-card {
   margin: 0;
   min-width: 0;
-  height: 74px;
-  padding: 12px;
-  gap: 10px;
+  height: 54px;
+  padding: 8px 10px;
+  gap: 8px;
+  --el-checkbox-input-height: 20px;
+  --el-checkbox-input-width: 20px;
+  --el-checkbox-border-radius: 5px;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--el-fill-color-blank);
   transition:
     border-color 0.15s,
@@ -666,6 +736,12 @@ onMounted(load);
   order: 2;
   flex: 0 0 auto;
 }
+.platform-card :deep(.el-checkbox__inner::after) {
+  width: 4px;
+  height: 8px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
 .platform-card :deep(.el-checkbox__label) {
   flex: 1;
   min-width: 0;
@@ -674,20 +750,20 @@ onMounted(load);
 .platform-card-content {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .platform-logo {
   position: relative;
   display: grid;
   place-items: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
 }
 .platform-logo img {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
   border-radius: 7px;
 }
@@ -706,19 +782,23 @@ onMounted(load);
 }
 .platform-copy {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 .platform-title {
   color: var(--el-text-color-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .platform-detail {
   color: var(--el-text-color-secondary);
   font-size: 11px;
   line-height: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .expiry-row {
   display: flex;
@@ -742,12 +822,36 @@ onMounted(load);
   flex: 1;
   min-width: 0;
 }
-@media (max-width: 480px) {
+@media (max-width: 760px) {
   .platform-choices {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .code-basics {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  :global(.code-editor .el-dialog__header),
+  :global(.code-editor .el-dialog__body),
+  :global(.code-editor .el-dialog__footer) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .platform-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .platform-card-content {
+    gap: 6px;
   }
   .platform-choices .platform-card {
-    height: 62px;
+    padding: 8px;
+    gap: 6px;
+  }
+}
+@media (max-width: 380px) {
+  .platform-choices {
+    grid-template-columns: 1fr;
   }
 }
 </style>
