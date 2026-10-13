@@ -3,6 +3,7 @@ export type PlatformState =
   | "qr_required"
   | "ready"
   | "network_error"
+  | "storage_error"
   | "unknown"
   | "closed";
 export interface PlatformAdapter {

@@ -5,6 +5,7 @@ import type { ShellAPI, ViewState } from "../shared/types.ts";
 import { createAccountSidebar } from "./account-sidebar.ts";
 import { createAccountForm } from "./account-form.ts";
 import { accountCloseDialog } from "./account-close.ts";
+import { accountRepairDialog } from "./account-repair.ts";
 import { mountCloudChat } from "../../../../packages/cloud-chat/index.ts";
 declare global {
   interface Window {
@@ -79,6 +80,13 @@ const accountClose = accountCloseDialog(
 );
 const whatsappLogo =
   '<img class="platform-logo" src="assets/whatsapp.svg" alt="" aria-hidden="true" draggable="false" />';
+const accountRepair = accountRepairDialog(
+  () => current,
+  (message) => {
+    const notice = container.querySelector(".notice");
+    if (notice) notice.textContent = message;
+  },
+);
 const sidebar = createAccountSidebar(
   () => current,
   (platform) => void accountForm.open(platform),
@@ -104,6 +112,7 @@ function render(state: ViewState) {
     tools?.widget.dispose();
     tools = undefined;
     void accountClose.dismiss().catch(() => {});
+    void accountRepair.dismiss().catch(() => {});
     cloudCustomer = undefined;
     void accountForm.dismiss().catch(() => {});
     if (wasLoggedIn === false && container.querySelector("#login-code")) {
@@ -174,6 +183,13 @@ function render(state: ViewState) {
   const hasPlatforms = state.platforms.length > 0;
   const hasNativePlatforms = state.platforms.some((p) => p.id !== "whatsapp_cloud");
   const reconnecting = state.connection !== "online";
+  const activePlatform = state.accounts.find((row) => row.id === state.activeId)?.platform;
+  const emptyLogo =
+    activePlatform === "telegram"
+      ? '<img class="platform-logo" src="assets/telegram.svg" alt="" />'
+      : activePlatform === "line"
+        ? '<img class="platform-logo" src="assets/line.png" alt="" />'
+        : whatsappLogo;
   const identityPending = state.activeId && state.statuses[state.activeId] === "identity_pending";
   const emptyTitle = identityPending
     ? "正在识别登录账号"
@@ -197,7 +213,7 @@ function render(state: ViewState) {
           : hasNativePlatforms
             ? "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"
             : "请管理员在 WhatsApp API 号码管理中，将号码分配给当前登录码。";
-  const shellMarkup = `<header class="topbar"><div class="brand">工作台 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span>${state.billing ? `<span class="billing-status ${state.billing.status === "normal" ? "" : "billing-low"}">剩余 ${escape(String(Number(state.billing.points)))} 点 · ${state.billing.status === "grace" ? `缓冲中，剩余 ${state.billing.graceDaysRemaining} 天 · 请联系平台充值` : state.billing.status === "low" ? "点数不足，请联系平台充值" : "翻译免费"}</span>` : ""}<span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace">${sidebar.markup(state)}<main class="empty"><div><span class="wa">${whatsappLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const shellMarkup = `<header class="topbar"><div class="brand">工作台 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span>${state.billing ? `<span class="billing-status ${state.billing.status === "normal" ? "" : "billing-low"}">剩余 ${escape(String(Number(state.billing.points)))} 点 · ${state.billing.status === "grace" ? `缓冲中，剩余 ${state.billing.graceDaysRemaining} 天 · 请联系平台充值` : state.billing.status === "low" ? "点数不足，请联系平台充值" : "翻译免费"}</span>` : ""}<span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button><button class="text-btn" id="repair-account">修复登录</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace">${sidebar.markup(state)}<main class="empty"><div><span class="wa">${emptyLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;
@@ -277,6 +293,9 @@ function render(state: ViewState) {
     .forEach((button) =>
       button.addEventListener("click", () => action(() => window.gongdan.open(button.dataset.id!))),
     );
+  container
+    .querySelector("#repair-account")
+    ?.addEventListener("click", () => void accountRepair.open());
   container
     .querySelector("#reload")
     ?.addEventListener("click", () => action(() => window.gongdan.reload()));

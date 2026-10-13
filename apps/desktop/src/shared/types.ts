@@ -97,6 +97,7 @@ export interface ShellAPI {
   logout(): Promise<void>;
   refresh(): Promise<void>;
   reload(): Promise<void>;
+  repairAccount(id: string, resetLogin: boolean): Promise<void>;
   open(id: string): Promise<void>;
   closeAccount(id: string): Promise<void>;
   removeAccount(id: string): Promise<void>;
@@ -112,6 +113,7 @@ export const stateLabels: Record<string, string> = {
   ready: "网页已就绪",
   unknown: "状态待确认",
   network_error: "网络异常",
+  storage_error: "网页数据库异常 · 点击修复登录",
   closed: "已关闭",
   proxy_disabled: "代理已禁用",
   platform_not_allowed: "平台未授权",

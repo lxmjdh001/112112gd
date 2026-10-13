@@ -20,6 +20,7 @@ const api: ShellAPI = {
   logout: () => ipcRenderer.invoke("shell:logout"),
   refresh: () => ipcRenderer.invoke("shell:refresh"),
   reload: () => ipcRenderer.invoke("shell:reload"),
+  repairAccount: (id, resetLogin) => ipcRenderer.invoke("shell:repair-account", id, resetLogin),
   open: (id) => ipcRenderer.invoke("shell:open", id),
   closeAccount: (id) => ipcRenderer.invoke("shell:close-account", id),
   removeAccount: (id) => ipcRenderer.invoke("shell:remove-account", id),

@@ -37,6 +37,7 @@ import type {
 import { serviceAddress } from "./service-address.ts";
 import { readServiceResult, serviceConnectionError } from "./service-response.ts";
 import { AccountCleanup } from "./account-cleanup.ts";
+import { repairAccountStorage } from "./account-repair.ts";
 
 declare const __GONGDAN_API_URL__: string;
 
@@ -305,8 +306,13 @@ function bounds() {
   const [width, height] = win.getContentSize();
   const sidebarWidth = state.sidebarCollapsed ? 76 : 280;
   for (const runtime of runtimes.values()) {
-    const active =
-      runtime.id === state.activeId && !accountFormOpen && runtime.status !== "identity_pending";
+    const selected = runtime.id === state.activeId && !accountFormOpen;
+    const pending = runtime.status === "identity_pending";
+    // Telegram's bootstrap uses animation frames before publishing its owner.
+    // A hidden pending view must keep progressing; restore throttling as soon
+    // as ownership is known or the user switches away from the account.
+    runtime.view.webContents.setBackgroundThrottling(!(selected && pending));
+    const active = selected && !pending;
     runtime.view.setVisible(active);
     if (active)
       runtime.view.setBounds({
@@ -462,7 +468,10 @@ async function updateStatus(runtime: Runtime, status: string, identifier?: strin
   bounds();
   emit();
   try {
-    await request(`/client/accounts/${runtime.id}/status`, { status, identifier });
+    await request(`/client/accounts/${runtime.id}/status`, {
+      status: status === "storage_error" ? "unknown" : status,
+      identifier,
+    });
   } catch (error) {
     if (auth && status === "ready" && String(error).includes("公司累计 3 天缓冲已用完")) {
       await request(`/client/accounts/${runtime.id}/close`, {}).catch(() => {});
@@ -891,6 +900,33 @@ app.whenReady().then(async () => {
   };
   ipcMain.handle("shell:close-account", (event, id) => changeAccount(event, id, false));
   ipcMain.handle("shell:remove-account", (event, id) => changeAccount(event, id, true));
+  ipcMain.handle("shell:repair-account", async (event, id, resetLogin) => {
+    requireShell(event);
+    if (typeof id !== "string" || typeof resetLogin !== "boolean") throw Error("修复参数无效");
+    if (opening || changingAccount) throw Error("正在处理账号，请稍后");
+    const runtime = runtimes.get(id);
+    const account = state.accounts.find((row) => row.id === id && row.available && !row.paused);
+    if (!auth || !runtime || !account || state.activeId !== id) throw Error("请先打开要修复的账号");
+    const generation = epoch;
+    changingAccount = true;
+    let repairError: unknown;
+    try {
+      await closeRuntime(runtime);
+      delete state.statuses[id];
+      await repairAccountStorage(runtime.ses, resetLogin);
+    } catch (error) {
+      repairError = error;
+    } finally {
+      changingAccount = false;
+      bounds();
+      emit();
+    }
+    if (auth && generation === epoch) {
+      await openAccount(id);
+      if (repairError)
+        throw Error("未能完成网页存储修复。已重新打开账号，请检查磁盘空间或重启客户端后重试。");
+    }
+  });
   ipcMain.handle("shell:reload", async (event) => {
     requireShell(event);
     const runtime = runtimes.get(state.activeId);
@@ -1287,7 +1323,11 @@ app.whenReady().then(async () => {
     ipcMain.on(channel, (event, status, identifier) => {
       try {
         const runtime = requireRuntime(event);
-        if (["ready", "qr_required", "loading", "unknown", "network_error"].includes(status))
+        if (
+          ["ready", "qr_required", "loading", "unknown", "network_error", "storage_error"].includes(
+            status,
+          )
+        )
           void updateStatus(runtime, status, typeof identifier === "string" ? identifier : null);
       } catch {
         /* Ignore untrusted/expired observations. */

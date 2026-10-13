@@ -263,6 +263,15 @@ details input {
   padding: 12px;
   border-radius: 10px;
 }
+.account-repair-primary {
+  background: #4d6cf5;
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+}
+.account-repair-primary:hover {
+  background: #3d59d9;
+}
 .account-danger {
   background: #dc242b;
   color: #fff;

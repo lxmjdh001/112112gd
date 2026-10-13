@@ -114,6 +114,7 @@ try {
       if (!sessionOnly) {
         await run(process.execPath, ["scripts/check-client-proxy.mjs"]);
         await run(process.execPath, ["scripts/check-desktop.mjs"]);
+        await run(process.execPath, ["scripts/check-login-repair.mjs"]);
       }
       await run(process.execPath, ["scripts/check-client-session.mjs"]);
     }

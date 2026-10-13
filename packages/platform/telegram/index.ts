@@ -59,6 +59,9 @@ export function observeTelegram(
   online: boolean,
 ): PlatformState {
   if (!online) return "network_error";
+  // Web K can leave #page-chats mounted behind its passcode overlay. Keep the
+  // unlock page visible; no owner is ready until the app finishes unlocking.
+  if (doc.querySelector(".passcode-lock-screen")?.getClientRects().length) return "loading";
   if (doc.querySelector("#auth-pages")?.getClientRects().length) return "qr_required";
   if (doc.querySelector("#page-chats")?.getClientRects().length) return "ready";
   return doc.readyState === "complete" ? "unknown" : "loading";

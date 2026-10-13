@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { currentTelegramAccount } from "../../../packages/platform/telegram/index.ts";
+import {
+  currentTelegramAccount,
+  observeTelegram,
+} from "../../../packages/platform/telegram/index.ts";
+import { liveTelegramAccount } from "../../../packages/platform/telegram/self.ts";
 import { readLineOwner } from "../../../packages/platform/line/index.ts";
 import {
   getPlatform,
@@ -102,4 +106,56 @@ test("native IPC origins and billing identity formats stay platform-specific", (
   assert.equal(validAccountIdentity("telegram", "12345"), true);
   assert.equal(validAccountIdentity("telegram", "@somebody"), false);
   assert.equal(validAccountIdentity("whatsapp", "12345"), false);
+});
+
+test("Telegram live identity reads only the authenticated owner on the slot URL", () => {
+  const keys = ["window", "location"] as const;
+  const descriptors = keys.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
+  try {
+    for (const [id, address, expected] of [
+      [12345, "https://web.telegram.org/k/", "12345"],
+      ["67890", "https://web.telegram.org/k/?account=1", "67890"],
+      [0, "https://web.telegram.org/k/", null],
+      ["-12345", "https://web.telegram.org/k/", null],
+      [12345, "https://web.telegram.org/k/?account=2", null],
+      [12345, "https://web.telegram.org/a/", null],
+      [12345, "https://evil.test/k/", null],
+    ] as const) {
+      Object.defineProperty(globalThis, "location", {
+        configurable: true,
+        value: { href: address },
+      });
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: { rootScope: { myId: id, peerId: 99999 } },
+      });
+      assert.equal(liveTelegramAccount(), expected);
+    }
+  } finally {
+    keys.forEach((key, i) =>
+      descriptors[i]
+        ? Object.defineProperty(globalThis, key, descriptors[i]!)
+        : Reflect.deleteProperty(globalThis, key),
+    );
+  }
+});
+
+test("Telegram passcode screen is visible until unlocked even with chat DOM mounted", () => {
+  const visible = { getClientRects: () => [{}] } as unknown as Element;
+  const doc = {
+    readyState: "complete" as const,
+    querySelector: (selector: string) =>
+      [".passcode-lock-screen", "#page-chats"].includes(selector) ? visible : null,
+  };
+  assert.equal(observeTelegram(doc, true), "loading");
+  assert.equal(
+    observeTelegram(
+      {
+        ...doc,
+        querySelector: (selector: string) => (selector === "#page-chats" ? visible : null),
+      },
+      true,
+    ),
+    "ready",
+  );
 });
