@@ -46,7 +46,8 @@ export function installAutomaticTranslation(
   let previewTicket = 0,
     previewTimer: ReturnType<typeof setTimeout>,
     scanTimer: ReturnType<typeof setTimeout>;
-  let footerHost: HTMLElement | undefined, preview: HTMLElement | undefined;
+  let composer: HTMLElement | undefined;
+  let errorHost: HTMLElement | undefined, errorTimer: ReturnType<typeof setTimeout>;
   let prepared: { peer: string; source: string; text: string; target: string } | undefined;
   let composerAfterSend: typeof prepared;
   const notes = new WeakMap<HTMLElement, { text: HTMLElement; retry: HTMLButtonElement }>();
@@ -61,25 +62,27 @@ export function installAutomaticTranslation(
     );
     return icon?.closest<HTMLElement>('button, [role="button"]') || undefined;
   };
-  function show(text: string) {
-    if (preview && preview.textContent !== text) preview.textContent = text;
+  function clearError() {
+    clearTimeout(errorTimer);
+    errorHost?.remove();
+    errorHost = undefined;
   }
-  function mountPreview() {
-    const footer = adapter ? adapter.footer() : doc.querySelector<HTMLElement>("#main footer");
-    if (!footer || footerHost?.parentElement === footer) return;
-    footerHost?.remove();
-    footerHost = doc.createElement("div");
-    footerHost.dataset.gd7AutoTranslation = "composer";
-    footerHost.style.cssText = "flex:0 0 100%;width:100%;order:-1;";
-    const root = footerHost.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>:host{display:block}div{font:12px/1.55 system-ui;background:#eef8f2;color:#476c59;border-top:1px solid #d9e9df;padding:7px 12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:130px;overflow:auto}button{font:inherit;color:#07885f;background:none;border:0;cursor:pointer;padding:3px 0}</style><div><p style="margin:0" role="status"></p><button type="button">重新翻译</button></div>`;
-    preview = root.querySelector("p")!;
-    root.querySelector("button")!.addEventListener("click", schedulePreview);
-    footer.prepend(footerHost);
-    schedulePreview();
+  function showError(text: string) {
+    if (disposed) return;
+    clearError();
+    errorHost = doc.createElement("div");
+    errorHost.dataset.gd7AutoTranslation = "error";
+    errorHost.style.cssText =
+      "position:fixed;top:12px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);z-index:2147483647;pointer-events:none;";
+    const root = errorHost.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>p{margin:0;padding:9px 14px;border:1px solid #f1d2c8;border-radius:9px;background:#fff7f3;color:#a0432e;box-shadow:0 3px 14px #0001;font:12px/1.5 system-ui;white-space:pre-wrap;overflow-wrap:anywhere;max-height:72px;overflow:hidden}</style><p role="alert"></p>`;
+    root.querySelector("p")!.textContent = text;
+    doc.body.append(errorHost);
+    errorTimer = setTimeout(clearError, 6000);
   }
   function schedulePreview() {
     if (disposed || replacing) return;
+    clearError();
     const ticket = ++previewTicket;
     clearTimeout(previewTimer);
     prepared = undefined;
@@ -87,31 +90,20 @@ export function installAutomaticTranslation(
       identifier = currentPeer(),
       target = languages.get(identifier);
     const source = box ? clean(box) : "";
-    if (!source) {
-      show("接收自动译成中文 · 输入中文后自动翻译，点击原发送按钮发送译文");
-      return;
-    }
-    if (!identifier || !target) {
-      show("正在识别客户和加载翻译语言，请稍候…");
-      return;
-    }
+    if (!source || !identifier || !target) return;
     if (composerAfterSend?.peer === identifier && composerAfterSend.text === source) {
       prepared = composerAfterSend;
-      show("原文：" + prepared.source + "\n译文：" + prepared.text);
       return;
     }
-    show("正在自动翻译…");
     previewTimer = setTimeout(() => {
       void translator
         .translate(source, target, "zh-CN")
         .then((text) => {
           if (disposed || ticket !== previewTicket || currentPeer() !== identifier) return;
           prepared = { peer: identifier, source, text, target };
-          show("将发送：" + text);
         })
-        .catch((e) => {
-          if (!disposed && ticket === previewTicket) show("翻译失败，原文未发送：" + errorText(e));
-        });
+        // Keep background preparation quiet; an explicit send retries and reports failures.
+        .catch(() => {});
     }, 650);
   }
   function annotate(
@@ -177,7 +169,11 @@ export function installAutomaticTranslation(
           })
           .catch(() => {});
     }
-    mountPreview();
+    const box = editor() || undefined;
+    if (composer !== box) {
+      composer = box;
+      schedulePreview();
+    }
     if (!identifier) return;
     for (const { row, textNode, id, text: source, outgoing } of messages().reverse()) {
       if (!source) continue;
@@ -195,7 +191,7 @@ export function installAutomaticTranslation(
           originals.set(id, original);
           void transport
             .saveOriginal(id, original)
-            .catch(() => show("消息原文暂未保存到本机，请保持客户端打开"));
+            .catch(() => showError("消息原文暂未保存到本机，请保持客户端打开"));
         }
       }
       const original = originals.get(id);
@@ -269,7 +265,7 @@ export function installAutomaticTranslation(
       ticket = peerVersion;
     if (!box || !clean(box)) return;
     if (!identifier || !target) {
-      show("未识别到当前客户或翻译语言尚未加载，消息未发送");
+      showError("未识别到当前客户或翻译语言尚未加载，消息未发送");
       return;
     }
     const input = clean(box);
@@ -280,7 +276,7 @@ export function installAutomaticTranslation(
     sending = true;
     clearTimeout(previewTimer);
     previewTicket++;
-    show("正在翻译并发送…");
+    clearError();
     let swapped: string | undefined;
     let handedOff = false;
     try {
@@ -322,7 +318,6 @@ export function installAutomaticTranslation(
       } finally {
         bypass = false;
       }
-      show(`已交给 ${adapter?.name || "WhatsApp"} 发送，请以消息旁的发送状态为准`);
       await new Promise((resolve) => setTimeout(resolve, 500));
       scan();
     } catch (e) {
@@ -332,10 +327,10 @@ export function installAutomaticTranslation(
             replaceDraft(box, source);
             composerAfterSend = undefined;
           } catch {
-            /* Keep the translated draft and original preview available. */
+            /* Keep the translated draft and its original available for the next send. */
           }
         }
-        show(errorText(e));
+        showError(errorText(e));
       }
     } finally {
       sending = false;
@@ -417,7 +412,7 @@ export function installAutomaticTranslation(
       win.removeEventListener("keydown", keydown, true);
       doc.removeEventListener("input", input, true);
       doc.removeEventListener("scroll", queueScan, true);
-      footerHost?.remove();
+      clearError();
     },
   };
 }

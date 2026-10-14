@@ -1,6 +1,6 @@
 {
   "name": "@gongdan/desktop",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "D1 Scrm 跨境客户沟通工作台",
   "type": "module",

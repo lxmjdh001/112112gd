@@ -485,7 +485,7 @@ function go(id: string) {
               <h2>你的工作台，随时就位。</h2>
               <p>下载 D1 Scrm，在电脑上开启客户沟通。</p>
             </div>
-            <span class="download-version"><i></i> v0.1.10 · 桌面客户端</span>
+            <span class="download-version"><i></i> v0.1.11 · 桌面客户端</span>
           </div>
           <div class="download-grid">
             <article class="download-card">
@@ -506,7 +506,7 @@ function go(id: string) {
               <p class="download-description">下载安装，登录后开始工作。</p>
               <a
                 class="home-button primary download-primary"
-                href="/client-downloads/0.1.10/D1-Scrm-0.1.10-windows-x64-setup.exe"
+                href="/client-downloads/0.1.11/D1-Scrm-0.1.11-windows-x64-setup.exe"
                 download
               >
                 下载 Windows 版 <span aria-hidden="true">↓</span>
@@ -532,13 +532,13 @@ function go(id: string) {
               <div class="download-mac-actions">
                 <a
                   class="home-button primary"
-                  href="/client-downloads/0.1.10/D1-Scrm-0.1.10-mac-arm64.dmg"
+                  href="/client-downloads/0.1.11/D1-Scrm-0.1.11-mac-arm64.dmg"
                   download
                   >苹果芯片版 <span aria-hidden="true">↓</span></a
                 >
                 <a
                   class="home-button secondary"
-                  href="/client-downloads/0.1.10/D1-Scrm-0.1.10-mac-x64.dmg"
+                  href="/client-downloads/0.1.11/D1-Scrm-0.1.11-mac-x64.dmg"
                   download
                   >Intel 芯片版 <span aria-hidden="true">↓</span></a
                 >
@@ -564,7 +564,7 @@ function go(id: string) {
                 Mac：打开 DMG，将 D1 Scrm 拖到「应用程序」。若系统阻止打开，可在「系统设置 →
                 隐私与安全性」中查看并确认。Windows：运行 EXE，按安装向导完成安装。
               </p>
-              <a class="text-link" href="/client-downloads/0.1.10/SHA256SUMS" download
+              <a class="text-link" href="/client-downloads/0.1.11/SHA256SUMS" download
                 >下载 SHA-256 校验文件 <span>↓</span></a
               >
             </div>

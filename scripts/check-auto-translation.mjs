@@ -89,7 +89,8 @@ try {
   const editor = page.locator("[role=textbox]");
   await page.getByText("译：中文：Quero 500 unidades.", { exact: false }).waitFor();
   await editor.fill("今天发报价单");
-  await page.getByText("将发送：pt: 今天发报价单", { exact: false }).waitFor();
+  await page.waitForFunction(() => window.nativeFixture.calls.some((c) => c.text === "今天发报价单"));
+  assert.equal(await page.locator('[data-gd7-auto-translation="composer"]').count(), 0);
   assert.equal(
     await page.evaluate(
       () => window.nativeFixture.calls.find((c) => c.text === "今天发报价单").source,
@@ -172,7 +173,7 @@ try {
     window.nativeFixture.hold = "";
   });
   await editor.fill("新客户回复");
-  await page.getByText("将发送：fr: 新客户回复", { exact: false }).waitFor();
+  await page.waitForFunction(() => window.nativeFixture.calls.some((c) => c.text === "新客户回复"));
   await page.locator("[aria-label=Send]").click();
   await page.getByText("原文：新客户回复", { exact: true }).waitFor();
   assert.deepEqual(await page.evaluate(() => window.nativeFixture.writes.at(-1)), {
@@ -317,7 +318,7 @@ try {
   assert.equal(await cloud.evaluate(() => window.cloudFixture.writes.at(-1).chat), "b");
   assert.deepEqual(errors, []);
   console.log(
-    "Automatic translation passed: native/API incoming, preview, translated send, original display/restoration, duplicate send guard, failures, IME, peer/draft/language isolation. Only synthetic transports were used.",
+    "Automatic translation passed: native/API incoming, background preparation, translated send, original display/restoration, duplicate send guard, failures, IME, peer/draft/language isolation. Only synthetic transports were used.",
   );
 } finally {
   await browser.close();

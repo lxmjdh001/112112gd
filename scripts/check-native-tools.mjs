@@ -192,15 +192,10 @@ try {
       page.evaluate((c) => window.gongdan.prepareQuick(c, { text: "不能覆盖" }), context),
       /草稿/,
     );
-    for (let n = 0; n < 40; n++) {
-      if (
-        await native(
-          `!!document.querySelector('[data-gd7-auto-translation="composer"]')?.shadowRoot?.textContent.includes('将发送：')`,
-        )
-      )
-        break;
-      await page.waitForTimeout(150);
-    }
+    assert.equal(
+      await native(`document.querySelectorAll('[data-gd7-auto-translation="composer"]').length`),
+      0,
+    );
     // User-confirmed send only: Enter reaches the shadow input for LINE.
     await native(
       "fixture.editor().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,bubbles:true,composed:true,cancelable:true}))",
