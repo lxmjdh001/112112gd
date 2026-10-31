@@ -1,4 +1,4 @@
-# Account portraits and presence - development change
+# Account portraits and presence - client 0.1.13
 
 The account sidebar displays Online / Offline / Error (Chinese UI labels). A web slot is online only after the existing platform observer reports ready and the main process validates the signed-in owner identity. QR/login/loading/closed/paused slots are offline; network/storage/unconfirmed-state/permission errors are errors. Slots bound to another device are offline. Cloud numbers use API channel availability, not a person's messaging presence. Detailed reasons remain in account tooltips and accessible names.
 
@@ -8,7 +8,7 @@ Images are rasterized to a 64x64 PNG inside the platform preload. Fetches retain
 
 Validation: desktop build/typecheck, 48 unit tests and synthetic Electron UI regression. A green self-avatar and red selected-contact avatar confirm the account reads its own photo; wrong-owner/shell-frame/SVG submissions are rejected. Network errors retain the portrait and display Error. Existing grouping, collapse/native view bounds, lifecycle, dialogs and keyboard tests pass.
 
-Real authenticated WhatsApp/Telegram/LINE pages have not been visually verified for this change. Platform DOM changes or CORS restrictions can leave initials in place; use real-account validation before public packaging. This is a local source change; public client installers remain version 0.1.12 and have not been republished for this change.
+Real authenticated WhatsApp/Telegram/LINE pages have not been visually verified for this change. Platform DOM changes or CORS restrictions can leave initials in place; actual platform compatibility remains subject to real-account validation. Published client installers include this change in version 0.1.13; both Mac architectures passed isolated packaged startup checks, and Windows passed package structure and integrity checks.
 
 ## Admin account list synchronization
 
@@ -16,4 +16,4 @@ Admin and client now share `packages/platform/core/presence.ts` for the three st
 
 The list refreshes every 15 seconds while visible, refreshes again on return, retains filters and stops its timer on unmount. A ready observation older than 90 seconds is displayed offline even when the most recent refresh fails. API connection states do not use native-account heartbeat expiry. Sync failures retain the last known records and show a retry hint.
 
-Verified admin stale/QR/API/error mapping, tooltip wording, automatic updates without losing search input and 1440/1024/390 layouts; client regression and all 49 unit tests passed. This synchronization remains a local source/build change until separately published.
+Verified admin stale/QR/API/error mapping, tooltip wording, automatic updates without losing search input and 1440/1024/390 layouts. The final client release has 72 passing unit tests, including the subsequent chat archive changes. The server and website synchronization were published on 2026-10-31; see deployment-team-20261031.md.
