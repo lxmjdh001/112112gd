@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { ElButton, ElInput } from "element-plus";
 import type { OrderStats } from "#/api/work-orders";
-import { orderDate } from "#/api/work-orders";
+import { orderDate, platformLabel } from "#/api/work-orders";
 import StatsBoard from "#/components/work-orders/StatsBoard.vue";
 const route = useRoute(),
   stats = ref<OrderStats>(),
@@ -11,6 +11,18 @@ const route = useRoute(),
   needPassword = ref(false),
   error = ref(""),
   loading = ref(false);
+const platforms = computed(() => {
+  if (!stats.value) return [];
+  const names: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    whatsapp_cloud: "WhatsApp API",
+    line: "LINE",
+    telegram: "Telegram",
+  };
+  return stats.value.platforms?.length
+    ? stats.value.platforms.map((platform) => names[platform] || platform)
+    : [...new Set(stats.value.accounts.map(platformLabel))];
+});
 let generation = 0;
 let controller: AbortController | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -72,24 +84,26 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <main class="public-order">
-    <header>
-      <a href="#/home" class="brand"><b>D1</b> Scrm <span>工单统计</span></a
-      ><span class="privacy">只读统计看板</span>
+    <header class="share-header">
+      <div class="header-context">
+        <a href="#/home" class="brand" aria-label="D1 Scrm 首页"><b>D1</b> Scrm</a>
+        <div class="title-context">
+          <span class="section-name">工单统计</span>
+          <h1 v-if="stats" class="order-name" :title="stats.name">{{ stats.name }}</h1>
+          <div v-if="platforms.length" class="platforms" aria-label="参与平台">
+            <span v-for="platform in platforms" :key="platform">{{ platform }}</span>
+          </div>
+        </div>
+      </div>
+      <span class="privacy">只读统计看板</span>
     </header>
     <section class="content">
-      <div class="heading">
-        <div>
-          <p class="eyebrow">ACCOUNT PERFORMANCE</p>
-          <h1>{{ stats?.name || "工单统计" }}</h1>
-          <p class="subtitle">
-            {{
-              stats
-                ? `更新于 ${orderDate(stats.updatedAt)} · 页面每 30 秒自动更新`
-                : "查看各平台账号的客户进线情况"
-            }}
-          </p>
-        </div>
-        <ElButton v-if="stats" :loading="loading" @click="load">刷新</ElButton>
+      <div v-if="stats" class="board-toolbar">
+        <p class="updated-at">
+          更新于 {{ orderDate(stats.updatedAt) }}
+          <span class="auto-refresh">每 30 秒自动更新</span>
+        </p>
+        <ElButton :loading="loading" @click="load">刷新</ElButton>
       </div>
       <div v-if="error" class="error" role="alert">{{ error }}</div>
       <form v-if="needPassword" class="password-box" @submit.prevent="load">
@@ -119,14 +133,29 @@ onBeforeUnmount(() => {
   padding: 0 32px;
   font-family: Inter, system-ui, sans-serif;
 }
-header {
-  height: 84px;
+.share-header {
+  min-height: 84px;
   max-width: 1200px;
   margin: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #e4eaf4;
+  gap: 16px;
+  padding: 18px 0;
+}
+.header-context {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-width: 0;
+}
+.title-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
 }
 .brand {
   display: flex;
@@ -136,6 +165,8 @@ header {
   font-weight: 650;
   color: inherit;
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .brand b {
   background: #3269e7;
@@ -147,47 +178,76 @@ header {
   border-radius: 11px;
   font-size: 18px;
 }
-.brand span {
+.section-name {
   font-size: 12px;
   font-weight: 400;
-  color: #8b99af;
+  color: #66758d;
   border-left: 1px solid #dce4f2;
-  padding-left: 12px;
-  margin-left: 6px;
+  padding-left: 18px;
+  white-space: nowrap;
+}
+.order-name {
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: #354966;
+  margin: 0;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.platforms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: #66758d;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.platforms span {
+  white-space: nowrap;
 }
 .privacy {
   font-size: 12px;
   color: #8392ab;
+  flex-shrink: 0;
 }
 .content {
   max-width: 1200px;
-  margin: 46px auto;
+  margin: 24px auto;
   background: #fff;
   padding: 32px;
   border: 1px solid #e8eef7;
   border-radius: 22px;
   box-shadow: 0 14px 55px #2854a008;
 }
-.heading {
+.board-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
-.eyebrow {
-  color: #6084ce;
-  letter-spacing: 2px;
-  font-size: 10px;
-  margin-bottom: 12px;
-}
-h1 {
-  font-size: 28px;
-  margin: 0;
-  font-weight: 650;
-}
-.subtitle {
+.updated-at {
   font-size: 12px;
-  color: #8a98ae;
-  margin-top: 12px;
+  line-height: 1.6;
+  color: #6d7e97;
+  margin: 0;
+}
+.auto-refresh {
+  display: inline-block;
+  margin-left: 16px;
+  color: #8392ab;
+}
+.board-toolbar :deep(.el-button) {
+  min-height: 40px;
+  padding: 0 18px;
+}
+.brand:focus-visible {
+  outline: 2px solid #3269e7;
+  outline-offset: 5px;
+  border-radius: 5px;
 }
 .error {
   color: #b65349;
@@ -228,14 +288,28 @@ footer {
     padding: 18px;
     margin: 22px auto;
   }
-  h1 {
-    font-size: 22px;
+  .header-context {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .title-context {
+    width: 100%;
+    gap: 6px 12px;
+  }
+  .section-name {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .order-name {
+    max-width: min(48vw, 240px);
+    font-size: 13px;
   }
   .privacy {
     display: none;
   }
-  .brand span {
-    font-size: 11px;
+  .auto-refresh {
+    display: block;
+    margin-left: 0;
   }
 }
 </style>

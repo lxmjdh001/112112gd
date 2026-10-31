@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import type { OrderStats } from "#/api/work-orders";
-import { orderDate, platformLabel } from "#/api/work-orders";
+import { orderDate } from "#/api/work-orders";
 import { ElTable, ElTableColumn, ElTag } from "element-plus";
 defineProps<{ stats: OrderStats }>();
-function syncLabel(row: OrderStats["accounts"][number]) {
-  if (row.removed) return "已移除 · 历史保留";
-  if (!row.collectorReady) return "等待同步";
-  if (row.connectionType === "cloud") return "API 回调已配置";
-  if (!row.lastSync || Date.now() - Date.parse(row.lastSync) > 120000) return "客户端离线";
-  return "同步中";
+function presence(row: OrderStats["accounts"][number]) {
+  if (row.status === "online") return { label: "在线", type: "success" as const };
+  if (row.status === "error") return { label: "异常", type: "danger" as const };
+  return { label: "离线", type: "info" as const };
 }
 </script>
 <template>
@@ -27,31 +25,35 @@ function syncLabel(row: OrderStats["accounts"][number]) {
         ><small>工单统计期间</small>
       </article>
       <article>
-        <span>有效新客 / 重复</span
+        <span>累计新增 / 重复</span
         ><strong
           >{{ stats.fresh }} <i>/ {{ stats.duplicate }}</i></strong
         ><small>{{ stats.target ? `目标 ${stats.target} 人` : "同一账号内去重计数" }}</small>
       </article>
     </div>
     <div class="board-table">
-      <ElTable :data="stats.accounts" empty-text="暂无参与账号">
-        <ElTableColumn label="平台账号" min-width="190"
+      <ElTable :data="stats.accounts" empty-text="暂无参与账号" class="account-stats-table">
+        <ElTableColumn label="昵称" min-width="150" show-overflow-tooltip
           ><template #default="{ row }"
-            ><b>{{ row.label }}</b>
-            <div class="muted">{{ platformLabel(row) }}</div></template
+            ><span class="account-nickname">{{ row.nickname || row.label || "—" }}</span></template
           ></ElTableColumn
         >
-        <ElTableColumn prop="today" label="今日" min-width="80" sortable />
-        <ElTableColumn prop="yesterday" label="昨日" min-width="80" sortable />
-        <ElTableColumn prop="total" label="累计" min-width="80" sortable />
-        <ElTableColumn prop="fresh" label="新客" min-width="80" />
-        <ElTableColumn prop="duplicate" label="重复" min-width="80" />
-        <ElTableColumn label="数据状态" min-width="165"
+        <ElTableColumn label="账号" min-width="178" show-overflow-tooltip
+          ><template #default="{ row }"><span class="account-identity">{{ row.account || "—" }}</span></template></ElTableColumn
+        >
+        <ElTableColumn prop="todayFresh" label="今日新增" min-width="112" align="right" sortable
+          ><template #default="{ row }">{{ row.todayFresh ?? "—" }}</template></ElTableColumn
+        >
+        <ElTableColumn prop="fresh" label="累积新增" min-width="112" align="right" sortable />
+        <ElTableColumn prop="todayDuplicate" label="今日重复" min-width="112" align="right" sortable
+          ><template #default="{ row }">{{ row.todayDuplicate ?? "—" }}</template></ElTableColumn
+        >
+        <ElTableColumn prop="duplicate" label="累积重复" min-width="112" align="right" sortable />
+        <ElTableColumn label="状态" min-width="96" align="center"
           ><template #default="{ row }"
-            ><ElTag :type="row.collectorReady && !row.removed ? 'success' : 'info'" size="small">{{
-              syncLabel(row)
-            }}</ElTag>
-            <div class="muted">{{ orderDate(row.lastSync) }}</div></template
+            ><ElTag :type="presence(row).type" size="small" effect="light" round class="presence-tag"><span aria-hidden="true" class="presence-dot"></span>{{
+              presence(row).label
+            }}</ElTag></template
           ></ElTableColumn
         >
       </ElTable>
@@ -63,13 +65,6 @@ function syncLabel(row: OrderStats["accounts"][number]) {
         {{ String(Math.floor(stats.resetMinutes / 60)).padStart(2, "0") }}:{{
           String(stats.resetMinutes % 60).padStart(2, "0")
         }}（北京时间）划分日期
-      </p>
-      <p>
-        工单期间，同一客户向同一账号首次发来消息计 1
-        人，后续消息不重复计入；同一客户进入多个账号时分别计数，后进入的账号标记重复。群聊不计入。
-      </p>
-      <p>
-        原生账号由新版客户端同步实际消息；离线期间需恢复同步后才更新。仅统计已同步的数据，历史消息未完整同步时不能视作完整历史。移除账号后保留已上报统计。
       </p>
     </div>
   </section>
@@ -115,10 +110,44 @@ function syncLabel(row: OrderStats["accounts"][number]) {
   overflow: hidden;
   padding: 8px 14px;
 }
-.muted {
-  font-size: 11px;
-  color: #8593a7;
-  margin-top: 5px;
+.account-stats-table {
+  font-variant-numeric: tabular-nums;
+}
+.account-nickname {
+  color: #263750;
+  font-weight: 600;
+}
+.account-identity {
+  color: #53647d;
+  font-variant-numeric: tabular-nums;
+}
+.presence-tag {
+  gap: 6px;
+  padding: 0 10px;
+  min-height: 25px;
+}
+.presence-tag.el-tag--success {
+  --el-tag-text-color: #0a7e57;
+  --el-tag-bg-color: #edf8f2;
+  --el-tag-border-color: #d6ebdf;
+}
+.presence-tag.el-tag--info {
+  --el-tag-text-color: #5f6c82;
+  --el-tag-bg-color: #f2f4f8;
+  --el-tag-border-color: #e1e6ee;
+}
+.presence-tag.el-tag--danger {
+  --el-tag-text-color: #b83246;
+  --el-tag-bg-color: #fff1f3;
+  --el-tag-border-color: #f3dce1;
+}
+.presence-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 .rules {
   color: #8894a6;

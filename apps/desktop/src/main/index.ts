@@ -1,3 +1,5 @@
+import { ChatArchiveQueue, type ArchiveBatch } from "./chat-archive-queue.ts";
+import { validAccountAvatar } from "../shared/account-avatar.ts";
 import { validCustomerIdentity } from "../shared/customer-identity.ts";
 import { RememberedLogin } from "./remembered-login.ts";
 import { InboundQueue, type InboundBatch } from "./inbound-queue.ts";
@@ -20,7 +22,7 @@ import {
   type IpcMainInvokeEvent,
   type Session,
 } from "electron";
-import { readFile, writeFile, mkdir, rm, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm, rename, readdir } from "node:fs/promises";
 import { randomBytes, randomUUID } from "node:crypto";
 import path from "node:path";
 import { hostname } from "node:os";
@@ -104,13 +106,17 @@ const state: ViewState = {
   platforms: [],
   activeId: "",
   statuses: {},
+  accountProfiles: {},
   message: "",
   apiURL,
   toolsCollapsed: false,
 };
 interface Runtime {
   owner?: string;
+  archiveOwner?: string;
   inbound?: InboundQueue;
+  archive?: ChatArchiveQueue;
+  archiveLastSync?: number;
   fingerprintCleanup?: () => void;
   platform: string;
   customer?: CustomerContext;
@@ -128,6 +134,8 @@ const runtimeClosures = new WeakMap<Runtime, Promise<void>>();
 const closingAccounts = new Map<string, Promise<void>>();
 // Reopening an account must reuse its outbox while an earlier upload is finishing.
 const inboundQueues = new Map<string, InboundQueue>();
+const archiveQueues = new Map<string, ChatArchiveQueue>();
+let archivePolicyRequest: { epoch: number; promise: Promise<void> } | undefined;
 const historyFile = (tenant: string, account: string) =>
   path.join(app.getPath("userData"), "translation-history", tenant, account + ".bin");
 const credentialsFile = () => path.join(app.getPath("userData"), "authorization.bin");
@@ -246,6 +254,7 @@ function saveAuth() {
           apiURL,
           auth,
           accounts: state.accounts,
+          accountProfiles: state.accountProfiles,
           platforms: state.platforms,
           activeId: state.activeId || restoringAccount,
           toolsCollapsed: state.toolsCollapsed,
@@ -310,6 +319,9 @@ async function terminate(message: string) {
   state.platforms = [];
   state.activeId = "";
   state.statuses = {};
+  state.accountProfiles = {};
+  state.teamArchiveEnabled = false;
+  state.teamArchiveError = "";
   state.billing = undefined;
   state.message = message;
   await Promise.allSettled([...runtimes.values()].map(closeRuntime));
@@ -376,6 +388,9 @@ async function syncAccounts() {
       if (state.activeId === runtime.id) state.activeId = "";
     }
   }
+  for (const id of Object.keys(state.accountProfiles || {})) {
+    if (!allowed.has(id)) delete state.accountProfiles![id];
+  }
   for (const account of accounts) {
     if (
       account.unavailableReason === "proxy_disabled" ||
@@ -407,6 +422,60 @@ function heartbeat(): Promise<void> {
   beating = pending;
   return pending.promise;
 }
+async function refreshArchivePolicy() {
+  if (!auth || quitting) return;
+  if (archivePolicyRequest?.epoch === epoch) return archivePolicyRequest.promise;
+  const generation = epoch,
+    tenant = auth.tenantId,
+    device = auth.deviceId;
+  const item = { epoch: generation, promise: Promise.resolve() };
+  item.promise = (async () => {
+    try {
+      const policy = await request<{ enabled: boolean }>("/client/team-settings");
+      if (!auth || generation !== epoch) return;
+      const changed = state.teamArchiveEnabled !== policy.enabled;
+      state.teamArchiveEnabled = policy.enabled;
+      state.teamArchiveError = "";
+      if (changed)
+        for (const runtime of runtimes.values())
+          if (!runtime.view.webContents.isDestroyed())
+            runtime.view.webContents.send("team:archive-policy", { enabled: policy.enabled });
+      emit();
+      if (!policy.enabled) {
+        const stillDisabled = () =>
+          auth?.tenantId === tenant &&
+          auth?.deviceId === device &&
+          generation === epoch &&
+          !state.teamArchiveEnabled;
+        const owned = [...archiveQueues.entries()].filter(([key]) =>
+          key.startsWith(tenant + ":" + device + ":"),
+        );
+        const discarded = await Promise.allSettled(owned.map(([, queue]) => queue.discard()));
+        if (!stillDisabled()) return;
+        const directory = path.join(app.getPath("userData"), "chat-archive", tenant, device);
+        const retained = new Set(
+          owned.map(([key]) => key.slice((tenant + ":" + device + ":").length) + ".bin"),
+        );
+        for (const file of await readdir(directory).catch(() => [])) {
+          if (!stillDisabled()) return;
+          if (/^[0-9a-f-]{36}\.bin$/.test(file) && !retained.has(file))
+            await rm(path.join(directory, file), { force: true });
+        }
+        if (discarded.some((result) => result.status === "rejected") && generation === epoch) {
+          state.teamArchiveError = "聊天同步已关闭，部分本机待同步记录清理失败";
+          emit();
+        }
+      }
+      if (!auth || generation !== epoch) return;
+    } catch {
+      /* Older or unavailable services do not affect account login. */
+    }
+  })().finally(() => {
+    if (archivePolicyRequest === item) archivePolicyRequest = undefined;
+  });
+  archivePolicyRequest = item;
+  return item.promise;
+}
 async function reconnect() {
   const generation = epoch;
   try {
@@ -417,6 +486,7 @@ async function reconnect() {
       state.billing = await request<ViewState["billing"]>("/client/billing");
       if (!auth || epoch !== generation) return;
       state.connection = "online";
+      void refreshArchivePolicy();
       state.message = "";
       emit();
     }
@@ -472,6 +542,12 @@ async function login(code: string, remember: boolean) {
 async function updateStatus(runtime: Runtime, status: string, identifier?: string | null) {
   if (runtimes.get(runtime.id) !== runtime || !auth) return;
   const generation = epoch;
+  if (runtime.status === "ready" && status !== "ready") runtime.archiveLastSync = undefined;
+  const profile = state.accountProfiles?.[runtime.id];
+  if (status === "qr_required" || (status === "ready" && profile && profile.owner !== identifier)) {
+    delete state.accountProfiles?.[runtime.id];
+    persistSession();
+  }
   if (status === "ready" && !validAccountIdentity(runtime.platform, identifier)) {
     runtime.owner = undefined;
     runtime.status = "identity_pending";
@@ -491,8 +567,13 @@ async function updateStatus(runtime: Runtime, status: string, identifier?: strin
       identifier,
     });
   } catch (error) {
-    if (auth && generation === epoch && runtimes.get(runtime.id) === runtime &&
-      status === "ready" && String(error).includes("公司累计 3 天缓冲已用完")) {
+    if (
+      auth &&
+      generation === epoch &&
+      runtimes.get(runtime.id) === runtime &&
+      status === "ready" &&
+      String(error).includes("公司累计 3 天缓冲已用完")
+    ) {
       await request(`/client/accounts/${runtime.id}/close`, {}).catch(() => {});
       if (!auth || generation !== epoch || runtimes.get(runtime.id) !== runtime) return;
       await closeRuntime(runtime);
@@ -756,6 +837,8 @@ async function openAccount(id: string) {
 }
 
 app.whenReady().then(async () => {
+  const applicationIcon = nativeImage.createFromPath(path.join(baseDir, "icon.png"));
+  if (!applicationIcon.isEmpty()) app.dock?.setIcon(applicationIcon);
   await mkdir(app.getPath("userData"), { recursive: true });
   rememberedLogin = new RememberedLogin(
     path.join(app.getPath("userData"), "login-preferences.json"),
@@ -789,6 +872,7 @@ app.whenReady().then(async () => {
     await writeFile(devicePath, deviceIdentity, { mode: 0o600 });
   }
   win = new BrowserWindow({
+    icon: applicationIcon,
     ...windowBounds(false),
     resizable: false,
     maximizable: false,
@@ -1369,6 +1453,161 @@ app.whenReady().then(async () => {
       .catch(() => {});
     return { stored: true };
   });
+  ipcMain.handle("team:archive-policy", (event) => {
+    requireRuntime(event);
+    return { enabled: state.teamArchiveEnabled === true };
+  });
+  ipcMain.handle("platform:chat-archive", async (event, input: ArchiveBatch) => {
+    const runtime = requireRuntime(event);
+    if (!state.teamArchiveEnabled) return { stored: false, enabled: false };
+    if (
+      !input ||
+      typeof input.ready !== "boolean" ||
+      !Array.isArray(input.messages) ||
+      input.messages.length > 100 ||
+      (!input.ready && input.messages.length > 0) ||
+      !["loaded_only", "unavailable"].includes(input.historyScope)
+    )
+      throw Error("聊天同步格式无效");
+    const metadataOnly = !input.ready && input.messages.length === 0;
+    const owner = input.owner || (metadataOnly ? runtime.owner || runtime.archiveOwner : "");
+    const ownsBatch = () =>
+      runtime.owner === owner || (metadataOnly && !runtime.owner && runtime.archiveOwner === owner);
+    if (!validAccountIdentity(runtime.platform, owner) || !ownsBatch())
+      throw Error("聊天同步账号无效");
+    if (input.ready) runtime.archiveOwner = owner;
+    const kinds = new Set([
+      "text",
+      "image",
+      "video",
+      "audio",
+      "document",
+      "sticker",
+      "location",
+      "contact",
+      "poll",
+    ]);
+    for (const message of input.messages) {
+      if (
+        !message ||
+        typeof message.id !== "string" ||
+        !message.id ||
+        message.id.length > 512 ||
+        typeof message.customer !== "string" ||
+        message.customer === owner ||
+        !(
+          validCustomerIdentity(runtime.platform, message.customer) ||
+          (runtime.platform === "whatsapp" && /^lid:[0-9]{5,25}$/.test(message.customer))
+        ) ||
+        typeof message.body !== "string" ||
+        [...message.body].length > 8000 ||
+        typeof message.at !== "string" ||
+        !Number.isFinite(Date.parse(message.at)) ||
+        !["in", "out"].includes(message.direction) ||
+        !kinds.has(message.kind) ||
+        (message.name !== undefined &&
+          (typeof message.name !== "string" || [...message.name].length > 150))
+      )
+        throw Error("聊天记录字段无效");
+    }
+    const batch: ArchiveBatch = {
+      owner,
+      ready: input.ready,
+      historyScope: input.historyScope,
+      limited: input.limited === true,
+      messages: input.messages.map((m) => ({
+        id: m.id,
+        customer: m.customer,
+        name: m.name,
+        direction: m.direction,
+        body: m.body,
+        kind: m.kind,
+        at: m.at,
+        observedAt: m.observedAt,
+        truncated: m.truncated === true,
+      })),
+    };
+    if (Buffer.byteLength(JSON.stringify(batch)) > 1_000_000) throw Error("聊天同步批次过大");
+    const generation = epoch,
+      tenant = auth!.tenantId,
+      device = auth!.deviceId,
+      key = tenant + ":" + device + ":" + runtime.id;
+    runtime.archive ||= archiveQueues.get(key);
+    runtime.archive ||= new ChatArchiveQueue({
+      file: path.join(app.getPath("userData"), "chat-archive", tenant, device, runtime.id + ".bin"),
+      scope: { tenantId: tenant, deviceId: device, accountId: runtime.id },
+      encrypt: (value) => {
+        if (!safeStorage.isEncryptionAvailable()) throw Error("本机加密存储不可用");
+        return safeStorage.encryptString(value);
+      },
+      decrypt: (value) => safeStorage.decryptString(value),
+    });
+    archiveQueues.set(key, runtime.archive);
+    const current = () =>
+      auth &&
+      generation === epoch &&
+      runtimes.get(runtime.id) === runtime &&
+      ownsBatch() &&
+      state.teamArchiveEnabled;
+    const send = async (data: ArchiveBatch) => {
+      if (!current()) throw Error("聊天同步已暂停");
+      const result = await request<{ accepted: number; enabled: boolean }>(
+        `/client/accounts/${runtime.id}/chat-archive`,
+        data,
+      );
+      if (!result.enabled) {
+        void refreshArchivePolicy();
+        throw Error("团队已暂停同步");
+      }
+      if (current()) {
+        runtime.archiveLastSync = Date.now();
+        state.teamArchiveError = "";
+        emit();
+      }
+      return result;
+    };
+    if (!batch.ready || !batch.messages.length) {
+      if (!runtime.archiveLastSync || Date.now() - runtime.archiveLastSync > 30000)
+        void send({ ...batch, messages: [] }).catch(() => {});
+    }
+    if (batch.messages.length) {
+      try {
+        await runtime.archive.enqueue(batch);
+      } catch (error) {
+        if (current()) {
+          state.teamArchiveError = "部分聊天记录暂未保存，将自动重试";
+          emit();
+        }
+        throw error;
+      }
+    }
+    void runtime.archive.flush(owner, batch.ready, send).catch(() => {
+      if (current()) {
+        state.teamArchiveError = "部分聊天记录待同步，将自动重试";
+        emit();
+      }
+    });
+    return { stored: true, enabled: true };
+  });
+  ipcMain.on("platform:self-avatar", (event, owner, avatar) => {
+    try {
+      const runtime = requireRuntime(event);
+      if (
+        runtime.status !== "ready" ||
+        runtime.owner !== owner ||
+        !validAccountIdentity(runtime.platform, owner) ||
+        !validAccountAvatar(avatar)
+      )
+        return;
+      const profiles = (state.accountProfiles ||= {});
+      if (profiles[runtime.id]?.owner === owner && profiles[runtime.id]?.avatar === avatar) return;
+      profiles[runtime.id] = { owner, avatar };
+      persistSession();
+      emit();
+    } catch {
+      /* Reject non-platform frames and stale account snapshots. */
+    }
+  });
   for (const channel of ["wa:status", "platform:status"])
     ipcMain.on(channel, (event, status, identifier) => {
       try {
@@ -1392,6 +1631,24 @@ app.whenReady().then(async () => {
         state.label = auth!.label;
         state.accounts = Array.isArray(saved.accounts) ? saved.accounts : [];
         state.platforms = Array.isArray(saved.platforms) ? saved.platforms : [];
+        state.accountProfiles = {};
+        if (
+          saved.accountProfiles &&
+          typeof saved.accountProfiles === "object" &&
+          !Array.isArray(saved.accountProfiles)
+        ) {
+          for (const [id, raw] of Object.entries(saved.accountProfiles).slice(0, 500)) {
+            const profile = raw as { owner?: unknown; avatar?: unknown };
+            const account = state.accounts.find((a) => a.id === id);
+            if (
+              account &&
+              typeof profile?.owner === "string" &&
+              validAccountIdentity(account.platform, profile.owner) &&
+              validAccountAvatar(profile.avatar)
+            )
+              state.accountProfiles[id] = { owner: profile.owner, avatar: profile.avatar };
+          }
+        }
         state.toolsCollapsed = saved.toolsCollapsed === true;
         state.sidebarCollapsed = saved.sidebarCollapsed === true;
         restoringAccount = typeof saved.activeId === "string" ? saved.activeId : "";
@@ -1426,6 +1683,7 @@ app.on("before-quit", (event) => {
     saveAuth(),
     rememberedLogin?.flush(),
     ...[...inboundQueues.values()].map((queue) => queue.close()),
+    ...[...archiveQueues.values()].map((queue) => queue.close()),
   ])
     .catch(() => {})
     .finally(() => {

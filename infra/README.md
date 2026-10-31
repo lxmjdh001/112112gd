@@ -23,7 +23,7 @@ bash scripts/package-server.sh
 4. 安装 PostgreSQL（已有实例则复用并新建独立角色 / 数据库），创建系统用户 `d1scrm`；创建同名 PostgreSQL 非超级用户和同名数据库，数据库由该角色拥有。只允许本机 Unix socket / 回环访问。环境示例通过系统用户 `d1scrm` 的 peer 认证连接。
 5. 发布到 `/opt/d1scrm/releases/<版本>/`，程序和静态文件由 root 拥有，目录可读可遍历、API 可执行；`/opt/d1scrm/current` 指向该版本。密钥不能放在 `web/`。检查 Caddy 用户可读取静态文件。
 6. 将 `api.env.example` 复制到 `/etc/d1scrm/api.env`（root / 0600），设置独立的 32 字节随机主密钥、随机管理员密码、正式 HTTPS 地址。禁止复用示例值，凭据交付到用户受保护的本地文件。迁移加密数据必须同时迁移匹配的主密钥。
-7. 安装 `d1-api.service`，执行 `systemctl daemon-reload` 和 `systemctl enable --now d1-api`。启动时执行 001–020 事务迁移。验证本机 `/healthz`、后台登录、注册、登录码、多设备权限和计费。验证管理员后可移除环境中的两项 `BOOTSTRAP_*`，账号已保存在数据库。
+7. 安装 `d1-api.service`，执行 `systemctl daemon-reload` 和 `systemctl enable --now d1-api`。启动时执行 001–023 事务迁移。验证本机 `/healthz`、后台登录、注册、登录码、多设备权限和计费。验证管理员后可移除环境中的两项 `BOOTSTRAP_*`，账号已保存在数据库。
 8. 备份并修改现有站点 Caddy 路由，`/api/*` 和 `/healthz` 转发至 `127.0.0.1:18080`，静态文件指向新版 `web/`。Caddy 必须覆盖 `X-Real-IP`，不能透传访客伪造的值。Go 仅信任回环代理提供的该头；如果经过 CDN，需按现场配置核验真实地址来源。
 9. `caddy validate` 成功后平滑 reload，验证公网 HTTPS 首页、登录、注册、API 和静态资源。CDN 如使用 HTTP 回源，保留经核验的原有代理路由，避免重定向循环。旧 `/web-api` / 下载入口明确停用，不继续分发旧客户端。
 10. 新站验证通过后，停止并禁用已确认属于旧版的服务及账号容器 / 定时器，保留数据；不能停止不相关的 Docker 容器、网站和服务。公网验证失败则还原 Caddy 配置 / 旧服务状态。

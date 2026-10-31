@@ -20,7 +20,6 @@ import {
 } from "#/api/commerce";
 import { useAuthStore } from "#/store";
 import FinanceTable from "./components/finance-table.vue";
-import CommerceOperations from "./components/commerce-operations.vue";
 import "./common.css";
 const auth = useAuthStore(),
   tab = ref("billing"),
@@ -236,8 +235,8 @@ onMounted(refresh);
                   type="password"
                   show-password
                   autocomplete="new-password"
-                  minlength="12"
-                  maxlength="72"
+                  minlength="8"
+                  maxlength="16"
                   required /></label
               ><label class="field"
                 >确认新密码<ElInput
@@ -249,7 +248,7 @@ onMounted(refresh);
                   required
               /></label>
               <p class="subtitle">
-                密码至少 12 位。修改后其他网页会话退出，当前网页及客户端登录码不受影响。
+                密码8–16 位。修改后其他网页会话退出，当前网页及客户端登录码不受影响。
               </p>
               <ElButton native-type="submit" :loading="saving">更新密码</ElButton>
             </form>
@@ -314,9 +313,10 @@ onMounted(refresh);
             ]"
             empty-text="暂无已上报的翻译用量"
         /></ElTabPane>
-        <ElTabPane v-if="profile?.isOperator" label="运营管理" name="operations"
-          ><CommerceOperations v-if="tab === 'operations'" @changed="refresh"
-        /></ElTabPane>
+        <ElTabPane v-if="profile?.isOperator" label="平台管理" name="operations">
+          <p class="subtitle">平台运营功能已集中到侧栏「平台管理」。</p>
+          <ElButton type="primary" @click="$router.push('/platform/users')">进入平台管理</ElButton>
+        </ElTabPane>
       </ElTabs>
     </div>
     <ElDialog v-model="topupOpen" title="申请充值" width="520px" :close-on-click-modal="false"

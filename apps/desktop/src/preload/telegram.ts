@@ -1,3 +1,5 @@
+import { installChatArchive } from "./chat-archive.ts";
+import { reportSelfAvatar, resetSelfAvatar } from "./self-avatar.ts";
 import { installNativeChat } from "./native-chat.ts";
 import { installInboundStats } from "./inbound-stats.ts";
 import { contextBridge, ipcRenderer } from "electron";
@@ -12,6 +14,7 @@ window.addEventListener("DOMContentLoaded", () => {
   installNativeTranslation();
   installNativeChat("telegram");
   installInboundStats("telegram");
+  installChatArchive("telegram");
   function report() {
     const status = observeTelegram(document, navigator.onLine);
     let owner: string | null = null;
@@ -26,6 +29,8 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     }
     ipcRenderer.send("platform:status", status, owner);
+    if (owner) void reportSelfAvatar("telegram", owner);
+    else resetSelfAvatar();
   }
   report();
   setInterval(report, 5000);

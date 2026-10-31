@@ -14,6 +14,7 @@ if (!existsSync(path.join(electronDir, "path.txt"))) {
   if (install.status !== 0) throw new Error("Electron runtime installation failed");
 }
 await mkdir(outputDir, { recursive: true });
+await copyFile("resources/icon.png", path.join(outputDir, "icon.png"));
 await build({
   entryPoints: ["src/main/index.ts"],
   outfile: path.join(outputDir, "main.cjs"),

@@ -1,14 +1,12 @@
 .account-sidebar {
-  width: 280px;
+  width: var(--ui-sidebar-width);
   flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid #e1e8e5;
-  color: #293b34;
-  background:
-    radial-gradient(ellipse at 0 65%, #e5f7f080, transparent 42%),
-    radial-gradient(ellipse at 30% 100%, #edf1ff80, transparent 35%), #fff;
+  border-right: 1px solid var(--ui-line);
+  color: var(--ui-ink);
+  background: var(--ui-inset);
 }
 .account-sidebar [hidden] {
   display: none !important;
@@ -17,74 +15,73 @@
   font: inherit;
 }
 .account-sidebar button:focus-visible {
-  outline: 2px solid #0ca76d;
+  outline: 2px solid var(--ui-brand);
   outline-offset: -2px;
 }
 .sidebar-brand {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 11px;
-  min-height: 80px;
-  padding: 14px;
-  border-bottom: 1px solid #e5ebe7;
-  background: linear-gradient(110deg, #ffebdfb0, #fffaf6a0 60%, #fff);
+  gap: 10px;
+  min-height: 76px;
+  padding: 16px;
+  border-bottom: 1px solid var(--ui-line);
+  background: var(--ui-surface);
 }
 .icon-button {
   display: grid;
   place-items: center;
   flex: none;
-  width: 34px;
-  height: 34px;
-  padding: 7px;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 7px;
   background: transparent;
-  color: #75847e;
+  color: var(--ui-muted);
 }
 .icon-button svg {
   width: 19px;
   height: 19px;
 }
 .icon-button:hover {
-  background: #eef4f0;
-  color: #15865c;
+  background: var(--ui-hover);
+  color: var(--ui-ink);
 }
 .sidebar-collapse {
-  background: #ffffffb3;
-  border-color: #dfe3e0;
-  color: #43564b;
-  box-shadow: 0 2px 4px #22332b08;
+  background: var(--ui-surface);
+  border-color: var(--ui-line);
+  color: var(--ui-muted);
 }
 .sidebar-mark {
-  width: 35px;
-  height: 35px;
+  width: 36px;
+  height: 36px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 12px;
-  color: white;
-  background: #4d6cf5;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.5px;
-  box-shadow: 0 3px 8px #4d6cf51a;
+  border-radius: 11px;
+  color: var(--ui-on-brand);
+  background: var(--ui-brand);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -1px;
 }
 .sidebar-brand-info {
   min-width: 0;
+  flex: 1;
 }
 .sidebar-brand-info strong {
   display: block;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 650;
   letter-spacing: -0.4px;
 }
 .sidebar-status {
   display: flex;
-  gap: 11px;
-  margin-top: 6px;
-  color: #8b938d;
-  font-size: 10px;
+  gap: 12px;
+  margin-top: 5px;
+  color: var(--ui-muted);
+  font-size: 11px;
   white-space: nowrap;
 }
 .sidebar-status > span {
@@ -100,12 +97,12 @@
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: #b7bfba;
+  background: var(--ui-muted);
 }
 .sidebar-status .is-ready,
 .account-status-dot.is-ready,
 .connection-dot.is-ready {
-  background: #1ab477;
+  background: var(--ui-success);
 }
 .account-list {
   min-height: 0;
@@ -113,33 +110,36 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #cfdbd4 transparent;
+  scrollbar-color: var(--ui-line-strong) transparent;
+  padding: 8px 0;
+  scroll-padding: 8px;
 }
 .account-group {
-  border-bottom: 1px solid #e5ebe7;
+  border-bottom: 1px solid var(--ui-line);
+  padding: 4px 0;
 }
 .platform-heading {
   display: flex;
   align-items: center;
-  gap: 2px;
-  min-height: 46px;
-  padding: 0 10px;
-  background: #f3f9f5;
+  gap: 4px;
+  min-height: 42px;
+  padding: 0 14px;
+  background: transparent;
 }
 .account-group.is-active .platform-heading {
-  background: #dff6e9;
+  background: transparent;
 }
 .platform-toggle {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   min-width: 0;
   flex: 1;
   align-self: stretch;
   border: 0;
   background: transparent;
-  color: #253e30;
-  padding: 8px 0;
+  color: var(--ui-ink);
+  padding: 6px 0;
   text-align: left;
 }
 .platform-toggle h2 {
@@ -169,31 +169,34 @@
   bottom: -2px;
   padding: 1px 3px;
   border-radius: 4px;
-  background: #277357;
-  color: white;
-  border: 1px solid white;
+  background: var(--ui-brand);
+  color: var(--ui-on-brand);
+  border: 1px solid var(--ui-surface);
   font-size: 7px;
   font-weight: 700;
   line-height: 10px;
 }
 .platform-count {
-  color: #80a08c;
-  font-size: 10px;
+  color: var(--ui-muted);
+  font-size: 11px;
   margin-left: auto;
-  padding: 1px 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--ui-line);
+  border-radius: 5px;
+  background: var(--ui-surface);
 }
 .platform-add,
 .platform-fold {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 28px;
+  width: 28px;
+  height: 30px;
   flex: none;
   padding: 0;
   border: 0;
   background: transparent;
-  color: #6a8b78;
-  border-radius: 7px;
+  color: var(--ui-muted);
+  border-radius: 6px;
 }
 .account-sidebar .platform-add {
   font-size: 23px;
@@ -201,8 +204,8 @@
 }
 .platform-add:hover:not(:disabled),
 .platform-fold:hover {
-  background: #c5e9d6;
-  color: #138754;
+  background: var(--ui-brand-soft);
+  color: var(--ui-brand);
 }
 .sidebar-chevron {
   width: 8px;
@@ -215,11 +218,11 @@
   transform: translateY(-2px) rotate(225deg);
 }
 .group-accounts {
-  padding: 7px;
+  padding: 4px 10px 8px;
 }
 .account-item {
   position: relative;
-  margin: 2px 0 6px;
+  margin: 3px 0;
 }
 .account-item:last-child {
   margin-bottom: 0;
@@ -227,44 +230,45 @@
 .account {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   width: 100%;
-  min-height: 68px;
-  padding: 11px 12px;
+  min-height: 64px;
+  padding: 10px 38px 10px 12px;
   border: 1px solid transparent;
-  border-radius: 14px;
-  background: #f5f7f6;
-  color: #30493b;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ui-ink);
   text-align: left;
 }
 .account:hover:not(:disabled) {
-  background: #edf4f0;
+  background: var(--ui-hover);
 }
 .account.active {
-  background: #e6eeea;
-  border-color: #c9ddcf;
+  background: var(--ui-brand-soft);
+  border-color: color-mix(in srgb, var(--ui-brand) 18%, var(--ui-surface));
 }
 .account.active::after {
   content: "";
   position: absolute;
   left: 0;
-  top: 25px;
-  bottom: 25px;
+  top: 20px;
+  bottom: 20px;
   width: 3px;
   border-radius: 3px;
-  background: #14ac6c;
+  background: var(--ui-brand);
 }
 .account-avatar {
   position: relative;
   display: grid;
   place-items: center;
   flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, #e1e9e5, #c6d7cd);
-  color: #547b65;
-  font-size: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-surface);
+  color: var(--ui-muted);
+  font-size: 13px;
   font-weight: 600;
 }
 .account-platform-badge {
@@ -272,9 +276,9 @@
   right: -6px;
   bottom: -6px;
   padding: 2px;
-  border: 1px solid #e8f0eb;
+  border: 1px solid var(--ui-line);
   border-radius: 8px;
-  background: white;
+  background: var(--ui-surface);
 }
 .account-platform-badge .platform-icon {
   width: 17px;
@@ -304,9 +308,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #8a9990;
-  font-size: 10px;
-  margin-top: 7px;
+  color: var(--ui-muted);
+  font-size: 11px;
+  margin-top: 4px;
 }
 .account-status-dot {
   width: 5px;
@@ -316,18 +320,18 @@
 }
 .account-close {
   position: absolute;
-  left: 7px;
-  top: 7px;
+  right: 8px;
+  top: 20px;
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #f5f7f6;
-  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
   padding: 0;
-  background: #81928a;
-  color: white;
+  background: transparent;
+  color: var(--ui-muted);
 }
 .account-close svg {
   display: block;
@@ -340,11 +344,12 @@
   pointer-events: none;
 }
 .account-close:hover {
-  background: #da4b4b;
+  background: color-mix(in srgb, var(--ui-danger) 10%, var(--ui-surface));
+  color: var(--ui-danger);
 }
 .account.paused {
-  background: #f0f1f2;
-  color: #909791;
+  background: var(--ui-inset);
+  color: var(--ui-muted);
 }
 .account.paused .account-avatar {
   filter: grayscale(1);
@@ -353,7 +358,7 @@
 .removed-api {
   margin: 8px 0 0;
   padding: 4px;
-  color: #8a9990;
+  color: var(--ui-muted);
   font-size: 11px;
 }
 .removed-api summary {
@@ -368,12 +373,13 @@
   text-overflow: ellipsis;
 }
 .unused-platforms {
-  padding: 15px 10px 14px;
+  padding: 12px 12px 14px;
 }
 .unused-heading {
-  margin: 0 4px 10px;
-  color: #99a29c;
+  margin: 0 6px 9px;
+  color: var(--ui-muted);
   font-size: 11px;
+  font-weight: 500;
 }
 .unused-platform {
   display: flex;
@@ -381,27 +387,27 @@
   gap: 10px;
   width: 100%;
   min-height: 42px;
-  padding: 6px 4px;
+  padding: 6px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 7px;
   background: transparent;
-  color: #66786c;
+  color: var(--ui-ink);
   text-align: left;
 }
 .unused-platform:hover:not(:disabled) {
-  background: #eef8f1;
-  color: #158b58;
+  background: var(--ui-brand-soft);
+  color: var(--ui-brand);
 }
 .account-sidebar .unused-platform:disabled {
   opacity: 1;
-  color: #909894;
+  color: var(--ui-muted);
 }
 .unused-platform:disabled .platform-logo {
   opacity: 0.48;
   filter: saturate(0.75);
 }
 .unused-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -412,10 +418,10 @@
   bottom: -2px;
   transform: translateX(-50%);
   padding: 0 2px;
-  border: 1px solid #fff;
+  border: 1px solid var(--ui-surface);
   border-radius: 3px;
-  background: #edf2ef;
-  color: #74827b;
+  background: var(--ui-inset);
+  color: var(--ui-muted);
   font-size: 8px;
   font-weight: 500;
   line-height: 11px;
@@ -432,8 +438,8 @@
 }
 .unused-plus {
   margin-left: auto;
-  padding: 0 8px;
-  color: #9ba9a0;
+  padding: 0 6px;
+  color: var(--ui-muted);
   font-size: 20px;
 }
 .sidebar-actions {
@@ -441,37 +447,39 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  padding: 12px 14px 9px;
-  border-top: 1px solid #e5ebe7;
-  background: #ffffff80;
+  padding: 14px 16px 10px;
+  border-top: 1px solid var(--ui-line);
+  background: var(--ui-surface);
 }
 .account-sidebar .add-account {
   flex: 1;
-  padding: 8px;
-  border: 1px dashed #c7d8cd;
-  border-radius: 9px;
-  background: #f3faf6;
-  color: #438668;
+  min-height: 36px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--ui-brand);
+  color: var(--ui-on-brand);
   font-size: 12px;
+  font-weight: 550;
 }
 .add-account:hover:not(:disabled) {
-  border-color: #58aa80;
-  background: #e9f7ef;
+  background: var(--ui-brand-hover);
 }
 .side-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 14px 10px;
+  padding: 0 16px 12px;
+  background: var(--ui-surface);
 }
 .sidebar-user {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  font-size: 11px;
-  color: #8a9990;
+  font-size: 12px;
+  color: var(--ui-muted);
 }
 .sidebar-user > span {
   overflow: hidden;
@@ -479,12 +487,12 @@
   white-space: nowrap;
 }
 .account-sidebar.is-compact {
-  width: 76px;
+  width: var(--ui-sidebar-compact);
 }
 .is-compact .sidebar-brand {
-  min-height: 72px;
+  min-height: 76px;
   justify-content: center;
-  padding: 18px 0;
+  padding: 16px 0;
 }
 .is-compact .sidebar-collapse svg {
   transform: rotate(180deg);
@@ -526,8 +534,13 @@
   border-radius: 12px;
 }
 .is-compact .account-close {
-  left: 2px;
-  top: 4px;
+  right: 0;
+  left: auto;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line);
 }
 .is-compact .unused-platforms {
   padding: 12px 8px;
@@ -552,4 +565,41 @@
   padding: 0;
   font-size: 10px;
   overflow-wrap: anywhere;
+}
+
+.platform-state {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  color: var(--ui-muted);
+  padding: 1px 5px;
+  border: 1px solid var(--ui-line);
+  border-radius: 4px;
+  background: var(--ui-surface);
+}
+.is-compact .platform-state {
+  display: none;
+}
+.account.active .account-avatar {
+  color: var(--ui-brand);
+  border-color: color-mix(in srgb, var(--ui-brand) 20%, var(--ui-surface));
+}
+.is-compact .unused-platform {
+  min-height: 44px;
+}
+
+.account-self-avatar {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.account-platform-badge {
+  z-index: 1;
+}
+.account-status-dot.is-error,
+.sidebar-status .is-error {
+  background: var(--ui-danger);
 }

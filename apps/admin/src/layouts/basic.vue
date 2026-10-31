@@ -6,7 +6,7 @@ const user = useUserStore();
 const auth = useAuthStore();
 </script>
 <template>
-  <BasicLayout @clear-preferences-and-logout="auth.logout(false)"
+  <BasicLayout class="d1-admin-layout" @clear-preferences-and-logout="auth.logout(false)"
     ><template #user-dropdown
       ><UserDropdown
         avatar="/logo.svg"

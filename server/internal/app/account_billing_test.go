@@ -16,7 +16,7 @@ func TestRegistrationPointGift(t *testing.T) {
 	if got["points"] != "100" {
 		t.Fatal("new company gift missing", got)
 	}
-	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "point-customer", "password": "test-password-12345", "teamName": "duplicate"}); s != 409 {
+	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "point-customer", "password": "test-pass-12345", "teamName": "duplicate"}); s != 409 {
 		t.Fatal("duplicate registration", s)
 	}
 	got = h.commerceCall(t, "GET", "/account/billing", member, nil)

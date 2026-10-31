@@ -16,8 +16,9 @@ export const line: PlatformAdapter = {
 };
 
 // This function runs in the official React application's main world. It only
-// returns the signed-in profile MID, never contacts, credentials or message data.
-export function readLineOwner(): { status: string; identifier: string | null } {
+// returns the signed-in profile MID and optional own portrait address, never
+// contacts, credentials or message data.
+export function readLineOwner(): { status: string; identifier: string | null; avatarURL?: string } {
   const root = document.getElementById("root") as (HTMLElement & Record<string, any>) | null;
   const key = root && Object.keys(root).find((k) => k.startsWith("__reactContainer$"));
   const fiber = key && root![key];
@@ -33,6 +34,9 @@ export function readLineOwner(): { status: string; identifier: string | null } {
       if (auth?.loginState === "logged_in") {
         const mid = auth.profile?.mid;
         return {
+          ...(typeof auth.profile?.pictureUrl === "string"
+            ? { avatarURL: auth.profile.pictureUrl }
+            : {}),
           status: "ready",
           identifier: typeof mid === "string" && /^u[0-9a-f]{32}$/.test(mid) ? mid : null,
         };

@@ -70,9 +70,9 @@ async function submit() {
           type="password"
           show-password
           autocomplete="new-password"
-          minlength="12"
-          maxlength="72"
-          placeholder="至少 12 位"
+          minlength="8"
+          maxlength="16"
+          placeholder="8–16 位"
           required /></label
       ><label
         >确认密码<ElInput
@@ -110,7 +110,7 @@ async function submit() {
 .register-form small {
   font-size: 12px;
   line-height: 1.7;
-  color: #8791a5;
+  color: var(--el-text-color-secondary);
 }
 .register-form label {
   display: grid;

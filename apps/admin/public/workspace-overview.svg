@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" fill="none">
+  <rect x="25" y="35" width="550" height="312" rx="16" fill="#fff" stroke="#d9e0ec"/>
+  <path d="M25 87h550M162 87v260M455 87v260" stroke="#e3e7ef"/>
+  <rect x="43" y="52" width="23" height="23" rx="7" fill="#3659d9"/>
+  <path d="M49 58h3c5 0 7 3 7 6s-2 6-7 6h-3V58Z" stroke="#fff" stroke-width="2"/>
+  <rect x="78" y="58" width="69" height="9" rx="4.5" fill="#202939"/>
+  <rect x="500" y="53" width="50" height="21" rx="6" fill="#eef2ff"/>
+  <rect x="41" y="106" width="104" height="32" rx="7" fill="#eef2ff"/>
+  <rect x="52" y="118" width="12" height="9" rx="2" stroke="#3659d9" stroke-width="1.5"/>
+  <rect x="74" y="120" width="53" height="5" rx="2.5" fill="#3659d9"/>
+  <g fill="#e3e7ef"><rect x="52" y="159" width="72" height="6" rx="3"/><rect x="52" y="193" width="83" height="6" rx="3"/><rect x="52" y="227" width="61" height="6" rx="3"/><rect x="52" y="261" width="78" height="6" rx="3"/></g>
+  <rect x="183" y="109" width="93" height="11" rx="5.5" fill="#202939"/>
+  <rect x="183" y="133" width="188" height="6" rx="3" fill="#b7c1d2"/>
+  <rect x="183" y="164" width="251" height="146" rx="10" fill="#f8f9fc" stroke="#e3e7ef"/>
+  <path d="M202 194h212M202 234h212M202 274h212" stroke="#e3e7ef"/>
+  <g fill="#3659d9"><rect x="202" y="178" width="49" height="5" rx="2.5"/><circle cx="208" cy="215" r="5"/><circle cx="208" cy="255" r="5"/><circle cx="208" cy="295" r="5"/></g>
+  <g fill="#bcc6d7"><rect x="225" y="212" width="75" height="6" rx="3"/><rect x="225" y="252" width="62" height="6" rx="3"/><rect x="225" y="292" width="83" height="6" rx="3"/></g>
+  <g fill="#e6f4ee"><rect x="366" y="207" width="47" height="15" rx="5"/><rect x="366" y="247" width="47" height="15" rx="5"/><rect x="366" y="287" width="47" height="15" rx="5"/></g>
+  <rect x="474" y="111" width="81" height="7" rx="3.5" fill="#202939"/>
+  <rect x="474" y="139" width="81" height="54" rx="8" fill="#eef2ff"/>
+  <path d="M493 156h28a4 4 0 0 1 4 4v13a4 4 0 0 1-4 4h-14l-7 6v-6h-7a4 4 0 0 1-4-4v-13a4 4 0 0 1 4-4Z" stroke="#3659d9" stroke-width="1.7"/>
+  <path d="M498 164h18m-18 6h12" stroke="#3659d9" stroke-width="1.7" stroke-linecap="round"/>
+  <g fill="#e3e7ef"><rect x="474" y="214" width="69" height="6" rx="3"/><rect x="474" y="235" width="81" height="6" rx="3"/><rect x="474" y="256" width="62" height="6" rx="3"/></g>
+</svg>

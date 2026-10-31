@@ -1,3 +1,5 @@
+import { installChatArchive } from "./chat-archive.ts";
+import { reportSelfAvatar, resetSelfAvatar } from "./self-avatar.ts";
 import { installInboundStats } from "./inbound-stats.ts";
 import { installAutomaticTranslation } from "./automatic-translation.ts";
 import { installChatContext } from "./chat-context.ts";
@@ -12,6 +14,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (location.origin !== "https://web.whatsapp.com") return;
   installCustomerPanel();
   installInboundStats("whatsapp");
+  installChatArchive("whatsapp");
   installChatContext();
   const automatic = installAutomaticTranslation(document, {
     translate: (text, target, source) =>
@@ -126,11 +129,10 @@ window.addEventListener("DOMContentLoaded", () => {
   // Conservative DOM observations; missing selectors never mean an invalid session.
   function report() {
     const status = observeWhatsApp(document, navigator.onLine);
-    ipcRenderer.send(
-      "wa:status",
-      status,
-      status === "ready" ? currentWhatsAppAccount(localStorage) : null,
-    );
+    const owner = status === "ready" ? currentWhatsAppAccount(localStorage) : null;
+    ipcRenderer.send("wa:status", status, owner);
+    if (owner) void reportSelfAvatar("whatsapp", owner);
+    else resetSelfAvatar();
   }
   report();
   setInterval(report, 20000);

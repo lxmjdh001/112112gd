@@ -50,7 +50,14 @@ try {
     await createDialog.getByRole("button", { name: "生成登录码", exact: true }).isDisabled(),
     true,
   );
-  assert.equal(await createDialog.getByRole("checkbox", { name: /LINE/ }).isDisabled(), true);
+  assert.equal(
+    await createDialog.getByRole("button", { name: "LINE", exact: true }).isDisabled(),
+    false,
+  );
+  assert.equal(
+    await createDialog.getByRole("button", { name: "Facebook", exact: true }).count(),
+    0,
+  );
   await createDialog.getByText("WhatsApp", { exact: true }).click();
   await page.screenshot({ path: ".runtime/login-code-platforms.png", fullPage: true });
 

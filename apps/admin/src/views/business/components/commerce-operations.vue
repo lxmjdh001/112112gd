@@ -20,8 +20,12 @@ import {
   withdrawalColumns,
 } from "#/api/commerce";
 import FinanceTable from "./finance-table.vue";
+const props = withDefaults(
+  defineProps<{ section?: "all" | "recharges" | "withdrawals" | "settings" }>(),
+  { section: "all" },
+);
 const emit = defineEmits<{ changed: [] }>();
-const tab = ref("recharges"),
+const tab = ref(props.section === "all" ? "recharges" : props.section),
   busy = ref(false),
   rate = ref(0);
 const config = reactive<CommerceSettings>({
@@ -103,8 +107,8 @@ onMounted(load);
     :closable="false"
     style="margin-bottom: 18px"
   />
-  <ElTabs v-model="tab">
-    <ElTabPane label="充值审核" name="recharges"
+  <ElTabs v-model="tab" :class="{ 'operations-single': section !== 'all' }">
+    <ElTabPane label="充值审核" name="recharges" v-if="section === 'all' || section === 'recharges'"
       ><FinanceTable
         v-if="tab === 'recharges'"
         ref="table"
@@ -128,7 +132,10 @@ onMounted(load);
         ></FinanceTable
       ></ElTabPane
     >
-    <ElTabPane label="提现审核" name="withdrawals"
+    <ElTabPane
+      label="提现审核"
+      name="withdrawals"
+      v-if="section === 'all' || section === 'withdrawals'"
       ><FinanceTable
         v-if="tab === 'withdrawals'"
         ref="withdrawTable"
@@ -160,7 +167,7 @@ onMounted(load);
         ></FinanceTable
       ></ElTabPane
     >
-    <ElTabPane label="结算规则" name="settings"
+    <ElTabPane label="结算规则" name="settings" v-if="section === 'all' || section === 'settings'"
       ><form class="settings-form" @submit.prevent="save">
         <label class="field"
           >结算币种<ElInput model-value="人民币 CNY" disabled /><small
@@ -296,5 +303,11 @@ onMounted(load);
   .settings-form {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<style scoped>
+.operations-single :deep(.el-tabs__header) {
+  display: none;
 }
 </style>

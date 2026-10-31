@@ -519,12 +519,12 @@ async function recalculate() {
   display: flex;
   gap: 12px;
   align-items: center;
-  color: #8b93a7;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
   line-height: 1.7;
   margin-bottom: 20px;
 }
 .repeat-number {
-  color: #d18b24;
+  color: var(--el-color-warning);
 }
 </style>

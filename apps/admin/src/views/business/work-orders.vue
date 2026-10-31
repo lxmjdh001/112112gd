@@ -399,7 +399,7 @@ onMounted(() => void load());
 }
 .secondary {
   font-size: 12px;
-  color: #8994a8;
+  color: var(--el-text-color-secondary);
   line-height: 1.8;
   margin-top: 5px;
 }
@@ -414,7 +414,7 @@ onMounted(() => void load());
   display: flex;
   flex-direction: column;
   gap: 14px;
-  border-right: 1px solid #edf0f5;
+  border-right: 1px solid var(--el-border-color-lighter);
   padding-right: 22px;
 }
 .settings > label:not(.el-checkbox) {
@@ -422,7 +422,7 @@ onMounted(() => void load());
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
-  color: #65728a;
+  color: var(--el-text-color-secondary);
 }
 .settings :deep(.el-date-editor),
 .settings :deep(.el-input-number) {
@@ -442,7 +442,7 @@ onMounted(() => void load());
 }
 .account-picker h3 span {
   font-size: 12px;
-  color: #4978e3;
+  color: var(--el-color-primary);
 }
 .filters {
   display: flex;
@@ -465,21 +465,21 @@ onMounted(() => void load());
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid #e6ebf3;
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 10px;
   padding: 11px 14px;
   cursor: pointer;
 }
 .account-choice.selected {
-  border-color: #b7cbfb;
-  background: #f5f8ff;
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
 }
 .account-choice b {
   font-size: 13px;
 }
 .account-choice small {
   display: block;
-  color: #8c98aa;
+  color: var(--el-text-color-secondary);
   font-size: 11px;
   line-height: 1.7;
 }

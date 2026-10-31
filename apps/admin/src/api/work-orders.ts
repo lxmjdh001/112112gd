@@ -27,9 +27,12 @@ export interface OrderCounts {
   yesterday: number;
   fresh: number;
   duplicate: number;
+  todayFresh: number;
+  todayDuplicate: number;
 }
 export interface OrderStats extends OrderCounts {
   name: string;
+  platforms: string[];
   startAt: string;
   endAt: string | null;
   resetMinutes: number;
@@ -38,6 +41,9 @@ export interface OrderStats extends OrderCounts {
   accounts: (OrderCounts & {
     id: string;
     label: string;
+    nickname: string;
+    account: string;
+    status: "online" | "offline" | "error";
     platform: string;
     connectionType: string;
     removed: boolean;

@@ -4,8 +4,9 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 const schema = "gd007_e2e_" + randomBytes(5).toString("hex");
 const nativeToolsOnly = process.argv.includes("--native-tools-only");
+const platformOnly = process.argv.includes("--platform-only");
 const ordersOnly = process.argv.includes("--work-orders-only");
-const adminOnly = process.argv.includes("--admin-only") || ordersOnly;
+const adminOnly = process.argv.includes("--admin-only") || ordersOnly || platformOnly;
 const desktopOnly = process.argv.includes("--desktop-only");
 const sessionOnly = process.argv.includes("--session-only");
 const lifecycleOnly = process.argv.includes("--lifecycle-only");
@@ -99,11 +100,12 @@ try {
     await ready("http://127.0.0.1:5779");
     await run(process.execPath, ["scripts/check-login-navigation.mjs"]);
     if (!ordersOnly) {
-      await run(process.execPath, ["scripts/check-admin.mjs"]);
+      if (!platformOnly) await run(process.execPath, ["scripts/check-admin.mjs"]);
       await run(process.execPath, ["scripts/check-commerce.mjs"]);
-      await run(process.execPath, ["scripts/check-baseline.mjs"]);
+      await run(process.execPath, ["scripts/check-platform-management.mjs"]);
+      if (!platformOnly) await run(process.execPath, ["scripts/check-baseline.mjs"]);
     }
-    await run(process.execPath, ["scripts/check-work-orders.mjs"]);
+    if (!platformOnly) await run(process.execPath, ["scripts/check-work-orders.mjs"]);
     if (ordersOnly) await run(process.execPath, ["scripts/check-work-order-native.mjs"]);
   }
   if (!adminOnly) {

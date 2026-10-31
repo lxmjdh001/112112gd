@@ -1,6 +1,36 @@
 import type { RouteRecordRaw } from "vue-router";
 const routes: RouteRecordRaw[] = [
   {
+    name: "PlatformManagement",
+    path: "/platform",
+    redirect: "/platform/users",
+    component: () => import("#/views/business/platform-layout.vue"),
+    meta: { title: "平台管理", icon: "lucide:shield-check", order: -1, authority: ["operator"] },
+    children: [
+      {
+        name: "PlatformUsers",
+        path: "/platform/users",
+        component: () => import("#/views/business/platform-users.vue"),
+        meta: { title: "用户管理", icon: "lucide:users", authority: ["operator"] },
+      },
+      ...(
+        [
+          ["records", "充值记录", "receipt-text"],
+          ["recharges", "充值审核", "badge-check"],
+          ["withdrawals", "提现审核", "wallet"],
+          ["settings", "平台设置", "settings-2"],
+        ] as const
+      ).map(([section, title, icon]) => ({
+        name: "Platform-" + section,
+        path: "/platform/" + section,
+        component: () => import("#/views/business/platform-operations.vue"),
+        props: { section },
+        meta: { title, icon: "lucide:" + icon, authority: ["operator"] },
+      })),
+    ],
+  },
+
+  {
     name: "WorkOrders",
     path: "/work-orders",
     component: () => import("#/views/business/work-orders.vue"),
@@ -79,13 +109,13 @@ const routes: RouteRecordRaw[] = [
   {
     name: "Leads",
     path: "/leads",
-    component: () => import("#/views/business/planned.vue"),
-    meta: { title: "线索列表", icon: "lucide:list-filter", order: 7, authority: ["admin"] },
+    component: () => import("#/views/business/leads.vue"),
+    meta: { title: "新增接待", icon: "lucide:list-filter", order: 7, authority: ["admin"] },
   },
   {
     name: "Customers",
     path: "/customers",
-    component: () => import("#/views/business/planned.vue"),
+    component: () => import("#/views/business/customers.vue"),
     meta: { title: "客户运营", icon: "lucide:users", order: 8, authority: ["admin"] },
   },
   {

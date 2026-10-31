@@ -39,7 +39,16 @@ const server = createServer(async (req, res) => {
   const route = url.pathname.replace("/api/v1", "");
   const match = route.match(/^\/client\/accounts\/([^/]+)\/(open|close|remove|restore|status)$/);
   let data = {};
-  if (route === "/client/auth")
+  if (route === "/client/team-settings") data = { enabled: false };
+  else if (route === "/client/auth") {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    if (body.code === "GD7-INVALID") {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ code: 401, message: "登录码无效，请检查后重试" }));
+      return;
+    }
     data = {
       accessToken: "synthetic-token",
       deviceId: "fixture-device",
@@ -48,7 +57,7 @@ const server = createServer(async (req, res) => {
       label: "演示工作台",
       leaseSeconds: 3600,
     };
-  else if (route === "/client/billing")
+  } else if (route === "/client/billing")
     data = { points: "99.00", status: "normal", graceDaysRemaining: 3 };
   else if (route === "/client/accounts") data = accounts;
   else if (route === "/client/platforms") data = platforms;
@@ -127,8 +136,102 @@ try {
   );
   await page.locator(`.account[data-id="${nativeID}"]`).click();
   await waitClientState(page, (s) => s.statuses[nativeID] === "qr_required");
-  await page.getByText("等待扫码登录", { exact: true }).waitFor();
+  assert.equal(
+    await page.locator(`.account[data-id="${nativeID}"] .account-presence`).innerText(),
+    "离线",
+  );
+  assert.match(
+    await page.locator(`.account[data-id="${nativeID}"]`).getAttribute("title"),
+    /等待扫码/,
+  );
+  // The selected customer's photo must never become the account's own avatar.
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const wc = BrowserWindow.getAllWindows()[0]
+      .contentView.children.map((v) => v.webContents)
+      .find((w) => w.getURL().startsWith("https://web.whatsapp.com"));
+    await wc.executeJavaScript(`localStorage.setItem("last-wid", "8613800000000@c.us");
+      document.querySelectorAll("[data-testid=qrcode],canvas").forEach(e=>e.remove());
+      const own=document.createElement('canvas');own.width=own.height=64;own.getContext('2d').fillStyle='#159957';own.getContext('2d').fillRect(0,0,64,64);
+      const customer=document.createElement('canvas');customer.width=customer.height=64;customer.getContext('2d').fillStyle='#ff0000';customer.getContext('2d').fillRect(0,0,64,64);
+      Promise.all([new Promise(r=>own.toBlob(r)),new Promise(r=>customer.toBlob(r))]).then(([a,b])=>{
+        document.body.innerHTML='<div id="side"><header><img id="self" /></header><div id="pane-side"></div></div><div id="main"><header><img id="customer" /></header></div>';
+        document.querySelector('#self').src=URL.createObjectURL(a);document.querySelector('#customer').src=URL.createObjectURL(b);window.dispatchEvent(new Event('online'));
+      });`);
+  });
+  const ownState = await waitClientState(
+    page,
+    (s) => s.statuses[nativeID] === "ready" && !!s.accountProfiles?.[nativeID],
+  );
+  assert.equal(ownState.accountProfiles[nativeID].owner, "8613800000000");
+  const originalAvatar = ownState.accountProfiles[nativeID].avatar;
+  const pixel = await app.evaluate(
+    ({ nativeImage }, avatar) => [
+      ...nativeImage.createFromDataURL(avatar).toBitmap().subarray(0, 4),
+    ],
+    originalAvatar,
+  );
+  assert(pixel[1] > pixel[2], "Own green avatar, not customer's red photo");
+  assert.equal(
+    await page.locator(`.account[data-id="${nativeID}"] .account-self-avatar`).count(),
+    1,
+  );
+  assert.equal(
+    await page.locator(`.account[data-id="${nativeID}"] .account-presence`).innerText(),
+    "在线",
+  );
+  await app.evaluate(
+    ({ ipcMain, BrowserWindow }, { avatar }) => {
+      const win = BrowserWindow.getAllWindows()[0],
+        wc = win.contentView.children
+          .map((v) => v.webContents)
+          .find((w) => w.getURL().startsWith("https://web.whatsapp.com"));
+      ipcMain.emit(
+        "platform:self-avatar",
+        { sender: wc, senderFrame: wc.mainFrame },
+        "8613900000000",
+        avatar,
+      );
+      ipcMain.emit(
+        "platform:self-avatar",
+        { sender: win.webContents, senderFrame: win.webContents.mainFrame },
+        "8613800000000",
+        avatar,
+      );
+      ipcMain.emit(
+        "platform:self-avatar",
+        { sender: wc, senderFrame: wc.mainFrame },
+        "8613800000000",
+        "data:image/svg+xml,<svg/>",
+      );
+      ipcMain.emit("wa:status", { sender: wc, senderFrame: wc.mainFrame }, "network_error", null);
+    },
+    { avatar: originalAvatar },
+  );
+  await waitClientState(page, (s) => s.statuses[nativeID] === "network_error");
+  assert.equal(
+    await page.locator(`.account[data-id="${nativeID}"] .account-presence`).innerText(),
+    "异常",
+  );
+  assert.equal(
+    (await page.evaluate(() => window.gongdan.state())).accountProfiles[nativeID].avatar,
+    originalAvatar,
+  );
+  await app.evaluate(({ BrowserWindow }) => {
+    const wc = BrowserWindow.getAllWindows()[0]
+      .contentView.children.map((v) => v.webContents)
+      .find((w) => w.getURL().startsWith("https://web.whatsapp.com"));
+    return wc.executeJavaScript("window.dispatchEvent(new Event('online'))");
+  });
+  await waitClientState(page, (s) => s.statuses[nativeID] === "ready");
   async function verifyBounds() {
+    // Native resize events can arrive before the renderer's viewport update.
+    const contentSize = await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].getContentSize(),
+    );
+    await page.waitForFunction(
+      ([width, height]) => innerWidth === width && innerHeight === height,
+      contentSize,
+    );
     const sidebar = await page.locator(".account-sidebar").boundingBox();
     const tools = await page.locator(".customer-sidebar").boundingBox();
     const actual = await app.evaluate(({ BrowserWindow }) => {
@@ -232,10 +335,73 @@ try {
   await page
     .locator(".account-sidebar")
     .screenshot({ path: ".runtime/account-sidebar-platforms.png" });
+
+  // The new empty-state entry must use the existing network/account form.
+  platforms = [
+    { id: "whatsapp", name: "WhatsApp" },
+    { id: "line", name: "LINE" },
+    { id: "telegram", name: "Telegram" },
+  ];
+  await page.locator("#refresh").click();
+  await waitClientState(page, (s) => s.platforms.length === 3);
+  const emptyAdd = page.locator("[data-empty-add]");
+  await emptyAdd.waitFor();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await emptyAdd.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  assert.equal(await emptyAdd.evaluate((el) => getComputedStyle(el).outlineStyle), "solid");
+  assert.equal(await emptyAdd.evaluate((el) => getComputedStyle(el).outlineWidth), "2px");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  for (const heading of await page.locator(".ct-card-head h3").all()) {
+    assert.equal(
+      await heading.evaluate(
+        (el) =>
+          el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * 1.25,
+      ),
+      true,
+      "Tool headings must remain readable without forced character wrapping",
+    );
+  }
+  await page.screenshot({ path: ".runtime/desktop-ui-workspace.png" });
+  await emptyAdd.click();
+  const networkDialog = page.getByRole("dialog", { name: "是否设置独立 IP？", exact: true });
+  await networkDialog.waitFor();
+  await page.screenshot({ path: ".runtime/desktop-ui-network.png" });
+  await page.locator("#use-system-network").click();
+  await page.locator("#account-platform").waitFor();
+  await page.screenshot({ path: ".runtime/desktop-ui-account-form.png" });
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.locator('.ct-tabs [data-tab="profile"]').click();
+  await page.locator(".ct-profile-page").waitFor();
+  await page.screenshot({ path: ".runtime/desktop-ui-profile.png" });
+  await page.locator('.ct-tabs [data-tab="tools"]').click();
+  await page.getByRole("button", { name: "新增话术", exact: true }).click();
+  await page.getByRole("dialog", { name: "新增话术", exact: true }).waitFor();
+  await page.screenshot({ path: ".runtime/desktop-ui-quick-reply.png" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.locator("#logout").click();
+  await page.locator("#login-code").waitFor();
+  await page.locator("#login-code").focus();
+  await page.screenshot({ path: ".runtime/desktop-ui-login.png" });
+  assert.equal(
+    await page.locator(".login").evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth;
+    }),
+    true,
+    "Login form must fit the compact native window",
+  );
+  await page.locator("#login-code").fill("GD7-INVALID");
+  await page.getByRole("button", { name: "进入工作台", exact: true }).click();
+  await page.getByRole("alert").filter({ hasText: "登录码无效" }).waitFor();
+  assert.equal(await page.locator("#login-code").inputValue(), "GD7-INVALID");
+  await page.screenshot({ path: ".runtime/desktop-ui-login-error.png" });
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log(
-    "Account sidebar passed: grouping, native/API isolation, official icons, add flows, folding, 4 native bounds combinations, close/remove/restore and unavailable platforms.",
+    "Desktop UI passed: grouping, native/API isolation, official icons, add flows, folding, native bounds, lifecycle, empty state, dialogs, keyboard focus, reduced motion, compact login and recoverable login errors.",
   );
 } finally {
   await app?.close();

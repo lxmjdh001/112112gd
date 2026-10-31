@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 const root = process.env.D1_RELEASE_DIR;
 await writeFile(path.join(root, 'manifest.json'), JSON.stringify({
   product: 'D1 Scrm', revision: process.env.D1_RELEASE_REV,
-  architecture: `linux-${process.env.D1_RELEASE_ARCH}`, migration: 21,
+  architecture: `linux-${process.env.D1_RELEASE_ARCH}`, migration: 23,
   createdAt: new Date().toISOString(),
 }, null, 2) + '\n');
 async function files(dir) {

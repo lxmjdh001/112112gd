@@ -1,3 +1,5 @@
+import { installChatArchive } from "./chat-archive.ts";
+import { reportSelfAvatar, resetSelfAvatar } from "./self-avatar.ts";
 import { installNativeChat } from "./native-chat.ts";
 import { installInboundStats } from "./inbound-stats.ts";
 import { contextBridge, ipcRenderer } from "electron";
@@ -61,9 +63,13 @@ if (location.href.startsWith(LINE_ORIGIN + "/") && window.top === window) {
     installNativeTranslation();
     installNativeChat("line");
     installInboundStats("line");
+    installChatArchive("line");
     function report() {
       try {
         const owner = contextBridge.executeInMainWorld({ func: readLineOwner });
+        if (navigator.onLine && owner.status === "ready" && owner.identifier)
+          void reportSelfAvatar("line", owner.identifier, owner.avatarURL);
+        else resetSelfAvatar();
         ipcRenderer.send(
           "platform:status",
           navigator.onLine ? owner.status : "network_error",

@@ -9,6 +9,12 @@ export const overridesPreferences = defineOverridesPreferences({
     defaultAvatar: "/logo.svg",
   },
   logo: { source: "/logo.svg", sourceDark: "/logo.svg" },
-  theme: { mode: "light", colorPrimary: "hsl(228 85% 60%)" },
+  theme: {
+    mode: "light",
+    colorPrimary: "#3659d9",
+    colorSuccess: "#147c57",
+    colorWarning: "#975a16",
+    colorDestructive: "#c3343f",
+  },
   copyright: { enable: false },
 });

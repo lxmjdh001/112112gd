@@ -110,7 +110,7 @@ function go(id: string) {
 </script>
 
 <template>
-  <div class="gd-home">
+  <div class="gd-home" @keydown.esc="menu = false">
     <header class="home-nav">
       <div class="home-nav-inner home-wrap">
         <RouterLink class="home-brand" to="/home" aria-label="D1 Scrm 首页">
@@ -126,13 +126,13 @@ function go(id: string) {
         <div class="nav-actions">
           <RouterLink class="nav-login" to="/dashboard">登录后台</RouterLink>
           <RouterLink class="home-button primary nav-start" to="/auth/register"
-            >免费开始 <span>↗</span></RouterLink
+            >免费开始</RouterLink
           >
           <button
             class="mobile-menu"
             :aria-expanded="menu"
             aria-controls="home-navigation"
-            aria-label="展开导航"
+            :aria-label="menu ? '收起导航' : '展开导航'"
             @click="menu = !menu"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
@@ -146,26 +146,25 @@ function go(id: string) {
         <div class="hero-grid" aria-hidden="true"></div>
         <div class="home-wrap hero-content">
           <div class="hero-copy">
-            <div class="hero-kicker">
-              <span class="kicker-mark">D1</span> 为跨境沟通而生
-              <span class="kicker-divider">/</span> D1 工单
+            <div class="hero-heading">
+              <p class="hero-kicker">D1 Scrm 客户沟通工作台</p>
+              <h1>把每一次对话，<br />接成下一次机会。</h1>
             </div>
-            <h1>连接全球客户，<br /><em>从容处理每一次对话。</em></h1>
-            <p>
-              多账号、免费翻译、客户跟进，一个工作台就够。<br
-                class="desktop-break"
-              />让沟通更专注，让团队协作更有条理。
-            </p>
-            <div class="home-buttons">
-              <RouterLink class="home-button primary" to="/auth/register"
-                >免费开始 · 领取 100 点 <span>↗</span></RouterLink
-              >
-              <button class="home-button secondary" @click="go('download')">
-                下载客户端 <span>↓</span>
-              </button>
-            </div>
-            <div class="hero-note">
-              <span>✓ 翻译免费</span><span>✓ 无需绑卡</span><span>✓ 上线当天才计费</span>
+            <div class="hero-intro">
+              <p>
+                连接 WhatsApp、LINE 与 Telegram，<br
+                  class="desktop-break"
+                />让多账号、翻译和客户跟进，在同一个工作台有序进行。
+              </p>
+              <div class="home-buttons">
+                <RouterLink class="home-button primary" to="/auth/register"
+                  >免费开始 · 领取 100 点</RouterLink
+                >
+                <button class="home-button secondary" @click="go('download')">下载客户端</button>
+              </div>
+              <div class="hero-note">
+                <span>翻译免费</span><span>无需绑卡</span><span>上线当天才计费</span>
+              </div>
             </div>
           </div>
 
@@ -304,8 +303,7 @@ function go(id: string) {
         <div class="feature-grid">
           <article v-for="f in features" :key="f.n" class="feature-card" :class="f.cls">
             <div class="feature-label">
-              <span>{{ f.n }}</span
-              >{{ f.tag }}
+              {{ f.tag }}
             </div>
             <h3>{{ f.title }}</h3>
             <p>{{ f.body }}</p>
@@ -485,7 +483,7 @@ function go(id: string) {
               <h2>你的工作台，随时就位。</h2>
               <p>下载 D1 Scrm，在电脑上开启客户沟通。</p>
             </div>
-            <span class="download-version"><i></i> v0.1.11 · 桌面客户端</span>
+            <span class="download-version"><i></i> v0.1.13 · 桌面客户端</span>
           </div>
           <div class="download-grid">
             <article class="download-card">
@@ -506,7 +504,7 @@ function go(id: string) {
               <p class="download-description">下载安装，登录后开始工作。</p>
               <a
                 class="home-button primary download-primary"
-                href="/client-downloads/0.1.11/D1-Scrm-0.1.11-windows-x64-setup.exe"
+                href="/client-downloads/0.1.13/D1-Scrm-0.1.13-windows-x64-setup.exe"
                 download
               >
                 下载 Windows 版 <span aria-hidden="true">↓</span>
@@ -532,13 +530,13 @@ function go(id: string) {
               <div class="download-mac-actions">
                 <a
                   class="home-button primary"
-                  href="/client-downloads/0.1.11/D1-Scrm-0.1.11-mac-arm64.dmg"
+                  href="/client-downloads/0.1.13/D1-Scrm-0.1.13-mac-arm64.dmg"
                   download
                   >苹果芯片版 <span aria-hidden="true">↓</span></a
                 >
                 <a
                   class="home-button secondary"
-                  href="/client-downloads/0.1.11/D1-Scrm-0.1.11-mac-x64.dmg"
+                  href="/client-downloads/0.1.13/D1-Scrm-0.1.13-mac-x64.dmg"
                   download
                   >Intel 芯片版 <span aria-hidden="true">↓</span></a
                 >
@@ -564,7 +562,7 @@ function go(id: string) {
                 Mac：打开 DMG，将 D1 Scrm 拖到「应用程序」。若系统阻止打开，可在「系统设置 →
                 隐私与安全性」中查看并确认。Windows：运行 EXE，按安装向导完成安装。
               </p>
-              <a class="text-link" href="/client-downloads/0.1.11/SHA256SUMS" download
+              <a class="text-link" href="/client-downloads/0.1.13/SHA256SUMS" download
                 >下载 SHA-256 校验文件 <span>↓</span></a
               >
             </div>
@@ -582,10 +580,7 @@ function go(id: string) {
         </div>
         <div class="faq-list">
           <details v-for="([q, a], index) in faqs" :key="q" :open="index === 0">
-            <summary>
-              <span class="faq-number">0{{ index + 1 }}</span
-              >{{ q }}<span class="faq-toggle">+</span>
-            </summary>
+            <summary>{{ q }}<span class="faq-toggle">+</span></summary>
             <p>{{ a }}</p>
           </details>
         </div>

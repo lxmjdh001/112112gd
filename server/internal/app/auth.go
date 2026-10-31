@@ -26,7 +26,7 @@ func (a *App) adminLogin(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 	var id, tenant, hash string
-	e = tx.QueryRow(ctx, `SELECT id::text,tenant_id::text,password_hash FROM admins WHERE username=$1 FOR SHARE`, b.Username).Scan(&id, &tenant, &hash)
+	e = tx.QueryRow(ctx, `SELECT id::text,tenant_id::text,password_hash FROM admins WHERE username=$1 AND disabled_at IS NULL FOR SHARE`, b.Username).Scan(&id, &tenant, &hash)
 	if e != nil && !errors.Is(e, pgx.ErrNoRows) {
 		dbError(c, e)
 		return
@@ -55,7 +55,11 @@ func (a *App) userInfo(c *gin.Context) {
 		dbError(c, e)
 		return
 	}
-	ok(c, gin.H{"userId": id.Actor, "username": name, "realName": display, "roles": []string{"admin"}, "homePath": "/dashboard", "tenantId": id.Tenant, "avatar": "/logo.svg"})
+	roles := []string{"admin"}
+	if id.Operator {
+		roles = append(roles, "operator")
+	}
+	ok(c, gin.H{"userId": id.Actor, "username": name, "realName": display, "roles": roles, "homePath": "/dashboard", "tenantId": id.Tenant, "avatar": "/logo.svg"})
 }
 func (a *App) adminLogout(c *gin.Context) {
 	_, e := a.DB.Exec(c.Request.Context(), `DELETE FROM admin_sessions WHERE token_hash=$1`, security.Hash(c.GetHeader("Authorization")[7:]))

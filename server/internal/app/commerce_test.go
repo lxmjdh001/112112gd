@@ -30,8 +30,8 @@ func (h *harness) commerceCall(t *testing.T, method, path, token string, body an
 }
 func (h *harness) member(t *testing.T, name, ref string) string {
 	t.Helper()
-	h.commerceCall(t, "POST", "/auth/register", "", gin.H{"username": name, "password": "test-password-12345", "teamName": name, "referralCode": ref, "platform_operator": true})
-	return h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": name, "password": "test-password-12345"})["accessToken"].(string)
+	h.commerceCall(t, "POST", "/auth/register", "", gin.H{"username": name, "password": "test-pass-12345", "teamName": name, "referralCode": ref, "platform_operator": true})
+	return h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": name, "password": "test-pass-12345"})["accessToken"].(string)
 }
 func key(n int) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", n) }
 func (h *harness) topup(t *testing.T, token, amount string, n int) string {
@@ -47,7 +47,7 @@ func TestCommerceDisabledByDefaultAndMoneyParsing(t *testing.T) {
 	if _, e := h.app.DB.Exec(context.Background(), `UPDATE commerce_settings SET registration_enabled=false`); e != nil {
 		t.Fatal(e)
 	}
-	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "member", "password": "test-password-12345", "teamName": "test"}); s != 403 {
+	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "member", "password": "test-pass-12345", "teamName": "test"}); s != 403 {
 		t.Fatal("registration must be explicitly enabled", s)
 	}
 	if s, _ := h.call("POST", "/account/recharges", h.admin, gin.H{"amount": "10.00", "requestId": key(1), "paymentReference": "test"}); s != 409 {
@@ -213,21 +213,21 @@ func TestConcurrentCommissionSpendAndProfileSecurity(t *testing.T) {
 	if info := h.commerceCall(t, "GET", "/account/profile", token, nil); info["isOperator"] != false || info["teamName"] != "客户团队" {
 		t.Fatal("profile update permissions", info)
 	}
-	second := h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "test-password-12345"})["accessToken"].(string)
-	if s, _ := h.call("POST", "/account/password", token, gin.H{"currentPassword": "incorrect", "newPassword": "new-test-password-123"}); s != 400 {
+	second := h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "test-pass-12345"})["accessToken"].(string)
+	if s, _ := h.call("POST", "/account/password", token, gin.H{"currentPassword": "incorrect", "newPassword": "new-pass-12345"}); s != 400 {
 		t.Fatal("password changed without original", s)
 	}
-	h.commerceCall(t, "POST", "/account/password", token, gin.H{"currentPassword": "test-password-12345", "newPassword": "new-test-password-123"})
+	h.commerceCall(t, "POST", "/account/password", token, gin.H{"currentPassword": "test-pass-12345", "newPassword": "new-pass-12345"})
 	if s, _ := h.call("GET", "/account/profile", second, nil); s != 401 {
 		t.Fatal("other session not revoked", s)
 	}
 	h.commerceCall(t, "GET", "/account/profile", token, nil)
-	if s, _ := h.call("POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "test-password-12345"}); s != 401 {
+	if s, _ := h.call("POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "test-pass-12345"}); s != 401 {
 		t.Fatal("old password still accepted", s)
 	}
-	h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "new-test-password-123"})
+	h.commerceCall(t, "POST", "/auth/login", "", gin.H{"username": "concurrency-member", "password": "new-pass-12345"})
 	h.commerceCall(t, "PATCH", "/promotion", h.admin, gin.H{"enabled": false})
-	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "blocked-referral", "password": "test-password-12345", "teamName": "blocked", "referralCode": code}); s != 400 {
+	if s, _ := h.call("POST", "/auth/register", "", gin.H{"username": "blocked-referral", "password": "test-pass-12345", "teamName": "blocked", "referralCode": code}); s != 400 {
 		t.Fatal("disabled referral accepted", s)
 	}
 }

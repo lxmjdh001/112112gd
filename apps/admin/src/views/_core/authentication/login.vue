@@ -53,11 +53,11 @@ const form = reactive({ username: "", password: "" });
   margin: auto;
 }
 .login-form h1 {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 650;
 }
 .login-form p {
-  color: #7b859b;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
   line-height: 1.7;
   margin-bottom: 14px;
@@ -68,7 +68,7 @@ const form = reactive({ username: "", password: "" });
   margin-top: 6px;
 }
 .login-form small {
-  color: #929bad;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.8;
   margin-top: 8px;

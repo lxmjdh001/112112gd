@@ -1,5 +1,5 @@
+import { accountPresence } from "../shared/account-presence.ts";
 import type { Account, ViewState } from "../shared/types.ts";
-import { stateLabels } from "../shared/types.ts";
 
 const escape = (text: string) =>
   text.replace(
@@ -30,35 +30,20 @@ const refreshIcon = glyph(
 const logoutIcon = glyph('<path d="M9 4H4v16h5m6-12 4 4-4 4m-7-4h11"/>');
 const accountPlatform = (account: Account) =>
   account.connectionType === "cloud" ? "whatsapp_cloud" : account.platform;
-const ready = (account: Account, state: ViewState) =>
-  account.available &&
-  !account.paused &&
-  (account.connectionType === "cloud" || state.statuses[account.id] === "ready");
-
 function accountMarkup(account: Account, state: ViewState, platform: Platform) {
-  const status = account.paused
-    ? "已退出 · 点击重新打开"
-    : !account.available
-      ? {
-          proxy_disabled: "代理已禁用",
-          platform_not_allowed: "平台未授权",
-          other_device: "已绑定其他设备",
-          api_disabled: "API 已停用",
-        }[
-          account.unavailableReason ||
-            (account.connectionType === "cloud" ? "platform_not_allowed" : "other_device")
-        ] || "暂不可用"
-      : account.connectionType === "cloud"
-        ? "API 号码 · 点击打开聊天"
-        : stateLabels[state.statuses[account.id] || ""] || "点击打开官方页面";
-  const scanning =
-    !account.paused && account.available && state.statuses[account.id] === "qr_required";
-  const label = scanning ? "等待扫码登录" : account.label;
+  const presence = accountPresence(account, state);
   const initials = [...account.label.trim()].slice(0, 2).join("").toUpperCase() || "D1";
+  const avatar = state.accountProfiles?.[account.id]?.avatar;
+  const photo =
+    typeof avatar === "string" &&
+    avatar.length <= 24000 &&
+    /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(avatar)
+      ? `<img class="account-self-avatar" src="${avatar}" alt="" draggable="false" />`
+      : "";
   return `<div class="account-item">
-    <button type="button" class="account ${account.id === state.activeId ? "active" : ""} ${account.paused ? "paused" : ""}" data-id="${escape(account.id)}" title="${escape(account.label)} · ${escape(status)}" ${account.id === state.activeId ? 'aria-current="true"' : ""} ${account.available ? "" : "disabled"}>
-      <span class="account-avatar" aria-hidden="true">${escape(initials)}<span class="account-platform-badge">${icon(platform)}</span></span>
-      <span class="account-info"><b>${escape(label)}</b><small>${scanning ? escape(account.label) : `<i class="account-status-dot ${ready(account, state) ? "is-ready" : ""}"></i>${escape(status)}`}</small></span>
+    <button type="button" class="account ${account.id === state.activeId ? "active" : ""} ${account.paused ? "paused" : ""}" data-id="${escape(account.id)}" title="${escape(account.label)} · ${presence.label} · ${escape(presence.reason)}" aria-label="${escape(account.label)}，${presence.label}，${escape(presence.reason)}" ${account.id === state.activeId ? 'aria-current="true"' : ""} ${account.available ? "" : "disabled"}>
+      <span class="account-avatar" aria-hidden="true">${escape(initials)}${photo}<span class="account-platform-badge">${icon(platform)}</span></span>
+      <span class="account-info"><b>${escape(account.label)}</b><small><i class="account-status-dot ${presence.kind === "online" ? "is-ready" : presence.kind === "error" ? "is-error" : ""}"></i><span class="account-presence">${presence.label}</span></small></span>
     </button>
     ${account.unavailableReason === "other_device" ? "" : `<button class="account-close" type="button" data-close-id="${escape(account.id)}" title="${account.paused ? "移除号位" : "退出账号"}" aria-label="${account.paused ? "移除" : "退出"} ${escape(account.label)}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="m2.5 2.5 7 7m0-7-7 7" /></svg></button>`}
   </div>`;
@@ -81,7 +66,8 @@ export function createAccountSidebar(
   }
   function markup(state: ViewState) {
     const visible = state.accounts.filter((a) => !a.hidden);
-    const readyCount = visible.filter((a) => ready(a, state)).length;
+    const counts = { online: 0, offline: 0, error: 0 };
+    visible.forEach((a) => counts[accountPresence(a, state).kind]++);
     const added = platforms.filter((p) => state.accounts.some((a) => accountPlatform(a) === p.id));
     const unused = platforms.filter((p) => !added.includes(p));
     const group = (p: Platform) => {
@@ -102,9 +88,9 @@ export function createAccountSidebar(
       </section>`;
     };
     return `<aside class="account-sidebar ${state.sidebarCollapsed ? "is-compact" : ""}" aria-label="平台与账号">
-      <div class="sidebar-brand"><button class="sidebar-collapse icon-button" id="sidebar-toggle" type="button" title="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-label="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-expanded="${!state.sidebarCollapsed}">${collapseIcon}</button><span class="sidebar-mark">D1</span><div class="sidebar-brand-info"><strong>D1 Scrm</strong><div class="sidebar-status"><span title="网页已就绪或 API 可用"><i class="is-ready"></i>${readyCount} 就绪</span><span title="等待登录、已退出或暂不可用"><i></i>${visible.length - readyCount} 未就绪</span></div></div></div>
+      <div class="sidebar-brand"><span class="sidebar-mark">D1</span><div class="sidebar-brand-info"><strong>D1 Scrm</strong><div class="sidebar-status"><span title="已登录的账号或可用的 API 通道"><i class="is-ready"></i>${counts.online} 在线</span><span title="尚未登录、已退出或绑定其他设备"><i></i>${counts.offline} 离线</span><span title="网络、账号数据或授权异常"><i class="is-error"></i>${counts.error} 异常</span></div></div><button class="sidebar-collapse icon-button" id="sidebar-toggle" type="button" title="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-label="${state.sidebarCollapsed ? "展开" : "收起"}左侧菜单" aria-expanded="${!state.sidebarCollapsed}">${collapseIcon}</button></div>
       <div class="account-list">${added.map(group).join("")}
-        <div class="unused-platforms"><p class="unused-heading">还没添加的平台</p>${unused
+        <div class="unused-platforms"><p class="unused-heading">添加平台</p>${unused
           .map((p) => {
             const disabled = availability(p, state);
             const title =
@@ -114,7 +100,7 @@ export function createAccountSidebar(
                   ? `请联系管理员授权 ${p.name}`
                   : disabled ||
                     (p.id === "whatsapp_cloud" ? "查看 API 号码分配" : `添加 ${p.name} 账号`);
-            return `<button class="unused-platform" data-add-platform="${p.id}" type="button" title="${title}" aria-label="${title}" ${disabled ? "disabled" : ""}>${icon(p, disabled)}<span class="unused-name">${p.name}</span><span class="unused-plus" aria-hidden="true">+</span></button>`;
+            return `<button class="unused-platform" data-add-platform="${p.id}" type="button" title="${title}" aria-label="${title}" ${disabled ? "disabled" : ""}>${icon(p)}<span class="unused-name">${p.name}</span>${disabled ? `<span class="platform-state">${escape(disabled)}</span>` : '<span class="unused-plus" aria-hidden="true">+</span>'}</button>`;
           })
           .join("")}</div>
       </div>
@@ -164,6 +150,9 @@ export function createAccountSidebar(
     }
   }
   function bind(aside: HTMLElement) {
+    aside
+      .querySelectorAll<HTMLImageElement>(".account-self-avatar")
+      .forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
     aside
       .querySelector("#sidebar-toggle")!
       .addEventListener(

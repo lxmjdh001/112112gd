@@ -738,7 +738,7 @@ onMounted(load);
   padding: 0 3px;
   border: 1px solid var(--el-bg-color);
   border-radius: 4px;
-  background: #13976b;
+  background: var(--el-color-success);
   color: #fff;
   font-size: 8px;
   font-weight: 700;

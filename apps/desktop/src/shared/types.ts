@@ -59,6 +59,9 @@ export interface ClientAuth {
   leaseSeconds: number;
 }
 export interface ViewState {
+  teamArchiveEnabled?: boolean;
+  teamArchiveError?: string;
+  accountProfiles?: Record<string, { owner: string; avatar: string }>;
   billing?: { points: string; graceDaysRemaining: number; status: string };
   sidebarCollapsed?: boolean;
   customer?: CustomerContext;
@@ -110,10 +113,10 @@ export const stateLabels: Record<string, string> = {
   identity_pending: "正在识别登录账号",
   loading: "加载中",
   qr_required: "等待扫码",
-  ready: "网页已就绪",
+  ready: "账号已登录",
   unknown: "状态待确认",
   network_error: "网络异常",
-  storage_error: "网页数据库异常 · 点击修复登录",
+  storage_error: "账号数据异常 · 点击修复登录",
   closed: "已关闭",
   proxy_disabled: "代理已禁用",
   platform_not_allowed: "平台未授权",

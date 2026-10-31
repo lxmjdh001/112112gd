@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+func validAccountPassword(password string) bool {
+	length := len([]rune(password))
+	return length >= 8 && length <= 16
+}
+
 func (a *App) accountProfile(c *gin.Context) {
 	id := identity(c)
 	var username, name, contact, team string
@@ -54,8 +59,8 @@ func (a *App) changePassword(c *gin.Context) {
 		CurrentPassword string `json:"currentPassword"`
 		NewPassword     string `json:"newPassword"`
 	}
-	if c.ShouldBindJSON(&b) != nil || len(b.CurrentPassword) > 72 || len(b.NewPassword) < 12 || len(b.NewPassword) > 72 {
-		fail(c, 400, "新密码须为 12–72 字节")
+	if c.ShouldBindJSON(&b) != nil || len(b.CurrentPassword) > 72 || !validAccountPassword(b.NewPassword) {
+		fail(c, 400, "新密码须为 8–16 位")
 		return
 	}
 	a.transaction(c, func(tx pgx.Tx) (any, error) {
@@ -106,8 +111,8 @@ func (a *App) registerAdmin(c *gin.Context) {
 	b.Username = strings.TrimSpace(b.Username)
 	b.TeamName = strings.TrimSpace(b.TeamName)
 	b.ReferralCode = strings.TrimSpace(b.ReferralCode)
-	if !usernamePattern.MatchString(b.Username) || len(b.Password) < 12 || len(b.Password) > 72 || b.TeamName == "" || len([]rune(b.TeamName)) > 100 || len(b.ReferralCode) > 64 {
-		fail(c, 400, "账号须为 4–50 位字母、数字或 ._-，密码 12–72 字节，并填写团队名称")
+	if !usernamePattern.MatchString(b.Username) || !validAccountPassword(b.Password) || b.TeamName == "" || len([]rune(b.TeamName)) > 100 || len(b.ReferralCode) > 64 {
+		fail(c, 400, "账号须为 4–50 位字母、数字或 ._-，密码 8–16 位，并填写团队名称")
 		return
 	}
 	s, e := settings(c.Request.Context(), a.DB, false)

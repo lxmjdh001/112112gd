@@ -6,6 +6,7 @@ import { preferences } from "@vben/preferences";
 import { initStores } from "@vben/stores";
 import "@vben/styles";
 import "@vben/styles/ele";
+import "./styles/admin-theme.css";
 
 import { useTitle } from "@vueuse/core";
 import { ElLoading } from "element-plus";

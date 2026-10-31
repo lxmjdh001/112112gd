@@ -333,17 +333,22 @@ func (a *App) ingestInboundEvents(c *gin.Context) {
 }
 
 type workOrderCount struct {
-	Total     int `json:"total"`
-	Today     int `json:"today"`
-	Yesterday int `json:"yesterday"`
-	Fresh     int `json:"fresh"`
-	Duplicate int `json:"duplicate"`
+	Total          int `json:"total"`
+	Today          int `json:"today"`
+	Yesterday      int `json:"yesterday"`
+	Fresh          int `json:"fresh"`
+	Duplicate      int `json:"duplicate"`
+	TodayFresh     int `json:"todayFresh"`
+	TodayDuplicate int `json:"todayDuplicate"`
 }
 type workOrderAccountStats struct {
 	ID             string     `json:"id"`
 	Label          string     `json:"label"`
+	Nickname       string     `json:"nickname"`
+	Account        string     `json:"account"`
 	Platform       string     `json:"platform"`
 	ConnectionType string     `json:"connectionType"`
+	Status         string     `json:"status"`
 	Removed        bool       `json:"removed"`
 	LastSync       *time.Time `json:"lastSync"`
 	FirstSync      *time.Time `json:"firstSync"`
@@ -358,6 +363,7 @@ type workOrderStats struct {
 	ResetMinutes int        `json:"resetMinutes"`
 	Target       int        `json:"target"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	Platforms    []string   `json:"platforms"`
 	workOrderCount
 	Accounts []workOrderAccountStats `json:"accounts"`
 }
@@ -365,6 +371,31 @@ type workOrderStats struct {
 func workOrderDayStart(now time.Time, reset int) time.Time {
 	local := now.In(time.FixedZone("Beijing", 8*3600)).Add(-time.Duration(reset) * time.Minute)
 	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location()).Add(time.Duration(reset) * time.Minute)
+}
+
+// Use account/device presence, never the statistics collector heartbeat, to
+// report availability. A stopped client cannot leave its last ready state online.
+func workOrderPresenceStatus(now time.Time, state string, observed, seen *time.Time, active, available, stopped bool) string {
+	if stopped {
+		return "offline"
+	}
+	if !available {
+		return "error"
+	}
+	if state == "not_opened" || state == "closed" || state == "" {
+		return "offline"
+	}
+	if observed == nil || seen == nil || !active || now.Sub(*observed) > 90*time.Second || now.Sub(*seen) > 90*time.Second {
+		return "offline"
+	}
+	switch state {
+	case "ready":
+		return "online"
+	case "loading", "qr_required", "identity_pending":
+		return "offline"
+	default:
+		return "error"
+	}
 }
 func (a *App) renderWorkOrderStats(c *gin.Context, tenant, id string) {
 	result, e := a.calculateWorkOrderStats(c.Request.Context(), tenant, id, time.Now())
@@ -379,7 +410,7 @@ func (a *App) renderWorkOrderStats(c *gin.Context, tenant, id string) {
 	ok(c, result)
 }
 func (a *App) calculateWorkOrderStats(ctx context.Context, tenant, id string, now time.Time) (workOrderStats, error) {
-	s := workOrderStats{Accounts: []workOrderAccountStats{}, UpdatedAt: now}
+	s := workOrderStats{Accounts: []workOrderAccountStats{}, Platforms: []string{}, UpdatedAt: now}
 	var baseline bool
 	// Repeatable read prevents account selection edits or incoming messages from mixing snapshots.
 	tx, e := a.DB.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
@@ -391,16 +422,53 @@ func (a *App) calculateWorkOrderStats(ctx context.Context, tenant, id string, no
 	if e != nil {
 		return s, e
 	}
-	rows, e := tx.Query(ctx, `SELECT p.id::text,p.label,p.platform,p.connection_type,p.removed_at IS NOT NULL,CASE WHEN p.connection_type='cloud' THEN app.last_event_at ELSE sync.last_sync_at END,sync.first_sync_at,CASE WHEN p.connection_type='cloud' THEN app.verified_at IS NOT NULL ELSE COALESCE(sync.collector_ready,false) END FROM work_order_accounts x JOIN platform_accounts p ON p.id=x.account_id AND p.tenant_id=x.tenant_id LEFT JOIN account_stats_sync sync ON sync.account_id=p.id LEFT JOIN wa_cloud_numbers n ON n.id=p.id LEFT JOIN wa_cloud_apps app ON app.id=n.app_id WHERE x.tenant_id=$1 AND x.order_id::text=$2 ORDER BY p.created_at,p.id`, tenant, id)
+	rows, e := tx.Query(ctx, `SELECT p.id::text,p.label,p.platform,p.connection_type,p.removed_at IS NOT NULL,
+ CASE WHEN p.connection_type='cloud' THEN app.last_event_at ELSE sync.last_sync_at END,sync.first_sync_at,
+ CASE WHEN p.connection_type='cloud' THEN app.verified_at IS NOT NULL ELSE COALESCE(sync.collector_ready,false) END,
+ CASE WHEN p.connection_type='cloud' THEN COALESCE(NULLIF(n.verified_name,''),p.label) ELSE p.label END,
+ CASE WHEN p.connection_type='cloud' THEN COALESCE(n.display_phone,'') ELSE p.billing_identity END,
+ p.observed_status,p.observed_at,COALESCE(d.active,false),d.last_seen,
+ COALESCE(l.enabled AND l.deleted_at IS NULL AND l.expires_at>$3 AND p.platform=ANY(l.allowed_platforms),false)
+ AND (p.proxy_id IS NULL OR COALESCE(proxy.enabled,false)),p.paused_at IS NOT NULL,
+ COALESCE(n.enabled,false),COALESCE(n.auth_status,'')
+ FROM work_order_accounts x JOIN platform_accounts p ON p.id=x.account_id AND p.tenant_id=x.tenant_id
+ LEFT JOIN account_stats_sync sync ON sync.account_id=p.id AND sync.tenant_id=p.tenant_id
+ LEFT JOIN login_codes l ON l.id=p.code_id AND l.tenant_id=p.tenant_id
+ LEFT JOIN proxies proxy ON proxy.id=p.proxy_id AND proxy.tenant_id=p.tenant_id
+ LEFT JOIN devices d ON d.id=p.device_id AND d.tenant_id=p.tenant_id
+ LEFT JOIN wa_cloud_numbers n ON n.id=p.id AND n.tenant_id=p.tenant_id
+ LEFT JOIN wa_cloud_apps app ON app.id=n.app_id AND app.tenant_id=p.tenant_id
+ WHERE x.tenant_id=$1 AND x.order_id::text=$2 ORDER BY p.created_at,p.id`, tenant, id, now)
 	if e != nil {
 		return s, e
 	}
 	indices := map[string]int{}
+	platforms := map[string]bool{}
 	for rows.Next() {
 		var v workOrderAccountStats
-		if e = rows.Scan(&v.ID, &v.Label, &v.Platform, &v.ConnectionType, &v.Removed, &v.LastSync, &v.FirstSync, &v.CollectorReady); e != nil {
+		var state, cloudAuth string
+		var observed, seen *time.Time
+		var active, available, paused, cloudEnabled bool
+		if e = rows.Scan(&v.ID, &v.Label, &v.Platform, &v.ConnectionType, &v.Removed, &v.LastSync, &v.FirstSync, &v.CollectorReady, &v.Nickname, &v.Account, &state, &observed, &active, &seen, &available, &paused, &cloudEnabled, &cloudAuth); e != nil {
 			rows.Close()
 			return s, e
+		}
+		v.Status = workOrderPresenceStatus(now, state, observed, seen, active, available, v.Removed || paused)
+		platform := v.Platform
+		if v.ConnectionType == "cloud" {
+			platform = "whatsapp_cloud"
+			v.Status = "error"
+			if v.Removed || paused {
+				v.Status = "offline"
+			} else if cloudEnabled && cloudAuth == "valid" {
+				v.Status = "online"
+			}
+		} else if !validBillingIdentity(v.Platform, v.Account) {
+			v.Account = "" // Unconfirmed identities are never guessed from client labels.
+		}
+		if !platforms[platform] {
+			platforms[platform] = true
+			s.Platforms = append(s.Platforms, platform)
 		}
 		indices[v.ID] = len(s.Accounts)
 		s.Accounts = append(s.Accounts, v)
@@ -449,6 +517,11 @@ func (a *App) calculateWorkOrderStats(ctx context.Context, tenant, id string, no
 			}
 			if !first.Before(today) {
 				counts.Today++
+				if dup {
+					counts.TodayDuplicate++
+				} else {
+					counts.TodayFresh++
+				}
 			} else if !first.Before(yesterday) {
 				counts.Yesterday++
 			}

@@ -115,6 +115,9 @@ func (a *App) Routes() *gin.Engine {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/client/tools/assets") && (c.Request.Method == "POST" || c.Request.Method == "PATCH") {
 			limit = 7 << 20
 		}
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/client/accounts/") && strings.HasSuffix(c.Request.URL.Path, "/chat-archive") && c.Request.Method == "POST" {
+			limit = 1_500_000
+		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
@@ -188,6 +191,7 @@ func (a *App) Routes() *gin.Engine {
 	client.POST("/customers/check", a.checkClientCustomer)
 	client.POST("/conversations", a.recordClientConversation)
 	a.workOrderRoutes(v, admin, client)
+	a.teamSupervisionRoutes(admin, client)
 	a.cloudRoutes(v, admin, client)
 	a.customerToolsRoutes(client)
 	return r
@@ -205,7 +209,7 @@ func (a *App) auth(client bool) gin.HandlerFunc {
 			e = a.DB.QueryRow(c.Request.Context(), `SELECT d.tenant_id::text,d.id::text,d.code_id::text FROM client_sessions s JOIN devices d ON d.id=s.device_id JOIN login_codes l ON l.id=d.code_id WHERE s.token_hash=$1 AND s.expires_at>now() AND d.active AND l.enabled AND l.deleted_at IS NULL AND l.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Device, &id.Code)
 			id.Actor = id.Device
 		} else {
-			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text,a.platform_operator FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now()`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor, &id.Operator)
+			e = a.DB.QueryRow(c.Request.Context(), `SELECT a.tenant_id::text,a.id::text,a.platform_operator FROM admin_sessions s JOIN admins a ON a.id=s.admin_id WHERE s.token_hash=$1 AND s.expires_at>now() AND a.disabled_at IS NULL`, security.Hash(raw)).Scan(&id.Tenant, &id.Actor, &id.Operator)
 		}
 		if errors.Is(e, pgx.ErrNoRows) {
 			if client {

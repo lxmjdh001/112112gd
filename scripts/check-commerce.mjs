@@ -19,9 +19,7 @@ async function tab(page, name) {
   await page.getByRole("tab", { name, exact: true }).click();
 }
 async function operate(root, kind, rowText, button, title, reference) {
-  await goto(root, "account-center", "账户中心");
-  await tab(root, "运营管理");
-  await tab(root, kind);
+  await goto(root, kind === "充值审核" ? "platform/recharges" : "platform/withdrawals", kind);
   const row = root.locator(".el-table__body-wrapper tr").filter({ hasText: rowText });
   await row.getByRole("button", { name: button, exact: true }).click();
   const dialog = root.getByRole("dialog", { name: title, exact: true });
@@ -49,8 +47,7 @@ try {
   await root.reload({ waitUntil: "networkidle" });
   await tab(root, "个人资料");
   assert.equal(await root.getByLabel("显示名称", { exact: true }).inputValue(), "验收运营");
-  await tab(root, "运营管理");
-  await tab(root, "结算规则");
+  await goto(root, "platform/settings", "平台设置");
   await root.getByRole("spinbutton", { name: "推广佣金比例", exact: true }).fill("10");
   await root.getByLabel("充值收款说明", { exact: true }).fill("验收专用模拟收款，不接受实际资金。");
   await root.getByLabel("提现渠道名称", { exact: true }).fill("验收模拟渠道");
@@ -67,15 +64,15 @@ try {
   await member.goto(link);
   await member.locator("#register-team").fill("验收推广客户");
   await member.locator("#register-username").fill("commerce-member");
-  await member.locator("#register-password").fill("commerce-test-password-123");
-  await member.locator("#register-confirm").fill("commerce-test-password-123");
+  await member.locator("#register-password").fill("commerce-old-123");
+  await member.locator("#register-confirm").fill("commerce-old-123");
   assert.match(await member.locator("#register-referral").inputValue(), /^R-/);
   await member.getByRole("button", { name: "创建账户并登录", exact: true }).click();
   await member.getByRole("heading", { name: "工作台", exact: true }).waitFor();
   await goto(member, "account-center", "账户中心");
   await tab(member, "个人资料");
   await member.getByLabel("团队名称", { exact: true }).waitFor();
-  assert.equal(await member.getByRole("tab", { name: "运营管理", exact: true }).count(), 0);
+  assert.equal(await member.getByRole("tab", { name: "平台管理", exact: true }).count(), 0);
   await member.getByRole("button", { name: "申请充值", exact: true }).click();
   const recharge = member.getByRole("dialog", { name: "申请充值", exact: true });
   await recharge.getByLabel("充值金额", { exact: true }).fill("100.00");
@@ -100,9 +97,9 @@ try {
   await tab(member, "点数流水");
   await member.locator(".el-table__body-wrapper tr").filter({ hasText: "充值入账" }).waitFor();
   await tab(member, "个人资料");
-  await member.getByLabel("当前密码", { exact: true }).fill("commerce-test-password-123");
-  await member.getByLabel("新密码", { exact: true }).fill("commerce-new-password-123");
-  await member.getByLabel("确认新密码", { exact: true }).fill("commerce-new-password-123");
+  await member.getByLabel("当前密码", { exact: true }).fill("commerce-old-123");
+  await member.getByLabel("新密码", { exact: true }).fill("commerce-new-123");
+  await member.getByLabel("确认新密码", { exact: true }).fill("commerce-new-123");
   await member.getByRole("button", { name: "更新密码", exact: true }).click();
   await member.getByText("密码已更新，其他网页会话已退出", { exact: true }).waitFor();
   await goto(root, "promotion", "推广中心");

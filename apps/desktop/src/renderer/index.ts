@@ -80,6 +80,10 @@ const accountClose = accountCloseDialog(
 );
 const whatsappLogo =
   '<img class="platform-logo" src="assets/whatsapp.svg" alt="" aria-hidden="true" draggable="false" />';
+const conversationGlyph =
+  '<svg class="conversation-glyph" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 10h23a5 5 0 0 1 5 5v13a5 5 0 0 1-5 5H20l-9 7v-7h-1a5 5 0 0 1-5-5V15a5 5 0 0 1 5-5Z"/><path d="M14 19h15m-15 7h9m15-7h2a5 5 0 0 1 5 5v12a5 5 0 0 1-5 5h-3v4l-7-4"/></svg>';
+const privacyGlyph =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
 const accountRepair = accountRepairDialog(
   () => current,
   (message) => {
@@ -120,7 +124,7 @@ function render(state: ViewState) {
       error.textContent = state.message;
       return;
     }
-    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">D1</span>D1 Scrm</div><h1>使用登录码开始工作</h1><label for="login-code">登录码</label><input id="login-code" type="password" autocomplete="off" placeholder="GD7-…" required/><label class="login-remember" for="remember-login"><input id="remember-login" type="checkbox" aria-label="记住登录码" checked/><span>记住登录码</span><small>仅保存在这台电脑</small></label><button class="primary login-submit" type="submit"><span class="login-spinner" aria-hidden="true"></span><span class="login-button-label">进入工作台</span></button><div class="error" role="alert">${escape(state.message)}</div><p class="muted">首次使用请登录网站后台生成登录码。</p></form></main>`;
+    container.innerHTML = `<main class="login-wrap"><form class="login"><div class="brand"><span class="mark">D1</span>D1 Scrm</div><h1>使用登录码开始工作</h1><p class="login-description">连接你的账号，开始与客户沟通。</p><label for="login-code">登录码</label><input id="login-code" aria-describedby="login-hint" type="password" autocomplete="off" placeholder="GD7-…" required/><label class="login-remember" for="remember-login"><input id="remember-login" type="checkbox" aria-label="记住登录码" checked/><span>记住登录码</span><small>仅保存在这台电脑</small></label><button class="primary login-submit" type="submit"><span class="login-spinner" aria-hidden="true"></span><span class="login-button-label">进入工作台</span></button><div class="error" role="alert" aria-live="polite">${escape(state.message)}</div><p class="muted" id="login-hint">首次使用请登录网站后台生成登录码。</p></form></main>`;
     const form = container.querySelector("form")!;
     const codeInput = form.querySelector<HTMLInputElement>("#login-code")!;
     const remember = form.querySelector<HTMLInputElement>("#remember-login")!;
@@ -189,7 +193,9 @@ function render(state: ViewState) {
       ? '<img class="platform-logo" src="assets/telegram.svg" alt="" />'
       : activePlatform === "line"
         ? '<img class="platform-logo" src="assets/line.png" alt="" />'
-        : whatsappLogo;
+        : activePlatform === "whatsapp"
+          ? whatsappLogo
+          : conversationGlyph;
   const identityPending = state.activeId && state.statuses[state.activeId] === "identity_pending";
   const emptyTitle = identityPending
     ? "正在识别登录账号"
@@ -209,11 +215,21 @@ function render(state: ViewState) {
       : !hasPlatforms
         ? "请管理员在网站的登录码设置中勾选可用平台，再点击刷新。"
         : state.accounts.length
-          ? "从左侧选择账号开始工作。普通账号打开官方网页，API 号码直接进入在线聊天，两种模式都支持翻译。"
+          ? "从左侧选择账号，继续与客户沟通。翻译和客户工具会随会话切换。"
           : hasNativePlatforms
-            ? "点击左侧“添加账号”，选择已授权的平台与代理，在官方页面登录。"
+            ? "添加账号，选择已授权的平台与网络，按提示完成登录。"
             : "请管理员在 WhatsApp API 号码管理中，将号码分配给当前登录码。";
-  const shellMarkup = `<header class="topbar"><div class="brand">工作台 <span class="badge">客户端</span></div><span class="notice">${escape(state.message)}</span>${state.billing ? `<span class="billing-status ${state.billing.status === "normal" ? "" : "billing-low"}">剩余 ${escape(String(Number(state.billing.points)))} 点 · ${state.billing.status === "grace" ? `缓冲中，剩余 ${state.billing.graceDaysRemaining} 天 · 请联系平台充值` : state.billing.status === "low" ? "点数不足，请联系平台充值" : "翻译免费"}</span>` : ""}<span class="muted">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button><button class="text-btn" id="repair-account">修复登录</button>' : ""}原生平台 / 官方 API · 翻译</span></header><div class="workspace">${sidebar.markup(state)}<main class="empty"><div><span class="wa">${emptyLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p><p class="muted">登录资料仅保存在本机，切换账号不会共享 Cookie。</p></div></main></div>`;
+  const shellMarkup = `<header class="topbar">
+    <div class="brand"><span>工作台</span><span class="workspace-caption">多账号沟通</span></div>
+    <span class="notice" role="status" aria-live="polite">${escape(state.message)}</span>
+    <div class="topbar-end"><div class="topbar-actions">${state.activeId && !activeCloud ? '<button class="text-btn" id="reload">重新加载账号</button><button class="text-btn" id="repair-account">修复登录</button>' : ""}</div>
+    ${state.teamArchiveEnabled ? `<span class="billing-status" title="${escape(state.teamArchiveError || "团队管理员可查看本团队已同步的聊天记录，历史范围取决于平台支持")}">${state.teamArchiveError ? "聊天记录待同步" : "团队聊天同步已开启"}</span>` : ""}
+    ${state.billing ? `<span class="billing-status ${state.billing.status === "normal" ? "" : "billing-low"}">剩余 ${escape(String(Number(state.billing.points)))} 点 · ${state.billing.status === "grace" ? `缓冲中，剩余 ${state.billing.graceDaysRemaining} 天 · 请联系平台充值` : state.billing.status === "low" ? "点数不足，请联系平台充值" : "翻译免费"}</span>` : ""}</div>
+    </header><div class="workspace">${sidebar.markup(state)}<main class="empty"><div>
+    <span class="wa">${emptyLogo}</span><h2>${emptyTitle}</h2><p class="muted">${emptyHelp}</p>
+    ${!state.accounts.length && hasNativePlatforms && !reconnecting && !identityPending ? '<div class="empty-actions"><button class="primary" type="button" data-empty-add>添加账号</button></div>' : ""}
+    <p class="empty-privacy">${privacyGlyph}<span>登录资料仅保存在本机，切换账号不会共享 Cookie。</span></p>
+    </div></main></div>`;
   // Keep the mounted chat in place across heartbeat updates. Detaching it would
   // reset scroll/focus and remove an open template dialog from the modal layer.
   const keepCloud = !!activeCloud && !!cloud && cloud.host.isConnected;
@@ -288,6 +304,9 @@ function render(state: ViewState) {
       ),
     );
   container.querySelector("#add-account")!.addEventListener("click", () => void accountForm.open());
+  container
+    .querySelector("[data-empty-add]")
+    ?.addEventListener("click", () => void accountForm.open());
   container
     .querySelectorAll<HTMLButtonElement>("[data-id]")
     .forEach((button) =>

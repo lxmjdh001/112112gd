@@ -477,15 +477,15 @@ onMounted(load);
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: #edf0ff;
-  color: #5266ef;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
   margin-right: 10px;
   font-size: 12px;
   font-weight: 700;
 }
 .cloud-steps p {
   font-size: 13px;
-  color: #8a95a9;
+  color: var(--el-text-color-secondary);
   margin: 12px 0 0;
 }
 .cloud-alert {
@@ -501,7 +501,7 @@ onMounted(load);
 }
 .cloud-small {
   font-size: 11px;
-  color: #8a95a9;
+  color: var(--el-text-color-secondary);
   margin-top: 7px;
 }
 .cloud-form-grid {
@@ -518,7 +518,7 @@ onMounted(load);
 .cloud-empty {
   padding: 80px;
   text-align: center;
-  color: #8a95a9;
+  color: var(--el-text-color-secondary);
 }
 .cloud-module :deep(.el-tabs__header) {
   margin-bottom: 20px;
@@ -527,6 +527,6 @@ onMounted(load);
   font-size: 15px;
 }
 .muted {
-  color: #8a95a9;
+  color: var(--el-text-color-secondary);
 }
 </style>
