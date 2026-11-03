@@ -27,7 +27,7 @@ let generation = 0;
 let controller: AbortController | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
 async function load() {
-  if (loading.value) return;
+  if (loading.value || route.query.api === "go7") return;
   const version = generation;
   loading.value = true;
   controller = new AbortController();
@@ -60,7 +60,7 @@ async function load() {
   }
 }
 watch(
-  () => route.params.token,
+  () => [route.params.token, route.query.api],
   () => {
     generation++;
     controller?.abort();
@@ -69,6 +69,12 @@ watch(
     password.value = "";
     needPassword.value = false;
     error.value = "";
+    if (route.query.api === "go7") {
+      location.replace(
+        `/api/v1/public/work-orders/${encodeURIComponent(String(route.params.token))}?api=go7`,
+      );
+      return;
+    }
     void load();
   },
   { immediate: true },

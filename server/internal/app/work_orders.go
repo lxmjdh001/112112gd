@@ -41,6 +41,8 @@ func (a *App) workOrderRoutes(v, admin, client *gin.RouterGroup) {
 	admin.POST("/work-orders/:id/rotate", a.rotateWorkOrderLink)
 	admin.DELETE("/work-orders/:id", a.deleteWorkOrder)
 	v.POST("/public/work-orders/:token", a.rate, a.publicWorkOrderStats)
+	v.GET("/public/work-orders/:token/accounts", a.rate, a.publicWorkOrderStats)
+	v.GET("/public/work-orders/:token", a.rate, a.publicWorkOrderStats)
 	client.POST("/accounts/:id/inbound-events", a.ingestInboundEvents)
 }
 func (a *App) workOrderOptions(c *gin.Context) {
@@ -227,6 +229,8 @@ func (a *App) memberWorkOrderStats(c *gin.Context) {
 	a.renderWorkOrderStats(c, identity(c).Tenant, c.Param("id"))
 }
 func (a *App) publicWorkOrderStats(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
 	if len(c.Param("token")) != 43 {
 		fail(c, 404, "统计链接不存在或已停用")
 		return
@@ -234,7 +238,13 @@ func (a *App) publicWorkOrderStats(c *gin.Context) {
 	var b struct {
 		Password string `json:"password"`
 	}
-	if c.ShouldBindJSON(&b) != nil || len(b.Password) > 72 {
+	if c.Request.Method == "GET" {
+		b.Password = c.GetHeader("X-Work-Order-Password")
+	} else if c.ShouldBindJSON(&b) != nil {
+		fail(c, 400, "请求无效")
+		return
+	}
+	if len(b.Password) > 72 {
 		fail(c, 400, "请求无效")
 		return
 	}
@@ -250,6 +260,19 @@ func (a *App) publicWorkOrderStats(c *gin.Context) {
 	}
 	if hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), []byte(b.Password)) != nil {
 		fail(c, 403, "请输入正确的访问密码")
+		return
+	}
+	if c.Request.Method == "GET" {
+		result, err := a.calculateWorkOrderStats(c.Request.Context(), tenant, id, time.Now())
+		if errors.Is(err, pgx.ErrNoRows) {
+			fail(c, 404, "工单不存在")
+			return
+		}
+		if err != nil {
+			dbError(c, err)
+			return
+		}
+		ok(c, gin.H{"name": result.Name, "updatedAt": result.UpdatedAt, "total": len(result.Accounts), "accounts": result.Accounts})
 		return
 	}
 	a.renderWorkOrderStats(c, tenant, id)
