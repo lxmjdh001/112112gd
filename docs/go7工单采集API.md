@@ -52,6 +52,6 @@ go7 读取 `data.accounts`，以 `id` 作为稳定标识，`account` 为已确�
 
 只返回该工单已选择的账号及公开统计，不返回登录码、平台登录凭据或客户明细。统计口径沿用工单页面。建议每 30 秒采集一次；同一来源 IP 对同一路径模式的请求限制为每分钟 12 次（多个工单共享该额度），失败请求也计数；收到 429 时等待下一分钟再请求。响应禁止缓存。密码错误返回 HTTP 403；令牌无效、停用、过期、重置或工单删除后返回 HTTP 404；限流返回 HTTP 429。
 
-服务端和网站更新发布后生效，本地实现不代表生产已上线。`GET /api/v1/public/work-orders/令牌/accounts` 同样可用。
+已于北京时间 2026-11-03 在工单项目上线，发布记录见 [工单 JSON 接口上线记录](deployment-json-20261103.md)。`GET /api/v1/public/work-orders/令牌/accounts` 同样可用。
 
 `nickname` 沿用统计页面展示名称：原生账号使用账号备注，API 账号优先使用已验证名称。`platform` 为平台标识，API 账号可通过 `connectionType: "cloud"` 识别；不要将 `collectorReady` 当作在线状态。
